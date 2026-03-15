@@ -1,0 +1,57 @@
+# Maven
+**/target/
+.mvn/
+.flattened-pom.xml
+dependency-reduced-pom.xml
+release.properties
+
+# Build and package artifacts
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+out/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+
+# Environment and local config
+.env
+.env.*
+*.local
+*.pid
+
+# Java
+*.class
+
+# Annotation processor / compiler outputs
+generated/
+**/generated-sources/
+**/generated-test-sources/
+**/maven-status/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
