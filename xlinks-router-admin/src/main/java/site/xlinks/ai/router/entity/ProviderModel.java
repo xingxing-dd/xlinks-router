@@ -36,6 +36,16 @@ public class ProviderModel extends BaseEntity {
     private String providerModelName;
 
     /**
+     * 模型类型：chat、embedding、image 等
+     */
+    private String modelType;
+
+    /**
+     * 使用类型：0-不限制，1-仅套餐可用，2-仅余额可用
+     */
+    private Integer usageType;
+
+    /**
      * 状态：1-启用，0-禁用
      */
     private Integer status;

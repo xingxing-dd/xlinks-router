@@ -16,10 +16,14 @@ public enum ErrorCode {
     PROVIDER_TOKEN_UNAVAILABLE(4005, "Provider Token 不可用"),
     MODEL_NOT_IN_ALLOWED_LIST(4006, "模型不在允许列表中"),
     TOKEN_EXPIRED(4007, "Token 已过期"),
+    UNAUTHORIZED(4010, "未授权"),
+    FORBIDDEN(4011, "无权限"),
+    ROUTE_ERROR(4012, "路由错误"),
 
     // 服务端错误 5xxx
     SYSTEM_ERROR(5000, "系统异常"),
-    EXTERNAL_SERVICE_ERROR(5001, "外部服务调用失败");
+    EXTERNAL_SERVICE_ERROR(5001, "外部服务调用失败"),
+    INTERNAL_ERROR(5002, "内部错误");
 
     private final int code;
     private final String message;
