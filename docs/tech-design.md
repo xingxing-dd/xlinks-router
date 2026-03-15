@@ -167,6 +167,16 @@ CREATE TABLE `customer_models` (
 
 表示底层 Provider 的实际模型定义。
 
+### usageType 定义
+
+`usage_type` 用于限制当前 Provider Model 在什么计费/权益模式下可用：
+
+| 值 | 含义 | 说明 |
+|----|------|------|
+| 0 | 不限制 | 套餐模式、余额模式都可参与路由 |
+| 1 | 仅套餐可用 | 仅当用户当前请求按套餐模式结算时可用 |
+| 2 | 仅余额可用 | 仅当用户当前请求按余额模式结算时可用 |
+
 ### 表结构 (DDL)
 
 ```sql
@@ -175,6 +185,8 @@ CREATE TABLE `provider_models` (
   `provider_id` BIGINT NOT NULL COMMENT '关联 Provider ID',
   `provider_model_code` VARCHAR(50) NOT NULL COMMENT 'Provider Model 的稳定业务编码',
   `provider_model_name` VARCHAR(100) NOT NULL COMMENT '底层 Provider 的实际模型名',
+  `model_type` VARCHAR(20) NOT NULL DEFAULT 'chat' COMMENT '模型类型：chat、embedding、image 等',
+  `usage_type` TINYINT NOT NULL DEFAULT 0 COMMENT '使用类型：0-不限制，1-仅套餐可用，2-仅余额可用',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -196,6 +208,8 @@ CREATE TABLE `provider_models` (
 | provider_id | BIGINT | 是 | 关联 Provider ID |
 | provider_model_code | VARCHAR(50) | 是 | Provider Model 的稳定业务编码 |
 | provider_model_name | VARCHAR(100) | 是 | 底层 Provider 的实际模型名 |
+| model_type | VARCHAR(20) | 是 | 模型类型：chat、embedding、image 等 |
+| usage_type | TINYINT | 是 | 使用类型：0-不限制，1-仅套餐可用，2-仅余额可用 |
 | status | TINYINT | 是 | 1-启用，0-禁用 |
 | remark | VARCHAR(500) | 否 | 备注信息 |
 | created_at | DATETIME | 是 | 创建时间 |
@@ -253,6 +267,61 @@ CREATE TABLE `model_mapping` (
 
 - 一个 Customer Model 可对应多个 Provider Model
 - `priority` 用于路由/兜底顺序控制，值越小优先级越高
+
+---
+
+## 4.4.1 路由宽表（推荐新增）
+
+为提高 `/chat/completions` 的实时路由性能，建议增加一张面向查询的“模型路由宽表”，以 `customer_model` 为核心维度，提前把逻辑模型到 Provider 模型的路由信息摊平，减少运行时多表 Join。
+
+### 设计目标
+
+1. 将 `customer_model` -> `provider_model` -> `provider` 的映射预计算后落表
+2. 将 `usage_type` 和 `model_type` 一并冗余到宽表，支持按权益模式和模型类别快速筛选
+3. 对 `/chat/completions` 只保留一次按条件排序查询，降低响应延迟
+
+### 推荐表结构 (DDL)
+
+```sql
+CREATE TABLE `model_route_cache` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `customer_model` VARCHAR(50) NOT NULL COMMENT '客户侧逻辑模型编码，对应 customer_models.logic_model_code',
+  `provider_id` BIGINT NOT NULL COMMENT 'Provider ID',
+  `provider_model` VARCHAR(100) NOT NULL COMMENT '底层 Provider 模型名',
+  `priority` INT NOT NULL DEFAULT 100 COMMENT '优先级，值越小优先级越高',
+  `usage_type` TINYINT NOT NULL DEFAULT 0 COMMENT '使用类型：0-不限制，1-仅套餐可用，2-仅余额可用',
+  `model_type` VARCHAR(20) NOT NULL DEFAULT 'chat' COMMENT '模型类型：chat、embedding、image 等',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_customer_model_usage_priority` (`customer_model`, `usage_type`, `priority`),
+  KEY `idx_provider_id` (`provider_id`),
+  KEY `idx_model_type` (`model_type`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模型路由宽表';
+```
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| customer_model | VARCHAR(50) | 是 | 客户传入模型名 |
+| provider_id | BIGINT | 是 | 目标 Provider ID |
+| provider_model | VARCHAR(100) | 是 | 最终调用的底层模型名 |
+| priority | INT | 是 | 优先级，值越小优先级越高 |
+| usage_type | TINYINT | 是 | 适用权益模式：0/1/2 |
+| model_type | VARCHAR(20) | 是 | 模型类型，便于后续扩展到 embedding/image |
+| status | TINYINT | 是 | 路由状态 |
+
+### 刷新策略
+
+宽表本质上是 `customer_models + model_mapping + provider_models + providers` 的冗余投影，其中 `model_type` 建议直接来自 `provider_models.model_type`，避免宽表字段无法回溯来源。推荐两种刷新方式：
+
+1. **管理后台写后刷新**：在 Customer Model、Provider Model、Mapping 发生新增/修改/启停时同步刷新对应路由记录
+2. **定时全量重建**：通过定时任务按分钟或小时全量重算，作为兜底一致性策略
+
+MVP 阶段建议优先实现“管理后台写后刷新 + 手动全量重建接口”。
 
 ---
 
@@ -1208,6 +1277,153 @@ data: [DONE]
 5. 调用底层 Provider（转换请求格式）
 6. 标准化返回结果
 7. 记录 Usage Record
+
+### OpenAI 兼容性要求
+
+`/v1/chat/completions` 在 API 模块中需要尽量兼容 OpenAI 官方接口语义，MVP 阶段至少支持以下能力：
+
+1. 请求结构兼容：`model`、`messages`、`temperature`、`top_p`、`max_tokens`、`stream`、`frequency_penalty`、`presence_penalty`
+2. 响应结构兼容：非流式返回 `id/object/created/model/choices/usage`，流式返回 `chat.completion.chunk`
+3. Header 兼容：支持 `Authorization: Bearer {customerToken}`
+4. 错误兼容：对外尽量返回 OpenAI 风格错误语义，内部再映射为平台错误码和日志记录
+
+### API 模块核心处理链路（细化版）
+
+建议在 `xlinks-router-api` 模块内把 `/chat/completions` 的处理拆成以下阶段：
+
+1. **入口层**：Controller 接收标准 OpenAI 请求 DTO，完成参数校验、Header 解析、traceId 注入
+2. **鉴权层**：解析 Bearer Token，计算哈希并查询 `customer_tokens`，得到客户身份和允许访问模型列表
+3. **权益判定层**：根据 customerToken 对应客户的套餐和余额状态，计算本次请求的 `usageType`
+4. **模型路由层**：根据 `customerModel + usageType` 查询宽表 `model_route_cache`，得到目标 `providerId + providerModel`
+5. **Provider Token 选择层**：在目标 Provider 下选择可用 token，筛掉禁用、过期、额度耗尽 token
+6. **适配器调用层**：根据 `provider_type` 选择对应 adapter/client，把标准请求转换后发往下游 Provider
+7. **响应转换层**：把下游结果转换回 OpenAI 标准响应格式，支持非流式和流式输出
+8. **记录与结算层**：记录 usage_records，并预留套餐扣次/余额扣费的异步结算扩展点
+
+### customerToken -> usageType 判定逻辑
+
+为了支撑套餐优先、余额兜底的路由策略，建议在 API 模块中引入一个统一的权益判定结果对象，例如：
+
+```java
+public class UsageDecision {
+    private Long customerTokenId;
+    private String customerName;
+    private boolean packageEnabled;
+    private boolean balanceEnabled;
+    private Integer currentUsageType;
+    private List<String> packageAllowedModels;
+}
+```
+
+其中 `currentUsageType` 的判定规则按你的要求细化如下：
+
+| 客户状态 | 判定结果 | 说明 |
+|---------|----------|------|
+| 开通套餐且有余额 | 0 | 同时具备两类能力，优先走套餐逻辑，再决定是否切余额 |
+| 仅有套餐，无余额 | 1 | 只能走套餐模式 |
+| 无套餐，有余额 | 2 | 只能走余额模式 |
+| 套餐和余额都没有 | 特殊失败/无限制 mock | 当前阶段可按 mock 逻辑放行为 0 或直接视作无限权限 |
+
+> 说明：你提到“都没有则无限权限”，这个逻辑在正式生产通常不安全，文档里建议先标记为 **mock 行为**，后续上线前应切换为明确的拒绝策略或白名单策略。
+
+### customerModel -> providerModel 路由决策逻辑
+
+#### 场景一：套餐优先模式
+
+当 `currentUsageType = 0` 或 `1` 时，先进入套餐优先判断：
+
+1. 检查用户请求的 `customerModel` 是否在套餐允许模型列表内
+2. 如果在允许列表内，则本次请求按 **套餐模式** 执行，查询 `usage_type in (0, 1)` 的路由数据
+3. 如果不在允许列表内，但客户存在余额能力，则切换为 **余额模式**，查询 `usage_type in (0, 2)` 的路由数据
+4. 如果不在允许列表内且也没有余额能力，则直接返回“模型无权限/套餐不支持该模型”错误
+
+#### 场景二：余额模式
+
+当 `currentUsageType = 2` 时：
+
+1. 直接按余额模式查询宽表
+2. 查询条件为 `customer_model = ? and usage_type in (0, 2) and status = 1`
+3. 按 `priority asc` 排序，选择最优路由
+
+#### 推荐 SQL 语义
+
+```sql
+SELECT customer_model, provider_id, provider_model, priority, usage_type, model_type
+FROM model_route_cache
+WHERE customer_model = #{customerModel}
+  AND status = 1
+  AND usage_type IN (0, #{targetUsageType})
+ORDER BY priority ASC
+LIMIT 1;
+```
+
+### Provider Token 选择逻辑
+
+完成模型路由后，需要继续在目标 Provider 下选择实际调用 token，建议顺序如下：
+
+1. 查询 `provider_id = ? and token_status = 1`
+2. 过滤已过期 token
+3. 若存在额度字段，则过滤 `quota_used >= quota_total` 的 token
+4. 按以下优先级排序：
+   - 未过期优先
+   - 额度剩余更多优先
+   - 最近最少使用优先（`last_used_at asc nulls first`）
+5. 选中后更新 `last_used_at`
+
+MVP 阶段也可以先使用简化版本：只要状态正常且未过期，按 `id asc` 取第一条可用 token。
+
+### Provider Adapter 设计建议
+
+为了支持多个下游 Provider，API 模块建议定义统一适配器接口：
+
+```java
+public interface ChatProviderAdapter {
+    boolean supports(String providerType);
+    ChatCompletionResponse chatCompletion(ChatCompletionRequest request, ProviderInvokeContext context);
+    SseEmitter chatCompletionStream(ChatCompletionRequest request, ProviderInvokeContext context);
+}
+```
+
+其中 `ProviderInvokeContext` 至少应包含：
+
+- `providerId`
+- `providerCode`
+- `providerType`
+- `baseUrl`
+- `providerToken`
+- `providerModel`
+- `customerTokenId`
+- `requestId`
+
+MVP 第一版建议优先实现 `openai-compatible` 适配器，这样 DeepSeek、Right Codex 这类 OpenAI 兼容服务都能共用同一套调用逻辑。
+
+### `/chat/completions` 时序概览
+
+```text
+Client
+  -> ChatCompletionController
+  -> CustomerTokenAuthService
+  -> CustomerEntitlementService (mock 套餐/余额判断)
+  -> ModelRouteService (查 model_route_cache)
+  -> ProviderTokenSelectService
+  -> ChatProviderAdapterFactory
+  -> OpenAICompatibleAdapter
+  -> Provider API
+  <- OpenAICompatibleAdapter
+  <- ChatCompletionController
+  -> UsageRecordService (异步/同步记录)
+```
+
+### MVP 实现建议（按开发顺序）
+
+1. 先定义标准 OpenAI 请求/响应 DTO，覆盖非流式能力
+2. 实现 customerToken 鉴权与 `allowedModels` 校验
+3. 增加 `usage_type` 字段和 `model_route_cache` 宽表
+4. 实现 mock 的套餐/余额判定服务
+5. 实现基于宽表的路由服务
+6. 实现 Provider Token 选择逻辑
+7. 实现 `openai-compatible` adapter 与下游调用
+8. 最后补流式输出、usage 记录和异常映射
 
 ---
 

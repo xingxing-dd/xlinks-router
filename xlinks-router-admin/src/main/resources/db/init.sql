@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `customer_name` VARCHAR(100) NOT NULL COMMENT '客户名称',
   `token_name` VARCHAR(100) NOT NULL COMMENT 'Token 名称/别名',
-  `token_value` VARCHAR(64) NOT NULL COMMENT 'Token 值，SHA256 哈希存储',
+  `token_value` VARCHAR(128) NOT NULL COMMENT 'Token 值，SHA256 哈希存储',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `expire_time` DATETIME DEFAULT NULL COMMENT '过期时间',
   `allowed_models` JSON DEFAULT NULL COMMENT '允许访问的模型列表',
@@ -156,3 +156,48 @@ INSERT INTO `model_mapping`
   (`customer_model_id`, `provider_model_id`, `priority`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
   (1, 1, 1, 1, '默认模型映射', 'system', 'system');
+
+INSERT INTO `providers`
+  (`provider_code`, `provider_name`, `provider_type`, `base_url`, `status`, `remark`, `create_by`, `update_by`)
+VALUES
+  ('right-codex', 'Right Codex', 'openai-compatible', 'https://right.codes/codex/v1', 1, '测试 Provider', 'system', 'system');
+
+INSERT INTO `provider_models`
+  (`provider_id`, `provider_model_code`, `provider_model_name`, `status`, `remark`, `create_by`, `update_by`)
+VALUES
+  (2, 'gpt-5.2', 'gpt-5.2', 1, '测试 Provider 模型', 'system', 'system'),
+  (2, 'gpt-5.3', 'gpt-5.3', 1, '测试 Provider 模型', 'system', 'system'),
+  (2, 'gpt-5.4', 'gpt-5.4', 1, '测试 Provider 模型', 'system', 'system');
+
+INSERT INTO `provider_tokens`
+  (`provider_id`, `token_name`, `token_value`, `token_status`, `quota_total`, `quota_used`, `remark`, `create_by`, `update_by`)
+VALUES
+  (2, 'right-codex-default', 'sk-16dc1a6df0c04c7c851ec8c326f5f79b', 1, NULL, 0, '测试 Provider Token', 'system', 'system');
+
+INSERT INTO `customer_models`
+  (`logic_model_code`, `logic_model_name`, `model_type`, `status`, `is_default`, `remark`, `create_by`, `update_by`)
+VALUES
+  ('gpt-5.2', 'gpt-5.2', 'chat', 1, 0, '测试逻辑模型', 'system', 'system'),
+  ('gpt-5.3', 'gpt-5.3', 'chat', 1, 0, '测试逻辑模型', 'system', 'system'),
+  ('gpt-5.4', 'gpt-5.4', 'chat', 1, 0, '测试逻辑模型', 'system', 'system');
+
+INSERT INTO `model_mapping`
+  (`customer_model_id`, `provider_model_id`, `priority`, `status`, `remark`, `create_by`, `update_by`)
+VALUES
+  (2, 2, 1, 1, 'gpt-5.2 一对一映射', 'system', 'system'),
+  (3, 3, 1, 1, 'gpt-5.3 一对一映射', 'system', 'system'),
+  (4, 4, 1, 1, 'gpt-5.4 一对一映射', 'system', 'system');
+
+INSERT INTO `customer_tokens`
+  (`customer_name`, `token_name`, `token_value`, `status`, `allowed_models`, `remark`, `create_by`, `update_by`)
+VALUES
+  (
+    'right-codex-test-customer',
+    'right-codex-customer-token',
+    'sk-4f7d9c2a1b6e43d8a5c0f1e2b3d4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2',
+    1,
+    JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4'),
+    '测试客户 Token',
+    'system',
+    'system'
+  );
