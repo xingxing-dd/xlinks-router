@@ -16,9 +16,13 @@ public enum ErrorCode {
     PROVIDER_TOKEN_UNAVAILABLE(4005, "Provider Token 不可用"),
     MODEL_NOT_IN_ALLOWED_LIST(4006, "模型不在允许列表中"),
     TOKEN_EXPIRED(4007, "Token 已过期"),
+    SMS_CODE_INVALID(4008, "短信验证码错误或已失效"),
+    USER_ALREADY_EXISTS(4009, "用户已存在"),
     UNAUTHORIZED(4010, "未授权"),
     FORBIDDEN(4011, "无权限"),
     ROUTE_ERROR(4012, "路由错误"),
+    USER_NOT_FOUND(4013, "用户不存在"),
+    ACCOUNT_DISABLED(4014, "账号已禁用"),
 
     // 服务端错误 5xxx
     SYSTEM_ERROR(5000, "系统异常"),
