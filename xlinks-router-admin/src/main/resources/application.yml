@@ -28,8 +28,6 @@ mybatis-plus:
 
 # 应用配置
 app:
-  security:
-    token-encrypt-key: ${TOKEN_ENCRYPT_KEY:}
   auth:
     sms-code-prefix: "xlinks"
     sms-code-expire-seconds: 60
