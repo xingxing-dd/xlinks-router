@@ -12,7 +12,7 @@ import java.security.SecureRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 短信验证码服务。
+ * 邮箱验证码服务。
  */
 @Slf4j
 @Service
@@ -24,29 +24,29 @@ public class SmsCodeService {
     private final StringRedisTemplate stringRedisTemplate;
     private final AuthProperties authProperties;
 
-    public String sendCode(String mobile, String scene) {
-        String cooldownKey = buildCooldownKey(mobile, scene);
+    public String sendCode(String email, String scene) {
+        String cooldownKey = buildCooldownKey(email, scene);
         Boolean hasCooldown = stringRedisTemplate.hasKey(cooldownKey);
         if (Boolean.TRUE.equals(hasCooldown)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码发送过于频繁，请稍后再试");
         }
 
-        //此处后续换成真正的发短信
+        // 此处后续替换成真正的邮件发送
         String code = generateCode();
-        String codeKey = buildCodeKey(mobile, scene);
+        String codeKey = buildCodeKey(email, scene);
         stringRedisTemplate.opsForValue().set(codeKey, code, authProperties.getSmsCodeExpireSeconds(), TimeUnit.SECONDS);
         stringRedisTemplate.opsForValue().set(cooldownKey, "1", authProperties.getSmsSendIntervalSeconds(), TimeUnit.SECONDS);
 
-        log.info("Send sms code, mobile={}, scene={}, code={}", mobile, scene, code);
+        log.info("Send email code, email={}, scene={}, code={}", email, scene, code);
         return code;
     }
 
-    public void verifyCode(String mobile, String scene, String code) {
+    public void verifyCode(String email, String scene, String code) {
         if (Boolean.TRUE.equals(authProperties.getSmsMockEnabled())) {
-            log.warn("mock开启不验证短信");
+            log.warn("mock开启不验证邮箱验证码");
             return;
         }
-        String codeKey = buildCodeKey(mobile, scene);
+        String codeKey = buildCodeKey(email, scene);
         String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
         if (cachedCode == null || !cachedCode.equals(code)) {
             throw new BusinessException(ErrorCode.SMS_CODE_INVALID);
@@ -54,12 +54,12 @@ public class SmsCodeService {
         stringRedisTemplate.delete(codeKey);
     }
 
-    private String buildCodeKey(String mobile, String scene) {
-        return authProperties.getSmsCodePrefix() + scene + ":" + mobile;
+    private String buildCodeKey(String email, String scene) {
+        return authProperties.getSmsCodePrefix() + scene + ":" + email;
     }
 
-    private String buildCooldownKey(String mobile, String scene) {
-        return buildCodeKey(mobile, scene) + ":cooldown";
+    private String buildCooldownKey(String email, String scene) {
+        return buildCodeKey(email, scene) + ":cooldown";
     }
 
     private String generateCode() {

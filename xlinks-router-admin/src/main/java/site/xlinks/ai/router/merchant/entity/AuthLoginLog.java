@@ -20,9 +20,7 @@ public class AuthLoginLog {
 
     private Long userId;
 
-    private String username;
-
-    private String mobile;
+    private String email;
 
     private String loginType;
 

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 发送短信验证码响应。
+ * 发送邮箱验证码响应。
  */
 @Data
 @Builder

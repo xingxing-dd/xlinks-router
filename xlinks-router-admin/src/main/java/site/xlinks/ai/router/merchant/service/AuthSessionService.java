@@ -47,8 +47,7 @@ public class AuthSessionService {
                 .expiration(Date.from(expireAt))
                 .claim("tokenType", "merchant-access")
                 .claim("userId", user.getId())
-                .claim("username", user.getUsername())
-                .claim("mobile", user.getMobile())
+                .claim("email", user.getEmail())
                 .signWith(jwtSecretKey)
                 .compact();
     }

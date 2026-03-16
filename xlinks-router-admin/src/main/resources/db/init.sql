@@ -114,10 +114,8 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
 
 CREATE TABLE IF NOT EXISTS `auth_users` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `username` VARCHAR(64) NOT NULL COMMENT '登录用户名',
   `password_hash` VARCHAR(128) NOT NULL COMMENT 'BCrypt 密码哈希',
-  `nickname` VARCHAR(64) DEFAULT NULL COMMENT '昵称',
-  `mobile` VARCHAR(20) NOT NULL COMMENT '手机号',
+  `email` VARCHAR(128) NOT NULL COMMENT '邮箱',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `last_login_at` DATETIME DEFAULT NULL COMMENT '最后登录时间',
   `last_login_ip` VARCHAR(64) DEFAULT NULL COMMENT '最后登录 IP',
@@ -127,17 +125,15 @@ CREATE TABLE IF NOT EXISTS `auth_users` (
   `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
   `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_auth_username` (`username`),
-  UNIQUE KEY `uk_auth_mobile` (`mobile`),
+  UNIQUE KEY `uk_auth_email` (`email`),
   KEY `idx_auth_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='认证用户表';
 
 CREATE TABLE IF NOT EXISTS `auth_login_logs` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` BIGINT DEFAULT NULL COMMENT '用户 ID，未注册用户可为空',
-  `username` VARCHAR(64) NOT NULL COMMENT '登录用户名',
-  `mobile` VARCHAR(20) DEFAULT NULL COMMENT '手机号',
-  `login_type` VARCHAR(20) NOT NULL COMMENT '登录类型：password、sms、register',
+  `email` VARCHAR(128) DEFAULT NULL COMMENT '邮箱',
+  `login_type` VARCHAR(20) NOT NULL COMMENT '登录类型：password、register',
   `login_status` TINYINT NOT NULL COMMENT '登录状态：1-成功，0-失败',
   `login_ip` VARCHAR(64) DEFAULT NULL COMMENT '登录 IP',
   `user_agent` VARCHAR(255) DEFAULT NULL COMMENT '用户代理',
@@ -145,7 +141,7 @@ CREATE TABLE IF NOT EXISTS `auth_login_logs` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_login_user_id` (`user_id`),
-  KEY `idx_login_username` (`username`),
+  KEY `idx_login_email` (`email`),
   KEY `idx_login_status` (`login_status`),
   KEY `idx_login_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='登录日志表';

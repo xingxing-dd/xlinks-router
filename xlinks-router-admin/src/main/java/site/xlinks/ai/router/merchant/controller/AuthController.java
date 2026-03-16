@@ -27,7 +27,7 @@ import site.xlinks.ai.router.merchant.service.SmsCodeService;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@Tag(name = "用户认证", description = "用户名密码注册登录与短信验证码接口")
+@Tag(name = "用户认证", description = "邮箱密码注册登录与邮箱验证码接口")
 public class AuthController {
 
     private final SmsCodeService smsCodeService;
@@ -45,9 +45,9 @@ public class AuthController {
     }
 
     @PostMapping("/sms-code")
-    @Operation(summary = "发送短信验证码")
+    @Operation(summary = "发送邮箱验证码")
     public Result<SmsCodeSendResultVO> sendSmsCode(@Valid @RequestBody SmsCodeSendDTO dto) {
-        String code = smsCodeService.sendCode(dto.getMobile(), dto.getScene());
+        String code = smsCodeService.sendCode(dto.getEmail(), dto.getScene());
         return Result.success(SmsCodeSendResultVO.builder()
                 .message("验证码发送成功")
                 .mockCode(Boolean.TRUE.equals(authProperties.getSmsMockEnabled()) ? code : null)
