@@ -16,6 +16,7 @@
         <module>xlinks-router-common</module>
         <module>xlinks-router-admin</module>
         <module>xlinks-router-api</module>
+        <module>xlinks-router-client</module>
     </modules>
 
     <properties>

@@ -64,7 +64,7 @@ const handleLogout = () => {
             <Key class="w-5 h-5 text-white" />
           </div>
           <h1 class="text-xl font-bold text-white tracking-tight">
-            Xlinks Ai
+            Xlinks Hub
           </h1>
         </div>
       </div>
@@ -149,7 +149,7 @@ const handleLogout = () => {
               <Key class="w-4 h-4 text-white" />
             </div>
             <h1 class="font-bold text-slate-900 tracking-tight">
-              Xlinks Ai
+              Xlinks Hub
             </h1>
           </div>
           <div class="flex items-center gap-2">
