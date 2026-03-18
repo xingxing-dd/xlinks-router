@@ -9,8 +9,8 @@ import site.xlinks.ai.router.client.dto.auth.AuthLoginRequest;
 import site.xlinks.ai.router.client.dto.auth.AuthLoginResponse;
 import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
 import site.xlinks.ai.router.client.dto.auth.RsaPublicKeyResponse;
-import site.xlinks.ai.router.client.dto.auth.SmsCodeSendRequest;
-import site.xlinks.ai.router.client.dto.auth.SmsCodeSendResponse;
+import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendRequest;
+import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
 import site.xlinks.ai.router.common.result.Result;
 
 @RestController
@@ -25,10 +25,11 @@ public class AuthController {
         return Result.success(response);
     }
 
-    @PostMapping("/sms-code")
-    public Result<SmsCodeSendResponse> sendSmsCode(@Valid @RequestBody SmsCodeSendRequest request) {
-        SmsCodeSendResponse response = new SmsCodeSendResponse();
-        response.setMessage("验证码发送成功");
+    @PostMapping("/verify-code")
+    public Result<VerifyCodeSendResponse> sendVerifyCode(@Valid @RequestBody VerifyCodeSendRequest request) {
+        VerifyCodeSendResponse response = new VerifyCodeSendResponse();
+        String message = "email".equalsIgnoreCase(request.getCodeType()) ? "邮箱验证码发送成功" : "短信验证码发送成功";
+        response.setMessage(message);
         response.setMockCode("123456");
         response.setExpireSeconds(300);
         return Result.success(response);
@@ -47,7 +48,7 @@ public class AuthController {
 
         AuthLoginResponse.AuthUser user = new AuthLoginResponse.AuthUser();
         user.setId(1L);
-        user.setEmail(request.getEmail());
+        user.setEmail(request.getUsername());
         user.setStatus(1);
         response.setUser(user);
         return Result.success(response);

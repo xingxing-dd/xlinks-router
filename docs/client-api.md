@@ -93,26 +93,45 @@
 
 ---
 
-### 2.2 发送邮箱验证码
+### 2.2 发送验证码
 
-用于注册时发送验证码到用户邮箱。
+用于注册、重置密码等场景发送邮箱验证码或短信验证码。
 
-**请求地址**: `POST /auth/sms-code`
+**请求地址**: `POST /auth/verify-code`
 
 **请求参数**:
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| email | String | 是 | 邮箱地址 |
+| codeType | String | 是 | 验证码类型：`email`(邮箱)、`sms`(短信) |
+| target | String | 是 | 验证码接收目标；`codeType=email` 时传邮箱地址，`codeType=sms` 时传手机号 |
 | scene | String | 是 | 场景：`register`(注册)、`resetpwd`(重置密码) |
 
 **响应参数**:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| message | String | 提示信息 |
+| message | String | 提示信息，按验证码类型返回“邮箱验证码发送成功”或“短信验证码发送成功” |
 | mockCode | String | 模拟模式下的验证码（开发环境） |
 | expireSeconds | Integer | 验证码有效期（秒） |
+
+**邮箱验证码请求示例**:
+```json
+{
+  "codeType": "email",
+  "target": "user@example.com",
+  "scene": "register"
+}
+```
+
+**短信验证码请求示例**:
+```json
+{
+  "codeType": "sms",
+  "target": "13800138000",
+  "scene": "register"
+}
+```
 
 **响应示例**:
 ```json
@@ -120,7 +139,7 @@
   "code": 0,
   "message": "success",
   "data": {
-    "message": "验证码发送成功",
+    "message": "邮箱验证码发送成功",
     "mockCode": "123456",
     "expireSeconds": 300
   }
@@ -167,8 +186,8 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| email | String | 是 | 邮箱地址 |
-| password | String | 是 | 密码（RSA 加密） |
+| username | String | 是 | 用户名 |
+| password | String | 是 | 密码 |
 
 **响应参数**:
 
@@ -180,6 +199,14 @@
 | user.id | Long | 用户 ID |
 | user.email | String | 邮箱 |
 | user.status | Integer | 状态：1-启用 |
+
+**请求示例**:
+```json
+{
+  "username": "demo_user",
+  "password": "encrypted-password"
+}
+```
 
 **响应示例**:
 ```json
@@ -1218,4 +1245,3 @@ CREATE TABLE `contact_messages` (
   PRIMARY KEY (`id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='联系表单表';
-```

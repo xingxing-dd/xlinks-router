@@ -3,7 +3,7 @@ package site.xlinks.ai.router.client.dto.auth;
 import lombok.Data;
 
 @Data
-public class SmsCodeSendResponse {
+public class VerifyCodeSendResponse {
 
     private String message;
 

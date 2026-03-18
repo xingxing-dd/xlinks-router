@@ -4,11 +4,44 @@ server:
 spring:
   application:
     name: xlinks-router-client
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://123.60.29.123:3306/xlinks_router?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 132311aA.
+  data:
+    redis:
+      host: 123.60.29.123
+      port: 6379
+      password: 132311aA.
+      database: 0
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: site.xlinks.ai.router.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
 
 springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
   swagger-ui:
-    enabled: true
     path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    doc-expansion: none
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  packages-to-scan: site.xlinks.ai.router
+  paths-to-match: /**
+
+logging:
+  level:
+    site.xlinks.ai.router: DEBUG
+    org.springframework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("model_mapping")
+@TableName("customer_model_mappings")
 public class CustomerModelMapping extends BaseEntity {
 
     /**
@@ -21,17 +21,17 @@ public class CustomerModelMapping extends BaseEntity {
     private Long id;
 
     /**
-     * Customer Model ID
+     * 客户模型 ID
      */
     private Long customerModelId;
 
     /**
-     * Provider Model ID
+     * Provider 模型 ID
      */
     private Long providerModelId;
 
     /**
-     * 优先级，值越小优先级越高
+     * 优先级，数字越小优先级越高
      */
     private Integer priority;
 
