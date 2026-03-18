@@ -19,8 +19,8 @@ import java.util.List;
 public class UsageRecordController {
 
     @GetMapping
-    public Result<PageResult<UsageRecordItemResponse>> getUsageRecords(@RequestParam(defaultValue = "1") Integer page,
-                                                                       @RequestParam(defaultValue = "10") Integer pageSize) {
+    public Result<PageResult<UsageRecordItemResponse>> getUsageRecords(@RequestParam(name = "page", defaultValue = "1") Integer page,
+                                                                       @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
         List<UsageRecordItemResponse> records = List.of(
                 new UsageRecordItemResponse(1L, "req_abc123", "claude-sonnet", "OpenAI", 500, 745, 1245, 1500, 200, null, new BigDecimal("0.125"), "2026-03-17 14:00:00"),
                 new UsageRecordItemResponse(2L, "req_def456", "claude-haiku", "Anthropic", 300, 420, 720, 980, 200, null, new BigDecimal("0.052"), "2026-03-17 12:00:00")

@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import {
   LayoutDashboard,
   Key,
@@ -17,22 +19,24 @@ import {
   ChevronDown,
 } from 'lucide-vue-next'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const isMobileMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const language = ref('zh')
 
-const navItems = [
-  { path: '/dashboard', label: '仪表板', icon: LayoutDashboard },
-  { path: '/tokens', label: '令牌管理', icon: Key },
-  { path: '/models', label: '模型列表', icon: Layers },
-  { path: '/plans', label: '套餐购买', icon: CreditCard },
-  { path: '/promotion', label: '推广有礼', icon: Gift },
-  { path: '/contact', label: '联系我们', icon: MessageCircle },
-  { path: '/docs', label: '接入说明', icon: BookOpen },
-]
+const navItems = computed(() => [
+  { path: '/dashboard', label: t('dashboard.title'), icon: LayoutDashboard },
+  { path: '/tokens', label: t('tokens.title'), icon: Key },
+  { path: '/models', label: t('models.title'), icon: Layers },
+  { path: '/plans', label: t('plans.title'), icon: CreditCard },
+  { path: '/promotion', label: t('promotion.title'), icon: Gift },
+  { path: '/contact', label: t('contact.title'), icon: MessageCircle },
+  { path: '/docs', label: t('docs.title'), icon: BookOpen },
+])
 
 const isActive = (path) => {
   if (path === '/') return route.path === '/'
@@ -40,8 +44,8 @@ const isActive = (path) => {
 }
 
 const currentLabel = computed(() => {
-  const item = navItems.find(item => isActive(item.path))
-  return item ? item.label : '仪表板'
+  const item = navItems.value.find(item => isActive(item.path))
+  return item ? item.label : t('dashboard.title')
 })
 
 const toggleLanguage = () => {
@@ -50,6 +54,7 @@ const toggleLanguage = () => {
 
 const handleLogout = () => {
   isUserMenuOpen.value = false
+  authStore.clearAuth()
   router.push('/login')
 }
 </script>
@@ -60,11 +65,11 @@ const handleLogout = () => {
     <aside class="hidden md:flex md:flex-col md:w-72 bg-slate-900 shadow-2xl overflow-hidden">
       <div class="p-6 border-b border-slate-700/50 bg-slate-900">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-icon rounded-md flex items-center justify-center shadow-lg shadow-primary/20">
+          <div class="w-10 h-10 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
             <Key class="w-5 h-5 text-white" />
           </div>
           <h1 class="text-xl font-bold text-white tracking-tight">
-            Xlinks Hub
+            Xlinks Token Hub
           </h1>
         </div>
       </div>
@@ -74,7 +79,7 @@ const handleLogout = () => {
           v-for="item in navItems"
           :key="item.path"
           :to="item.path"
-          class="flex items-center gap-3 px-4 py-3 rounded-sm transition-all duration-200 group relative overflow-hidden"
+          class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative overflow-hidden"
           :class="[
             isActive(item.path)
               ? 'bg-gradient-button text-white shadow-md shadow-primary/25'
@@ -105,11 +110,11 @@ const handleLogout = () => {
           <!-- Language Switch -->
           <button
             @click="toggleLanguage"
-            class="flex items-center gap-2 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 rounded-sm border border-slate-200 transition-all group"
+            class="flex items-center gap-2 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all group"
           >
             <Globe class="w-4 h-4 text-slate-500 group-hover:scale-110 transition-transform duration-300" />
             <span class="text-sm font-medium text-slate-700">
-              {{ language === 'zh' ? '中文' : 'EN' }}
+              {{ language === 'zh' ? t('common.chinese') : t('common.english') }}
             </span>
           </button>
 
@@ -117,7 +122,7 @@ const handleLogout = () => {
           <div class="relative">
             <button
               @click="isUserMenuOpen = !isUserMenuOpen"
-              class="flex items-center gap-3 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-sm border border-slate-200 transition-all group"
+              class="flex items-center gap-3 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all group"
             >
               <div class="w-8 h-8 bg-gradient-icon rounded-full flex items-center justify-center shadow-sm">
                 <User class="w-4 h-4 text-white" />
@@ -127,13 +132,13 @@ const handleLogout = () => {
             </button>
 
             <!-- User Dropdown -->
-            <div v-if="isUserMenuOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-sm shadow-xl border border-slate-200 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div v-if="isUserMenuOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
               <button
                 @click="handleLogout"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
               >
                 <LogOut class="w-4 h-4" />
-                <span class="font-medium text-sm">退出登录</span>
+                <span class="font-medium text-sm">{{ t('common.logout') }}</span>
               </button>
             </div>
             <div v-if="isUserMenuOpen" @click="isUserMenuOpen = false" class="fixed inset-0 z-10"></div>
@@ -145,18 +150,18 @@ const handleLogout = () => {
       <div class="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-50 shadow-sm">
         <div class="flex items-center justify-between p-4">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 bg-gradient-icon rounded-md flex items-center justify-center">
+            <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
               <Key class="w-4 h-4 text-white" />
             </div>
             <h1 class="font-bold text-slate-900 tracking-tight">
-              Xlinks Hub
+              Xlinks Token Hub
             </h1>
           </div>
           <div class="flex items-center gap-2">
-            <button @click="toggleLanguage" class="p-2 hover:bg-slate-50 rounded-sm transition-colors">
+            <button @click="toggleLanguage" class="p-2 hover:bg-slate-50 rounded-lg transition-colors">
               <Globe class="w-5 h-5 text-slate-600" />
             </button>
-            <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="p-2 hover:bg-slate-50 rounded-sm transition-colors">
+            <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="p-2 hover:bg-slate-50 rounded-xl transition-colors">
               <component :is="isMobileMenuOpen ? X : Menu" class="w-6 h-6 text-slate-600" />
             </button>
           </div>
@@ -169,7 +174,7 @@ const handleLogout = () => {
             :key="item.path"
             :to="item.path"
             @click="isMobileMenuOpen = false"
-            class="flex items-center gap-3 px-4 py-3.5 rounded-sm transition-all"
+            class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"
             :class="[
               isActive(item.path)
                 ? 'bg-gradient-button text-white shadow-md shadow-primary/25'
@@ -181,10 +186,10 @@ const handleLogout = () => {
           </router-link>
           <button
             @click="handleLogout"
-            class="flex items-center gap-3 px-4 py-3.5 w-full text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-sm transition-all mt-4 border-t border-slate-100 pt-6"
+            class="flex items-center gap-3 px-4 py-3.5 w-full text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all mt-4 border-t border-slate-100 pt-6"
           >
             <LogOut class="w-5 h-5" />
-            <span class="font-medium text-sm">退出登录</span>
+            <span class="font-medium text-sm">{{ t('common.logout') }}</span>
           </button>
         </div>
       </div>

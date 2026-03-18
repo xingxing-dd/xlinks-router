@@ -1,30 +1,41 @@
 <script setup>
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Copy, Check, BookOpen, Code, Shield, Zap } from 'lucide-vue-next'
+import { toast } from '@/utils/toast'
 
+const { t } = useI18n()
 const copiedSection = ref(null)
 
-const handleCopy = (text, section) => {
-  const textArea = document.createElement('textarea')
-  textArea.value = text
-  textArea.style.position = 'fixed'
-  textArea.style.left = '-999999px'
-  textArea.style.top = '-999999px'
-  document.body.appendChild(textArea)
-  textArea.focus()
-  textArea.select()
-  
+const handleCopy = async (text, section) => {
   try {
-    document.execCommand('copy')
+    await navigator.clipboard.writeText(text)
     copiedSection.value = section
+    toast.success(t('common.success'))
     setTimeout(() => {
       copiedSection.value = null
     }, 2000)
   } catch (err) {
-    console.error('复制失败:', err)
-    alert('复制失败，请手动复制')
-  } finally {
-    document.body.removeChild(textArea)
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      copiedSection.value = section
+      toast.success(t('common.success'))
+      setTimeout(() => {
+        copiedSection.value = null
+      }, 2000)
+    } catch (e) {
+      toast.error(t('common.error'))
+    } finally {
+      document.body.removeChild(textArea)
+    }
   }
 }
 
@@ -39,23 +50,23 @@ const baseUrl = 'https://xlinks.site/v1/codex'
         <div class="w-12 h-12 bg-white/30 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
           <Zap class="w-6 h-6 text-white" />
         </div>
-        <h2 class="text-2xl font-bold text-white">快速开始</h2>
+        <h2 class="text-2xl font-bold text-white">{{ t('docs.quickStart') }}</h2>
       </div>
       <p class="text-white/95 mb-6 text-base font-medium">
-        只需三步，即可开始使用 Xlinks Ai 强大的 AI 模型服务
+        {{ t('docs.quickStartDesc') }}
       </p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="bg-white/20 backdrop-blur-md border-2 border-white/30 rounded-2xl p-4 shadow-lg">
           <div class="text-3xl font-bold mb-2 text-white">1</div>
-          <div class="text-sm text-white font-medium">获取 API Key</div>
+          <div class="text-sm text-white font-medium">{{ t('docs.step1') }}</div>
         </div>
         <div class="bg-white/20 backdrop-blur-md border-2 border-white/30 rounded-2xl p-4 shadow-lg">
           <div class="text-3xl font-bold mb-2 text-white">2</div>
-          <div class="text-sm text-white font-medium">配置 Base URL</div>
+          <div class="text-sm text-white font-medium">{{ t('docs.step2') }}</div>
         </div>
         <div class="bg-white/20 backdrop-blur-md border-2 border-white/30 rounded-2xl p-4 shadow-lg">
           <div class="text-3xl font-bold mb-2 text-white">3</div>
-          <div class="text-sm text-white font-medium">开始调用</div>
+          <div class="text-sm text-white font-medium">{{ t('docs.step3') }}</div>
         </div>
       </div>
     </div>
@@ -64,14 +75,14 @@ const baseUrl = 'https://xlinks.site/v1/codex'
     <div class="bg-white rounded-3xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
       <div class="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white flex items-center gap-3">
         <Code class="w-6 h-6" />
-        <h2 class="text-xl font-bold">API 配置</h2>
+        <h2 class="text-xl font-bold">{{ t('docs.apiConfig') }}</h2>
       </div>
       <div class="p-6 space-y-6">
         <!-- Base URL -->
         <div>
           <h3 class="text-lg font-semibold text-slate-900 mb-3">Base URL</h3>
           <p class="text-sm text-slate-600 mb-3">
-            将您的 API 客户端的 Base URL 配置为以下地址：
+            {{ t('docs.baseUrlDesc') }}
           </p>
           <div class="relative bg-slate-900 rounded-xl p-4 font-mono text-sm">
             <code class="text-green-400">{{ baseUrl }}</code>
@@ -89,7 +100,7 @@ const baseUrl = 'https://xlinks.site/v1/codex'
         <div>
           <h3 class="text-lg font-semibold text-slate-900 mb-3">API Key</h3>
           <p class="text-sm text-slate-600 mb-3">
-            在「令牌管理」页面创建您的 API Key，然后在请求头中添加：
+            {{ t('docs.apiKeyDesc') }}
           </p>
           <div class="relative bg-slate-900 rounded-xl p-4 font-mono text-sm">
             <code class="text-yellow-400">Authorization: Bearer YOUR_API_KEY</code>
@@ -109,7 +120,7 @@ const baseUrl = 'https://xlinks.site/v1/codex'
     <div class="bg-white rounded-3xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
       <div class="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white flex items-center gap-3">
         <BookOpen class="w-6 h-6" />
-        <h2 class="text-xl font-bold">代码示例</h2>
+        <h2 class="text-xl font-bold">{{ t('docs.codeExample') }}</h2>
       </div>
       <div class="p-6 space-y-6">
         <!-- Python 示例 -->
@@ -215,7 +226,7 @@ main();</pre>
     <div class="bg-white rounded-3xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
       <div class="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white flex items-center gap-3">
         <Shield class="w-6 h-6" />
-        <h2 class="text-xl font-bold">模型配置说明</h2>
+        <h2 class="text-xl font-bold">{{ t('docs.modelConfig') }}</h2>
       </div>
       <div class="p-6">
         <div class="space-y-4">
@@ -224,9 +235,9 @@ main();</pre>
               <Check class="w-4 h-4 text-violet-600" />
             </div>
             <div>
-              <h4 class="font-semibold text-slate-900 mb-1">支持的模型</h4>
+              <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.supportedModels') }}</h4>
               <p class="text-sm text-slate-600">
-                查看「模型列表」页面获取所有可用的 Claude 模型名称及定价信息
+                {{ t('docs.supportedModelsDesc') }}
               </p>
             </div>
           </div>
@@ -236,14 +247,14 @@ main();</pre>
               <Check class="w-4 h-4 text-violet-600" />
             </div>
             <div>
-              <h4 class="font-semibold text-slate-900 mb-1">推荐模型</h4>
+              <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.recommendedModels') }}</h4>
               <p class="text-sm text-slate-600 mb-2">
-                根据不同场景选择合适的模型：
+                {{ t('docs.recommendedModelsDesc') }}
               </p>
               <ul class="text-sm text-slate-600 space-y-1 ml-4">
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-haiku-4-5</code> - 快速响应，日常对话</li>
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-sonnet-4-5</code> - 平衡性能，通用场景</li>
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-opus-4</code> - 复杂推理，专业任务</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-haiku-4-5</code> - {{ t('docs.haikuDesc') }}</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-sonnet-4-5</code> - {{ t('docs.sonnetDesc') }}</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-opus-4</code> - {{ t('docs.opusDesc') }}</li>
               </ul>
             </div>
           </div>
@@ -253,9 +264,9 @@ main();</pre>
               <Check class="w-4 h-4 text-violet-600" />
             </div>
             <div>
-              <h4 class="font-semibold text-slate-900 mb-1">API 兼容性</h4>
+              <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.apiCompatibility') }}</h4>
               <p class="text-sm text-slate-600">
-                完全兼容 OpenAI API 格式，可直接使用 OpenAI SDK 进行调用
+                {{ t('docs.apiCompatibilityDesc') }}
               </p>
             </div>
           </div>
@@ -265,9 +276,9 @@ main();</pre>
               <Check class="w-4 h-4 text-violet-600" />
             </div>
             <div>
-              <h4 class="font-semibold text-slate-900 mb-1">并发限制</h4>
+              <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.concurrencyLimit') }}</h4>
               <p class="text-sm text-slate-600">
-                不同套餐有不同的并发限制，详见「套餐购买」页面
+                {{ t('docs.concurrencyLimitDesc') }}
               </p>
             </div>
           </div>
@@ -277,23 +288,23 @@ main();</pre>
 
     <!-- 注意事项 -->
     <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6">
-      <h3 class="text-lg font-semibold text-amber-900 mb-3">⚠️ 注意事项</h3>
+      <h3 class="text-lg font-semibold text-amber-900 mb-3">⚠️ {{ t('docs.notice') }}</h3>
       <ul class="space-y-2 text-sm text-amber-800">
         <li class="flex items-start gap-2">
           <span class="text-amber-600 font-bold">•</span>
-          <span>请妥善保管您的 API Key，不要在公开代码仓库中暴露</span>
+          <span>{{ t('docs.notice1') }}</span>
         </li>
         <li class="flex items-start gap-2">
           <span class="text-amber-600 font-bold">•</span>
-          <span>建议使用环境变量来存储 API Key</span>
+          <span>{{ t('docs.notice2') }}</span>
         </li>
         <li class="flex items-start gap-2">
           <span class="text-amber-600 font-bold">•</span>
-          <span>定期检查 API 使用情况，避免超出配额</span>
+          <span>{{ t('docs.notice3') }}</span>
         </li>
         <li class="flex items-start gap-2">
           <span class="text-amber-600 font-bold">•</span>
-          <span>如遇到问题，请访问「联系我们」页面获取技术支持</span>
+          <span>{{ t('docs.notice4') }}</span>
         </li>
       </ul>
     </div>

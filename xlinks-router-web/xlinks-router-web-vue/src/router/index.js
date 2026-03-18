@@ -9,6 +9,7 @@ import Promotion from '../views/promotion/index.vue'
 import Contact from '../views/contact/index.vue'
 import Docs from '../views/docs/index.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const routes = [
   {
@@ -71,6 +72,26 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to) => {
+  const authStore = useAuthStore()
+  const publicPaths = ['/login', '/register']
+
+  if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
+    return {
+      path: '/login',
+      query: {
+        redirect: to.fullPath,
+      },
+    }
+  }
+
+  if (publicPaths.includes(to.path) && authStore.isAuthenticated) {
+    return '/tokens'
+  }
+
+  return true
 })
 
 export default router

@@ -1,26 +1,17 @@
 <script setup>
-import { reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Key, Mail, Lock, Gift, Shield } from 'lucide-vue-next'
+import { useRegister } from '@/composables/useRegister'
 
-const router = useRouter()
-const formData = reactive({
-  email: '',
-  password: '',
-  verificationCode: '',
-  inviteCode: '',
-})
-
-const handleSubmit = () => {
-  // 模拟注册
-  console.log('Registering with:', formData)
-  router.push('/login')
-}
-
-const handleSendCode = () => {
-  // 模拟发送验证码
-  alert('验证码已发送到您的邮箱')
-}
+const { t } = useI18n()
+const {
+  formData,
+  isSubmitting,
+  isSendingCode,
+  feedback,
+  handleSubmit,
+  handleSendCode,
+} = useRegister()
 </script>
 
 <template>
@@ -35,16 +26,20 @@ const handleSendCode = () => {
         </div>
 
         <h1 class="text-2xl font-bold text-center text-slate-900 mb-2">
-          创建账号
+          {{ t('register.title') }}
         </h1>
         <p class="text-center text-slate-500 mb-8">
-          注册 Xlinks Ai 账号
+          {{ t('register.subtitle') }}
+        </p>
+
+        <p v-if="feedback" class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {{ feedback }}
         </p>
 
         <form @submit.prevent="handleSubmit" class="space-y-5">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-2">
-              邮箱地址
+              {{ t('register.email') }}
             </label>
             <div class="relative">
               <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -52,7 +47,7 @@ const handleSendCode = () => {
                 v-model="formData.email"
                 type="email"
                 class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all bg-white text-slate-900"
-                placeholder="your@email.com"
+                :placeholder="t('register.emailPlaceholder')"
                 required
               />
             </div>
@@ -60,7 +55,7 @@ const handleSendCode = () => {
 
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-2">
-              验证码
+              {{ t('register.verificationCode') }}
             </label>
             <div class="relative flex gap-2">
               <div class="relative flex-1">
@@ -69,23 +64,24 @@ const handleSendCode = () => {
                   v-model="formData.verificationCode"
                   type="text"
                   class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all bg-white text-slate-900"
-                  placeholder="请输入验证码"
+                  :placeholder="t('register.verificationCode')"
                   required
                 />
               </div>
               <button
                 type="button"
                 @click="handleSendCode"
+                :disabled="isSendingCode"
                 class="px-4 py-3 bg-violet-100 text-violet-600 rounded-xl hover:bg-violet-200 transition-colors font-medium whitespace-nowrap"
               >
-                发送验证码
+                {{ isSendingCode ? t('common.loading') : t('register.sendCode') }}
               </button>
             </div>
           </div>
 
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-2">
-              密码
+              {{ t('register.password') }}
             </label>
             <div class="relative">
               <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -101,7 +97,7 @@ const handleSendCode = () => {
 
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-2">
-              邀请码（选填）
+              {{ t('register.inviteCode') }}
             </label>
             <div class="relative">
               <Gift class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -109,11 +105,11 @@ const handleSendCode = () => {
                 v-model="formData.inviteCode"
                 type="text"
                 class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all bg-white text-slate-900"
-                placeholder="请输入邀请码（可选）"
+                :placeholder="t('register.inviteCodePlaceholder')"
               />
             </div>
             <p class="text-xs text-slate-500 mt-1.5">
-              填写邀请码可获得额外奖励
+              {{ t('register.inviteCodeTip') }}
             </p>
           </div>
 
@@ -124,32 +120,33 @@ const handleSendCode = () => {
               required
             />
             <label class="ml-2 text-sm text-slate-600">
-              我已阅读并同意
+              {{ t('register.termsPrefix') }}
               <a href="#" class="text-violet-600 hover:text-violet-700 font-medium transition-colors">
-                服务条款
+                {{ t('register.terms') }}
               </a>
               和
               <a href="#" class="text-violet-600 hover:text-violet-700 font-medium transition-colors">
-                隐私政策
+                {{ t('register.privacy') }}
               </a>
             </label>
           </div>
 
           <button
             type="submit"
+            :disabled="isSubmitting"
             class="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium active:scale-[0.98]"
           >
-            注册
+            {{ isSubmitting ? t('common.loading') : t('register.submit') }}
           </button>
         </form>
 
         <div class="mt-6 text-center">
-          <span class="text-slate-600">已有账号？</span>
+          <span class="text-slate-600">{{ t('register.hasAccount') }}</span>
           <router-link
             to="/login"
             class="ml-1 text-violet-600 hover:text-violet-700 font-medium transition-colors"
           >
-            立即登录
+            {{ t('register.login') }}
           </router-link>
         </div>
       </div>

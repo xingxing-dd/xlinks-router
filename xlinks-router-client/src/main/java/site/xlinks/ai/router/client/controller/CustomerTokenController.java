@@ -25,8 +25,8 @@ import java.util.List;
 public class CustomerTokenController {
 
     @GetMapping
-    public Result<PageResult<CustomerTokenItemResponse>> getTokens(@RequestParam(defaultValue = "1") Integer page,
-                                                                   @RequestParam(defaultValue = "10") Integer pageSize) {
+    public Result<PageResult<CustomerTokenItemResponse>> getTokens(@RequestParam(name = "page", defaultValue = "1") Integer page,
+                                                                   @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
         List<CustomerTokenItemResponse> records = List.of(
                 new CustomerTokenItemResponse(1L, "张三", "生产环境主Key", "sk-abc123***pqr678", 1, "2027-01-01 00:00:00", List.of("claude-sonnet", "gpt-4"), 12453, "2026-03-17 14:30:00", "2026-02-15 10:30:00"),
                 new CustomerTokenItemResponse(2L, "张三", "测试环境Key", "sk-test789***pqr678", 1, "2027-02-01 00:00:00", List.of("claude-haiku"), 3241, "2026-03-17 13:20:00", "2026-03-01 09:00:00"),

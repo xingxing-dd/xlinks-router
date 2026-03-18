@@ -1,67 +1,87 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { Search, Cpu, DollarSign, Check } from 'lucide-vue-next'
+import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Search, Cpu, DollarSign, Check, ChevronDown, Copy } from 'lucide-vue-next'
+import { useModels } from '@/composables/useModels'
 
-const claudeModels = [
-  { id: '1', name: 'claude-3-7-sonnet', provider: 'Anthropic', description: '高性能对话模型，适合复杂推理任务', inputPrice: '$3.00/M', outputPrice: '$15.00/M', contextWindow: '200K', status: 'available' },
-  { id: '2', name: 'claude-3-7-sonnet-20250219', provider: 'Anthropic', description: 'Sonnet 3.7 特定版本，稳定可靠', inputPrice: '$3.00/M', outputPrice: '$15.00/M', contextWindow: '200K', status: 'available' },
-  { id: '3', name: 'claude-3-7-sonnet-20250219-thinking', provider: 'Anthropic', description: '增强思考能力的 Sonnet 版本', inputPrice: '$3.00/M', outputPrice: '$15.00/M', contextWindow: '200K', status: 'available' },
-  { id: '4', name: 'claude-haiku-4-5', provider: 'Anthropic', description: '快速响应，高性价比的轻量级模型', inputPrice: '$1.00/M', outputPrice: '$5.00/M', contextWindow: '200K', status: 'available' },
-  { id: '5', name: 'claude-haiku-4-5-20251001', provider: 'Anthropic', description: 'Haiku 4.5 稳定版本', inputPrice: '$1.00/M', outputPrice: '$5.00/M', contextWindow: '200K', status: 'available' },
-  { id: '6', name: 'claude-opus-4', provider: 'Anthropic', description: '最强大的推理模型，适合复杂任务', inputPrice: '$15.00/M', outputPrice: '$75.00/M', contextWindow: '200K', status: 'available' },
-  { id: '7', name: 'claude-opus-4-1', provider: 'Anthropic', description: 'Opus 4.1 增强版本', inputPrice: '$15.00/M', outputPrice: '$75.00/M', contextWindow: '200K', status: 'available' },
-  { id: '8', name: 'claude-opus-4-1-20250805', provider: 'Anthropic', description: 'Opus 4.1 特定日期版本', inputPrice: '$15.00/M', outputPrice: '$75.00/M', contextWindow: '200K', status: 'available' },
-  { id: '9', name: 'claude-opus-4-1-20250805-thinking', provider: 'Anthropic', description: '增强思考能力的 Opus 版本', inputPrice: '$15.00/M', outputPrice: '$75.00/M', contextWindow: '200K', status: 'available' },
-  { id: '10', name: 'claude-opus-4-20250514', provider: 'Anthropic', description: 'Opus 4 稳定版本', inputPrice: '$15.00/M', outputPrice: '$75.00/M', contextWindow: '200K', status: 'available' },
-]
+const { t } = useI18n()
 
-const models = ref([...claudeModels])
-const searchQuery = ref('')
+const {
+  searchQuery,
+  selectedProvider,
+  isProviderDropdownOpen,
+  providers,
+  loading,
+  filteredModels,
+  getStatusColor,
+  getStatusText,
+  copyModelName,
+  loadModels,
+} = useModels()
 
-const filteredModels = computed(() => {
-  const query = searchQuery.value.toLowerCase()
-  return models.value.filter(model => 
-    model.name.toLowerCase().includes(query) || 
-    model.description.toLowerCase().includes(query)
-  )
-})
-
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'available': return 'text-green-700 bg-green-100'
-    case 'limited': return 'text-yellow-700 bg-yellow-100'
-    case 'unavailable': return 'text-red-700 bg-red-100'
-    default: return 'text-gray-700 bg-gray-100'
-  }
-}
-
-const getStatusText = (status) => {
-  switch (status) {
-    case 'available': return '可用'
-    case 'limited': return '限流'
-    case 'unavailable': return '不可用'
-    default: return '未知'
-  }
-}
+onMounted(loadModels)
 </script>
 
 <template>
   <div class="p-4 md:p-8 max-w-7xl mx-auto">
-    <!-- 搜索和筛选 -->
-    <div class="mb-6">
-      <div class="relative">
-        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索模型..."
-          class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white text-slate-900"
-        />
+    <!-- 搜索框和筛选下拉框 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6">
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="relative flex-1">
+          <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="t('models.searchPlaceholder')"
+            class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white transition-all text-slate-900"
+          />
+        </div>
+        
+        <!-- 服务商筛选下拉框 -->
+        <div class="relative">
+          <button
+            @click="isProviderDropdownOpen = !isProviderDropdownOpen"
+            class="flex items-center justify-between gap-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 whitespace-nowrap font-medium min-w-[160px]"
+          >
+            <span>{{ selectedProvider }}</span>
+            <ChevronDown class="w-5 h-5 transition-transform duration-200" :class="{ 'rotate-180': isProviderDropdownOpen }" />
+          </button>
+          
+          <!-- 下拉菜单 -->
+          <template v-if="isProviderDropdownOpen">
+            <!-- 背景遮罩 -->
+            <div
+              class="fixed inset-0 z-10"
+              @click="isProviderDropdownOpen = false"
+            />
+            
+            <!-- 下拉选项 -->
+            <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border-2 border-violet-200 overflow-hidden z-20 min-w-[160px] animate-in fade-in zoom-in duration-200">
+              <button
+                v-for="provider in providers"
+                :key="provider"
+                @click="() => { selectedProvider = provider; isProviderDropdownOpen = false }"
+                class="w-full px-4 py-3 text-left hover:bg-gradient-to-r hover:from-violet-50 hover:to-fuchsia-50 transition-all duration-150"
+                :class="[
+                  selectedProvider === provider
+                    ? 'bg-gradient-to-r from-violet-100 to-fuchsia-100 text-violet-700 font-semibold'
+                    : 'text-slate-700'
+                ]"
+              >
+                {{ provider }}
+                <span v-if="selectedProvider === provider" class="ml-2">✓</span>
+              </button>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
     <!-- 模型网格 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-if="loading" class="md:col-span-2 lg:col-span-3 rounded-2xl border border-slate-200 bg-white py-12 text-center text-slate-500">
+        {{ t('common.loading') }}
+      </div>
       <div
         v-for="model in filteredModels"
         :key="model.id"
@@ -71,6 +91,13 @@ const getStatusText = (status) => {
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-1">
               <h3 class="text-lg font-bold text-slate-900">{{ model.name }}</h3>
+              <button
+                @click="copyModelName(model.name)"
+                class="p-1 hover:bg-violet-100 rounded-md transition-colors duration-200"
+                :title="t('models.copyModelName')"
+              >
+                <Copy class="w-4 h-4 text-slate-400 hover:text-violet-600" />
+              </button>
               <span 
                 class="px-2 py-1 rounded-full text-xs font-medium"
                 :class="getStatusColor(model.status)"
@@ -91,7 +118,7 @@ const getStatusText = (status) => {
           <div class="bg-slate-50 rounded-xl p-3">
             <div class="flex items-center gap-2 mb-1">
               <DollarSign class="w-4 h-4 text-slate-500" />
-              <span class="text-xs text-slate-500">输入价格</span>
+              <span class="text-xs text-slate-500">{{ t('models.inputPrice') }}</span>
             </div>
             <p class="text-sm font-semibold text-slate-900 tabular-nums">
               {{ model.inputPrice }}
@@ -100,7 +127,7 @@ const getStatusText = (status) => {
           <div class="bg-slate-50 rounded-xl p-3">
             <div class="flex items-center gap-2 mb-1">
               <DollarSign class="w-4 h-4 text-slate-500" />
-              <span class="text-xs text-slate-500">输出价格</span>
+              <span class="text-xs text-slate-500">{{ t('models.outputPrice') }}</span>
             </div>
             <p class="text-sm font-semibold text-slate-900 tabular-nums">
               {{ model.outputPrice }}
@@ -112,7 +139,7 @@ const getStatusText = (status) => {
           <div class="flex items-center gap-2">
             <Check class="w-4 h-4 text-green-600" />
             <span class="text-sm text-slate-600 font-medium">
-              上下文: {{ model.contextWindow }}
+              {{ t('models.context') }}: {{ model.contextWindow }}
             </span>
           </div>
           <div class="text-xs text-slate-500 font-medium">
@@ -122,8 +149,8 @@ const getStatusText = (status) => {
       </div>
     </div>
 
-    <div v-if="filteredModels.length === 0" class="text-center py-12">
-      <p class="text-slate-500">未找到匹配的模型</p>
+    <div v-if="!loading && filteredModels.length === 0" class="text-center py-12">
+      <p class="text-slate-500">{{ t('models.noModels') }}</p>
     </div>
   </div>
 </template>

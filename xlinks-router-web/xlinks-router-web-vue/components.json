@@ -1,0 +1,15 @@
+{
+  "style": "default",
+  "baseColor": "slate",
+  "tailwind": {
+    "config": "tailwind.config.js",
+    "css": "src/styles/main.css",
+    "baseColor": "slate",
+    "cssVariables": true
+  },
+  "aliases": {
+    "utils": "@/utils/cn",
+    "components": "@/components/ui",
+    "ui": "@/components/ui"
+  }
+}

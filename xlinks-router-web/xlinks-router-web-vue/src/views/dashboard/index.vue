@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -21,6 +22,10 @@ import {
   DatasetComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { useDashboard } from '@/composables/useDashboard'
+import { formatCurrency, formatNumber } from '@/utils/formatters'
+
+const { t } = useI18n()
 
 use([
   CanvasRenderer,
@@ -33,50 +38,27 @@ use([
   DatasetComponent
 ])
 
-const usageData = [
-  { date: '03-03', tokens: 12000, cost: 240 },
-  { date: '03-04', tokens: 15000, cost: 300 },
-  { date: '03-05', tokens: 18000, cost: 360 },
-  { date: '03-06', tokens: 14000, cost: 280 },
-  { date: '03-07', tokens: 22000, cost: 440 },
-  { date: '03-08', tokens: 25000, cost: 500 },
-  { date: '03-09', tokens: 28000, cost: 560 },
-]
-
-const modelUsage = [
-  { model: 'GPT-4', requests: 850 },
-  { model: 'GPT-3.5', requests: 1200 },
-  { model: 'Claude-3', requests: 650 },
-  { model: 'Gemini', requests: 420 },
-]
+const {
+  usageData,
+  modelUsage,
+  dashboardStats,
+  activities,
+  loading,
+  isRechargeModalOpen,
+  usdAmount,
+  selectedPayment,
+  calculateCnyAmount,
+  loadDashboard,
+  handleConfirmRecharge,
+  formatChange,
+} = useDashboard()
 
 const paymentMethods = [
-  { id: 'alipay', name: '支付宝', icon: '💳' },
-  { id: 'wechat', name: '微信支付', icon: '💚' },
+  { id: 'alipay', name: t('plans.alipay'), icon: '💳' },
+  { id: 'wechat', name: t('plans.wechat'), icon: '💚' },
 ]
 
-const isRechargeModalOpen = ref(false)
-const usdAmount = ref('')
-const selectedPayment = ref('alipay')
-
-const calculateCnyAmount = computed(() => {
-  const amount = parseFloat(usdAmount.value)
-  if (isNaN(amount) || amount <= 0) return 0
-  return amount * 0.2
-})
-
-const handleConfirmRecharge = () => {
-  const amount = parseFloat(usdAmount.value)
-  if (isNaN(amount) || amount <= 0) {
-    alert('请输入有效的充值金额')
-    return
-  }
-  alert('正在跳转到支付页面...')
-  isRechargeModalOpen.value = false
-  usdAmount.value = ''
-}
-
-const lineOption = ref({
+const lineOption = computed(() => ({
   tooltip: {
     trigger: 'axis',
     backgroundColor: '#fff',
@@ -94,7 +76,7 @@ const lineOption = ref({
   },
   xAxis: {
     type: 'category',
-    data: usageData.map(d => d.date),
+    data: usageData.value.map(d => d.date),
     axisLine: { lineStyle: { color: '#94a3b8' } },
     axisTick: { show: false }
   },
@@ -106,7 +88,7 @@ const lineOption = ref({
   },
   series: [
     {
-      data: usageData.map(d => d.tokens),
+      data: usageData.value.map(d => d.tokens),
       type: 'line',
       smooth: true,
       symbol: 'circle',
@@ -125,9 +107,9 @@ const lineOption = ref({
       }
     }
   ]
-})
+}))
 
-const barOption = ref({
+const barOption = computed(() => ({
   tooltip: {
     trigger: 'axis',
     backgroundColor: '#fff',
@@ -145,7 +127,7 @@ const barOption = ref({
   },
   xAxis: {
     type: 'category',
-    data: modelUsage.map(d => d.model),
+    data: modelUsage.value.map(d => d.model),
     axisLine: { lineStyle: { color: '#94a3b8' } },
     axisTick: { show: false }
   },
@@ -157,7 +139,7 @@ const barOption = ref({
   },
   series: [
     {
-      data: modelUsage.map(d => d.requests),
+      data: modelUsage.value.map(d => d.requests),
       type: 'bar',
       barWidth: '40%',
       itemStyle: {
@@ -173,15 +155,9 @@ const barOption = ref({
       }
     }
   ]
-})
+}))
 
-const activities = [
-  { time: '2 分钟前', event: 'GPT-4 API 调用成功', tokens: '1,245 tokens', status: 'success' },
-  { time: '15 分钟前', event: 'Claude-3 API 调用成功', tokens: '856 tokens', status: 'success' },
-  { time: '1 小时前', event: '账户充值 ¥500', tokens: '', status: 'info' },
-  { time: '2 小时前', event: 'GPT-3.5 API 调用失败', tokens: '重试中', status: 'error' },
-  { time: '3 小时前', event: '新增 API Key', tokens: 'sk-***abc', status: 'info' },
-]
+onMounted(loadDashboard)
 </script>
 
 <template>
@@ -193,16 +169,16 @@ const activities = [
           <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
             <Activity class="w-6 h-6 text-white" />
           </div>
-          <span class="flex items-center text-sm text-green-600 font-medium">
-            <TrendingUp class="w-4 h-4 mr-1" />
-            12.5%
+          <span class="flex items-center text-sm font-medium" :class="dashboardStats.todayRequestsChange >= 0 ? 'text-green-600' : 'text-red-600'">
+            <component :is="dashboardStats.todayRequestsChange >= 0 ? TrendingUp : TrendingDown" class="w-4 h-4 mr-1" />
+            {{ formatChange(dashboardStats.todayRequestsChange) }}
           </span>
         </div>
         <h3 class="text-slate-500 text-sm mb-1">
-          今日请求数
+          {{ t('dashboard.todayRequests') }}
         </h3>
         <p class="text-2xl font-bold text-slate-900">
-          3,245
+          {{ formatNumber(dashboardStats.todayRequests) }}
         </p>
       </div>
 
@@ -211,16 +187,16 @@ const activities = [
           <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
             <Key class="w-6 h-6 text-white" />
           </div>
-          <span class="flex items-center text-sm text-green-600 font-medium">
-            <TrendingUp class="w-4 h-4 mr-1" />
-            8.2%
+          <span class="flex items-center text-sm font-medium" :class="dashboardStats.todayTokensChange >= 0 ? 'text-green-600' : 'text-red-600'">
+            <component :is="dashboardStats.todayTokensChange >= 0 ? TrendingUp : TrendingDown" class="w-4 h-4 mr-1" />
+            {{ formatChange(dashboardStats.todayTokensChange) }}
           </span>
         </div>
         <h3 class="text-slate-500 text-sm mb-1">
-          Token 消耗
+          {{ t('dashboard.tokenUsage') }}
         </h3>
         <p class="text-2xl font-bold text-slate-900">
-          28.5K
+          {{ formatNumber(dashboardStats.todayTokens) }}
         </p>
       </div>
 
@@ -229,16 +205,16 @@ const activities = [
           <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
             <DollarSign class="w-6 h-6 text-white" />
           </div>
-          <span class="flex items-center text-sm text-red-600 font-medium">
-            <TrendingDown class="w-4 h-4 mr-1" />
-            3.1%
+          <span class="flex items-center text-sm font-medium" :class="dashboardStats.todayCostChange >= 0 ? 'text-green-600' : 'text-red-600'">
+            <component :is="dashboardStats.todayCostChange >= 0 ? TrendingUp : TrendingDown" class="w-4 h-4 mr-1" />
+            {{ formatChange(dashboardStats.todayCostChange) }}
           </span>
         </div>
         <h3 class="text-slate-500 text-sm mb-1">
-          今日费用
+          {{ t('dashboard.todayCost') }}
         </h3>
         <p class="text-2xl font-bold text-slate-900">
-          ¥56.80
+          {{ formatCurrency(dashboardStats.todayCost) }}
         </p>
       </div>
 
@@ -252,14 +228,14 @@ const activities = [
             class="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-medium rounded-lg hover:shadow-lg transition-all"
           >
             <Plus class="w-3.5 h-3.5" />
-            <span>充值</span>
+            <span>{{ t('dashboard.recharge') }}</span>
           </button>
         </div>
         <h3 class="text-slate-500 text-sm mb-1">
-          账户余额
+          {{ t('dashboard.balance') }}
         </h3>
         <p class="text-2xl font-bold text-slate-900">
-          ¥1,258.00
+          {{ formatCurrency(dashboardStats.balance) }}
         </p>
       </div>
     </div>
@@ -267,23 +243,29 @@ const activities = [
     <!-- 图表区域 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <h2 class="text-lg font-semibold text-slate-900 mb-6">Token 使用趋势</h2>
+        <h2 class="text-lg font-semibold text-slate-900 mb-6">{{ t('dashboard.usageTrend') }}</h2>
         <div class="h-[300px]">
-          <v-chart class="h-full w-full" :option="lineOption" autoresize />
+          <v-chart v-if="usageData.length" class="h-full w-full" :option="lineOption" autoresize />
+          <div v-else class="h-full flex items-center justify-center text-slate-400">
+            {{ loading ? t('common.loading') : t('common.noData') }}
+          </div>
         </div>
       </div>
 
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <h2 class="text-lg font-semibold text-slate-900 mb-6">模型使用分布</h2>
+        <h2 class="text-lg font-semibold text-slate-900 mb-6">{{ t('dashboard.modelDistribution') }}</h2>
         <div class="h-[300px]">
-          <v-chart class="h-full w-full" :option="barOption" autoresize />
+          <v-chart v-if="modelUsage.length" class="h-full w-full" :option="barOption" autoresize />
+          <div v-else class="h-full flex items-center justify-center text-slate-400">
+            {{ loading ? t('common.loading') : t('common.noData') }}
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 最近活动 -->
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-      <h2 class="text-lg font-semibold text-slate-900 mb-6">最近活动</h2>
+      <h2 class="text-lg font-semibold text-slate-900 mb-6">{{ t('dashboard.recentActivity') }}</h2>
       <div class="space-y-4">
         <div
           v-for="(activity, index) in activities"
@@ -308,6 +290,9 @@ const activities = [
             {{ activity.tokens }}
           </span>
         </div>
+        <div v-if="!activities.length" class="py-8 text-center text-slate-400">
+          {{ loading ? t('common.loading') : t('common.noData') }}
+        </div>
       </div>
     </div>
 
@@ -320,10 +305,10 @@ const activities = [
           </div>
           <div>
             <h2 class="text-xl font-bold text-slate-900">
-              账户充值
+              {{ t('dashboard.recharge') }}
             </h2>
             <p class="text-sm text-slate-500">
-              余额充值
+              {{ t('dashboard.balance') }} {{ t('dashboard.recharge') }}
             </p>
           </div>
         </div>
@@ -331,7 +316,7 @@ const activities = [
         <div class="bg-slate-50 rounded-2xl p-4 mb-6">
           <div class="mb-4">
             <label class="block text-sm font-semibold text-slate-900 mb-2">
-              充值金额 (美元)
+              {{ t('dashboard.rechargeAmount') }} ({{ t('dashboard.usd') }})
             </label>
             <div class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
@@ -340,7 +325,7 @@ const activities = [
               <input
                 v-model="usdAmount"
                 type="number"
-                placeholder="请输入充值金额"
+                :placeholder="t('dashboard.inputAmountPlaceholder')"
                 min="0"
                 step="0.01"
                 class="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
@@ -349,14 +334,14 @@ const activities = [
           </div>
 
           <div class="flex items-center justify-between mb-2">
-            <span class="text-slate-600">充值金额</span>
+            <span class="text-slate-600">{{ t('dashboard.rechargeAmount') }}</span>
             <span class="font-semibold text-slate-900">
               ${{ usdAmount || "0.00" }}
             </span>
           </div>
           <div class="flex items-center justify-between mb-2">
             <span class="text-slate-600 text-sm">
-              兑换比例
+              {{ t('dashboard.exchangeRate') }}
             </span>
             <span class="text-sm text-slate-600">
               $1 = ¥0.2
@@ -364,7 +349,7 @@ const activities = [
           </div>
           <div class="flex items-center justify-between pt-2 border-t border-slate-200">
             <span class="text-slate-900 font-semibold">
-              支付金额
+              {{ t('dashboard.payAmount') }}
             </span>
             <span class="text-2xl font-bold text-slate-900">
               ¥{{ calculateCnyAmount.toFixed(2) }}
@@ -374,7 +359,7 @@ const activities = [
 
         <div class="mb-6">
           <h3 class="text-sm font-semibold text-slate-900 mb-3">
-            支付方式
+            {{ t('dashboard.paymentMethod') }}
           </h3>
           <div class="space-y-2">
             <label
@@ -407,13 +392,13 @@ const activities = [
             @click="() => { isRechargeModalOpen = false; usdAmount = '' }"
             class="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
           >
-            取消
+            {{ t('common.cancel') }}
           </button>
           <button
             @click="handleConfirmRecharge"
             class="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl hover:shadow-lg transition-all duration-200 font-medium"
           >
-            确认支付
+            {{ t('common.confirm') }}
           </button>
         </div>
       </div>
