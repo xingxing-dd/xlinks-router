@@ -16,4 +16,7 @@ public class UserSubscriptionResponse {
     private Integer currentConcurrency;
     private String expireTime;
     private String status;
+    private String purchaseTime;
+    private Integer daysRemaining;
+    private Boolean dailyReset;
 }

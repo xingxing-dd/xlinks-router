@@ -1,6 +1,6 @@
 # 客户端 API 接口文档
 
-本文档定义 xlinks-router-web-vue 前端界面所需的 API 接口。前端基于 Vue 3 + Tailwind CSS，后端基于 Spring Boot。
+本文档仅保留前后端对接所需的接口定义与字段信息。
 
 ---
 
@@ -66,8 +66,6 @@
 
 ### 2.1 获取 RSA 公钥
 
-用于登录/注册前加密密码。
-
 **请求地址**: `POST /auth/rsa-public-key`
 
 **请求参数**: 无
@@ -94,8 +92,6 @@
 ---
 
 ### 2.2 发送验证码
-
-用于注册、重置密码等场景发送邮箱验证码或短信验证码。
 
 **请求地址**: `POST /auth/verify-code`
 
@@ -156,9 +152,10 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| email | String | 是 | 邮箱地址 |
+| target | String | 是 | 注册账号；`targetType=email` 时传邮箱地址，`targetType=sms` 时传手机号 |
+| targetType | String | 是 | 账号类型：`email`(邮箱)、`sms`(手机号) |
 | password | String | 是 | 密码（RSA 加密） |
-| code | String | 是 | 邮箱验证码 |
+| code | String | 是 | 验证码 |
 | inviteCode | String | 否 | 邀请码 |
 
 **响应参数**:
@@ -166,6 +163,27 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | message | String | 注册结果信息 |
+
+**邮箱注册请求示例**:
+```json
+{
+  "target": "user@example.com",
+  "targetType": "email",
+  "password": "encrypted-password",
+  "code": "123456",
+  "inviteCode": "INVITE2026ABC"
+}
+```
+
+**手机号注册请求示例**:
+```json
+{
+  "target": "13800138000",
+  "targetType": "sms",
+  "password": "encrypted-password",
+  "code": "123456"
+}
+```
 
 **响应示例**:
 ```json
@@ -187,7 +205,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | username | String | 是 | 用户名 |
-| password | String | 是 | 密码 |
+| password | String | 是 | 密码（RSA 加密） |
 
 **响应参数**:
 
@@ -203,7 +221,7 @@
 **请求示例**:
 ```json
 {
-  "username": "demo_user",
+  "username": "user@example.com",
   "password": "encrypted-password"
 }
 ```
@@ -466,8 +484,6 @@
 
 ### 4.2 获取可用模型列表（展示用）
 
-供前端「模型」页面展示所有可用模型的详细信息。
-
 **请求地址**: `GET /api/v1/models/available`
 
 **请求参数**:
@@ -482,13 +498,17 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | Long | 模型 ID |
-| name | String | 模型名称（如 claude-3-7-sonnet） |
-| provider | String | 提供商名称（如 Anthropic） |
+| name | String | 模型名称（展示名，如 claude-3-7-sonnet） |
+| provider | String | 提供商名称 |
 | description | String | 模型描述 |
-| inputPrice | String | 输入价格（如 $3.00/M） |
-| outputPrice | String | 输出价格（如 $15.00/M） |
-| contextWindow | String | 上下文窗口大小（如 200K） |
+| inputPrice | String | 输入价格（展示字段） |
+| outputPrice | String | 输出价格（展示字段） |
+| contextWindow | String | 上下文窗口大小（展示字段） |
 | status | String | 状态：available/limited/unavailable |
+
+说明：
+- 该接口主要服务 `models/index.vue` 的展示卡片，字段保持轻量化即可。
+- 若后续接真实模型表，对客展示字段建议优先使用 `customer_models.logic_model_name`；底层供应商模型名可在路由明细等内部场景中再使用。
 
 **响应示例**:
 ```json
@@ -836,15 +856,21 @@
 
 ---
 
-### 6.4 获取用户当前套餐状态
+### 6.4 获取用户订阅详情
 
-**请求地址**: `GET /api/v1/user/subscription`
+**请求地址**: `GET /api/v1/subscriptions/{planId}`
+
+**路径参数**:
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| planId | String | 是 | 套餐 ID；前端“我的订阅”右上角切换时传入 |
 
 **响应参数**:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| planId | String | 当前套餐 ID |
+| planId | String | 当前查询的套餐 ID |
 | planName | String | 套餐名称 |
 | dailyLimit | BigDecimal | 每日额度 |
 | dailyUsed | BigDecimal | 今日已用 |
@@ -854,6 +880,14 @@
 | currentConcurrency | Integer | 当前并发数 |
 | expireTime | DateTime | 套餐过期时间 |
 | status | String | 套餐状态：active/expired/frozen |
+| purchaseTime | DateTime | 购买时间 |
+| daysRemaining | Integer | 剩余天数 |
+| dailyReset | Boolean | 今日额度是否已重置 |
+
+说明：
+- 为遵循 RESTful 风格，订阅详情查询改为资源路径 `/api/v1/subscriptions/{planId}`。
+- 该接口用于 `plans/index.vue` 右上角套餐切换后的详情展示。
+- 若前端需要默认展示当前生效订阅，建议额外提供 `GET /api/v1/subscriptions/current`，避免将“当前态查询”和“按 ID 查询”混在同一个接口中。
 
 **响应示例**:
 ```json
@@ -870,7 +904,10 @@
     "concurrency": 12,
     "currentConcurrency": 3,
     "expireTime": "2026-04-15 00:00:00",
-    "status": "active"
+    "status": "active",
+    "purchaseTime": "2026-03-18 09:30:00",
+    "daysRemaining": 28,
+    "dailyReset": true
   }
 }
 ```
@@ -1029,7 +1066,7 @@
 |------|------|------|------|
 | page | Integer | 否 | 页码 |
 | pageSize | Integer | 否 | 每页数量 |
-| model | String | 否 | 模型筛选 |
+| model | String | 否 | 模型筛选；建议与 `usage_records.request_model` 保持一致 |
 | providerId | Long | 否 | Provider 筛选 |
 | startDate | DateTime | 否 | 开始时间 |
 | endDate | DateTime | 否 | 结束时间 |
@@ -1039,8 +1076,8 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | Long | 记录 ID |
-| requestId | String | 请求 ID |
-| model | String | 请求模型 |
+| requestId | String | 请求 ID，对应 `usage_records.request_id` |
+| model | String | 请求模型，对应 `usage_records.request_model` |
 | providerName | String | Provider 名称 |
 | promptTokens | Integer | 提示词 Token |
 | completionTokens | Integer | 补全 Token |
@@ -1050,6 +1087,10 @@
 | errorCode | String | 错误码 |
 | cost | BigDecimal | 费用(元) |
 | createdAt | DateTime | 请求时间 |
+
+说明：
+- 当前后端 `UsageRecordController` 的 `GET /api/v1/usage-records` 仍返回空 `List<Object>`，与本文档定义的分页结构不一致，需补齐 DTO 与分页返回。
+- 当前前端 `src/views` 里尚未接入使用记录页，但该接口文档可继续保留，便于后续扩展控制台明细页。
 
 **响应示例**:
 ```json
@@ -1103,7 +1144,19 @@
 | avgLatencyMs | Integer | 平均延迟(毫秒) |
 | successRate | Double | 成功率(%) |
 | modelStats | Array | 按模型统计 |
+| modelStats[].name | String | 统计名称；当前后端 DTO 使用通用字段 `name` |
+| modelStats[].requests | Integer | 请求数 |
+| modelStats[].tokens | Integer | Token 数 |
+| modelStats[].cost | BigDecimal | 费用 |
 | providerStats | Array | 按 Provider 统计 |
+| providerStats[].name | String | Provider 名称；当前后端 DTO 使用通用字段 `name` |
+| providerStats[].requests | Integer | 请求数 |
+| providerStats[].tokens | Integer | Token 数 |
+| providerStats[].cost | BigDecimal | 费用 |
+
+说明：
+- 当前文档示例写法使用 `model` / `provider` 作为子项字段名，但后端 DTO `UsageSummaryStatItem` 实际为统一字段 `name`。
+- 为避免前后端歧义，建议以前端/接口统一的 `name` 为准；若需要更强语义，可后续拆分为 `modelName` 与 `providerName` 两类 VO。
 
 **响应示例**:
 ```json
@@ -1117,131 +1170,13 @@
     "avgLatencyMs": 1200,
     "successRate": 99.5,
     "modelStats": [
-      { "model": "GPT-4", "requests": 5000, "tokens": 800000, "cost": 800.00 }
+      { "name": "GPT-4", "requests": 5000, "tokens": 800000, "cost": 800.00 }
     ],
     "providerStats": [
-      { "provider": "OpenAI", "requests": 6000, "tokens": 900000, "cost": 900.00 }
+      { "name": "OpenAI", "requests": 6000, "tokens": 900000, "cost": 900.00 }
     ]
   }
 }
 ```
 
 ---
-
-## 10. 文件上传（待定义）
-
-如需支持用户上传头像、付款凭证等文件，需要定义以下接口：
-
-- `POST /api/v1/upload` - 上传文件
-- `DELETE /api/v1/files/{id}` - 删除文件
-
----
-
-## 附录：待新增数据表
-
-根据前端页面需求，建议新增以下数据表：
-
-### A.1 套餐表 (plans)
-
-```sql
-CREATE TABLE `plans` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `plan_code` VARCHAR(50) NOT NULL COMMENT '套餐编码，如 small、medium、large',
-  `plan_name` VARCHAR(100) NOT NULL COMMENT '套餐名称',
-  `price` DECIMAL(10,2) NOT NULL COMMENT '价格(元)',
-  `daily_limit` DECIMAL(10,2) NOT NULL COMMENT '每日额度(美元)',
-  `monthly_quota` DECIMAL(10,2) NOT NULL COMMENT '月度额度(美元)',
-  `concurrency` INT NOT NULL DEFAULT 1 COMMENT '并发限制',
-  `features` JSON DEFAULT NULL COMMENT '特性列表',
-  `is_recommended` TINYINT NOT NULL DEFAULT 0 COMMENT '是否推荐：1-是，0-否',
-  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
-  `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_plan_code` (`plan_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='套餐表';
-```
-
-### A.2 用户订阅表 (user_subscriptions)
-
-```sql
-CREATE TABLE `user_subscriptions` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `user_id` BIGINT NOT NULL COMMENT '用户 ID',
-  `plan_id` BIGINT NOT NULL COMMENT '套餐 ID',
-  `daily_used` DECIMAL(10,2) DEFAULT 0 COMMENT '今日已用额度(美元)',
-  `monthly_used` DECIMAL(10,2) DEFAULT 0 COMMENT '月度已用额度(美元)',
-  `current_concurrency` INT DEFAULT 0 COMMENT '当前并发数',
-  `expire_time` DATETIME NOT NULL COMMENT '过期时间',
-  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-正常，0-过期',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户订阅表';
-```
-
-### A.3 推广表 (referrals)
-
-```sql
-CREATE TABLE `referrals` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `user_id` BIGINT NOT NULL COMMENT '推广人 ID',
-  `referral_code` VARCHAR(50) NOT NULL COMMENT '邀请码',
-  `referred_user_id` BIGINT NOT NULL COMMENT '被邀请人 ID',
-  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待激活，1-已激活',
-  `register_reward` DECIMAL(10,2) DEFAULT 0 COMMENT '注册奖励',
-  `first_recharge_reward` DECIMAL(10,2) DEFAULT 0 COMMENT '首充奖励',
-  `total_earnings` DECIMAL(10,2) DEFAULT 0 COMMENT '累计收益',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
-  `activated_at` DATETIME DEFAULT NULL COMMENT '激活时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_user_id` (`user_id`),
-  KEY `idx_referral_code` (`referral_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推广记录表';
-```
-
-### A.4 充值订单表 (recharge_orders)
-
-```sql
-CREATE TABLE `recharge_orders` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `order_no` VARCHAR(64) NOT NULL COMMENT '订单号',
-  `user_id` BIGINT NOT NULL COMMENT '用户 ID',
-  `type` VARCHAR(20) NOT NULL COMMENT '类型：plan/recharge',
-  `plan_id` BIGINT DEFAULT NULL COMMENT '套餐 ID',
-  `amount` DECIMAL(10,2) NOT NULL COMMENT '支付金额(人民币)',
-  `usd_amount` DECIMAL(10,2) NOT NULL COMMENT '美元金额',
-  `bonus_amount` DECIMAL(10,2) DEFAULT 0 COMMENT '赠送金额',
-  `payment_method` VARCHAR(20) NOT NULL COMMENT '支付方式：alipay/wechat',
-  `payment_status` VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '支付状态：pending/paid/failed',
-  `trade_no` VARCHAR(64) DEFAULT NULL COMMENT '第三方交易号',
-  `paid_at` DATETIME DEFAULT NULL COMMENT '支付时间',
-  `expire_time` DATETIME NOT NULL COMMENT '订单过期时间',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_order_no` (`order_no`),
-  KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='充值订单表';
-```
-
-### A.5 联系表单表 (contact_messages)
-
-```sql
-CREATE TABLE `contact_messages` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `user_id` BIGINT DEFAULT NULL COMMENT '用户 ID（未登录可为空）',
-  `name` VARCHAR(50) NOT NULL COMMENT '姓名',
-  `email` VARCHAR(100) NOT NULL COMMENT '邮箱',
-  `subject` VARCHAR(20) NOT NULL COMMENT '主题：technical/billing/feature/bug/other',
-  `message` TEXT NOT NULL COMMENT '消息内容',
-  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待处理，1-已回复',
-  `reply` TEXT DEFAULT NULL COMMENT '回复内容',
-  `replied_at` DATETIME DEFAULT NULL COMMENT '回复时间',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='联系表单表';

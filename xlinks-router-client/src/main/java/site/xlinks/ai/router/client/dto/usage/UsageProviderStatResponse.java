@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UsageProviderStatResponse {
-    private String provider;
+    private String name;
     private Integer requests;
     private Integer tokens;
     private BigDecimal cost;
