@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { deleteApi, getApi, getPageRecords, postApi } from '@/utils/request'
+import { deleteApi, getApi, getPageRecords, postApi, putApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
 
 export function useTokens() {
@@ -139,7 +139,7 @@ export function useTokens() {
     const statusText = newStatus === 1 ? t('tokens.status.enabled') : t('tokens.status.disabled')
 
     try {
-      await postApi(`/v1/customer-tokens/${id}/status`, { status: newStatus })
+      await putApi(`/v1/customer-tokens/${id}/status`, { status: newStatus })
       tokens.value = tokens.value.map((token) => 
         token.id === id 
           ? { ...token, status: newStatus === 1 ? 'enabled' : 'disabled' } 

@@ -9,8 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import site.xlinks.ai.router.client.context.MerchantAccountContext;
-import site.xlinks.ai.router.entity.MerchantAccount;
+import site.xlinks.ai.router.client.context.CustomerAccountContext;
+import site.xlinks.ai.router.entity.CustomerAccount;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -42,7 +42,7 @@ public class TokenService {
     /**
      * 生成Token
      */
-    public String generateToken(MerchantAccount account) {
+    public String generateToken(CustomerAccount account) {
         // 生成JWT Token
         Map<String, Object> claims = new HashMap<>();
         claims.put("accountId", account.getId());
@@ -69,7 +69,7 @@ public class TokenService {
     /**
      * 验证Token
      */
-    public MerchantAccount validateToken(String token) {
+    public CustomerAccount validateToken(String token) {
         try {
             SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
             Claims claims = Jwts.parserBuilder()
@@ -94,7 +94,7 @@ public class TokenService {
             redisTemplate.expire(redisKey, REDIS_EXPIRE_TIME, TimeUnit.SECONDS);
 
             // 返回账户信息
-            MerchantAccount account = new MerchantAccount();
+            CustomerAccount account = new CustomerAccount();
             account.setId(accountId);
             account.setUsername(claims.get("username", String.class));
             account.setEmail(claims.get("email", String.class));
@@ -110,8 +110,8 @@ public class TokenService {
     /**
      * 从请求中获取当前账户
      */
-    public MerchantAccount getCurrentAccount() {
-        return MerchantAccountContext.getAccount();
+    public CustomerAccount getCurrentAccount() {
+        return CustomerAccountContext.getAccount();
     }
 
     /**
@@ -120,7 +120,7 @@ public class TokenService {
     public void logout(Long accountId) {
         String redisKey = TOKEN_PREFIX + accountId;
         redisTemplate.delete(redisKey);
-        MerchantAccountContext.clear();
+        CustomerAccountContext.clear();
         log.info("Logged out, accountId: {}", accountId);
     }
 
@@ -128,12 +128,12 @@ public class TokenService {
      * 刷新Token
      */
     public String refreshToken(String token) {
-        MerchantAccount account = validateToken(token);
+        CustomerAccount account = validateToken(token);
         if (account != null) {
             // 删除旧token
             logout(account.getId());
             // 生成新token
-            MerchantAccount fullAccount = new MerchantAccount();
+            CustomerAccount fullAccount = new CustomerAccount();
             fullAccount.setId(account.getId());
             fullAccount.setUsername(account.getUsername());
             fullAccount.setEmail(account.getEmail());

@@ -1,19 +1,22 @@
 package site.xlinks.ai.router.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDateTime;
+
 /**
- * 商户账户实体
+ * 客户账户实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("merchant_accounts")
-public class MerchantAccount extends BaseEntity {
+@TableName("customer_accounts")
+public class CustomerAccount extends BaseEntity {
 
     /**
      * 主键

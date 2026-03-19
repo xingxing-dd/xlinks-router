@@ -1,5 +1,5 @@
 const API_PREFIX = '/api'
-const AUTH_PREFIX = '/auth'
+const AUTH_PREFIX = '/api/v1/auth'
 
 function redirectToLogin() {
   if (typeof window === 'undefined') {

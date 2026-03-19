@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
-import site.xlinks.ai.router.client.context.MerchantAccountContext;
+import site.xlinks.ai.router.client.context.CustomerAccountContext;
 import site.xlinks.ai.router.client.service.TokenService;
 
 /**
@@ -35,7 +35,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             var account = tokenService.validateToken(token);
             if (account != null) {
                 // 设置到上下文
-                MerchantAccountContext.setAccount(account);
+                CustomerAccountContext.setAccount(account);
                 log.debug("Authenticated account: {}", account.getId());
                 return true;
             }
@@ -49,6 +49,6 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
         // 清理上下文
-        MerchantAccountContext.clear();
+        CustomerAccountContext.clear();
     }
 }

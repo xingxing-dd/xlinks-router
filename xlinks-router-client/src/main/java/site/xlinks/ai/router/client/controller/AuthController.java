@@ -12,18 +12,18 @@ import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
 import site.xlinks.ai.router.client.dto.auth.RsaPublicKeyResponse;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendRequest;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
-import site.xlinks.ai.router.client.service.MerchantAccountService;
+import site.xlinks.ai.router.client.service.CustomerAccountService;
 import site.xlinks.ai.router.common.result.Result;
 
 /**
  * 认证控制器
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final MerchantAccountService merchantAccountService;
+    private final CustomerAccountService customerAccountService;
 
     @PostMapping("/rsa-public-key")
     public Result<RsaPublicKeyResponse> getRsaPublicKey() {
@@ -46,19 +46,19 @@ public class AuthController {
 
     @PostMapping("/register")
     public Result<String> register(@Valid @RequestBody AuthRegisterRequest request) {
-        merchantAccountService.register(request);
+        customerAccountService.register(request);
         return Result.success("注册成功", null);
     }
 
     @PostMapping("/login")
     public Result<AuthLoginResponse> login(@Valid @RequestBody AuthLoginRequest request) {
-        AuthLoginResponse response = merchantAccountService.login(request.getUsername(), request.getPassword());
+        AuthLoginResponse response = customerAccountService.login(request.getUsername(), request.getPassword());
         return Result.success(response);
     }
 
     @PostMapping("/logout")
     public Result<String> logout() {
-        merchantAccountService.logout();
+        customerAccountService.logout();
         return Result.success("登出成功", null);
     }
 }

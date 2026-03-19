@@ -9,20 +9,20 @@ import site.xlinks.ai.router.client.dto.auth.AuthLoginResponse;
 import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.entity.MerchantAccount;
-import site.xlinks.ai.router.mapper.MerchantAccountMapper;
+import site.xlinks.ai.router.entity.CustomerAccount;
+import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 
 import java.util.regex.Pattern;
 
 /**
- * 商户账户服务
+ * 客户账户服务
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MerchantAccountService {
+public class CustomerAccountService {
 
-    private final MerchantAccountMapper merchantAccountMapper;
+    private final CustomerAccountMapper customerAccountMapper;
     private final TokenService tokenService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -44,19 +44,19 @@ public class MerchantAccountService {
         String targetType = request.getTargetType();
 
         // 检查账号是否已存在
-        LambdaQueryWrapper<MerchantAccount> queryWrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<CustomerAccount> queryWrapper = new LambdaQueryWrapper<>();
         
         if (TARGET_TYPE_USERNAME.equalsIgnoreCase(targetType)) {
-            queryWrapper.eq(MerchantAccount::getUsername, target);
+            queryWrapper.eq(CustomerAccount::getUsername, target);
         } else if (TARGET_TYPE_PHONE.equalsIgnoreCase(targetType)) {
-            queryWrapper.eq(MerchantAccount::getPhone, target);
+            queryWrapper.eq(CustomerAccount::getPhone, target);
         } else if (TARGET_TYPE_EMAIL.equalsIgnoreCase(targetType)) {
-            queryWrapper.eq(MerchantAccount::getEmail, target);
+            queryWrapper.eq(CustomerAccount::getEmail, target);
         } else {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的账号类型");
         }
 
-        Long count = merchantAccountMapper.selectCount(queryWrapper);
+        Long count = customerAccountMapper.selectCount(queryWrapper);
         if (count > 0) {
             if (TARGET_TYPE_USERNAME.equalsIgnoreCase(targetType)) {
                 throw new BusinessException(ErrorCode.USER_ALREADY_EXISTS);
@@ -68,7 +68,7 @@ public class MerchantAccountService {
         }
 
         // 创建新用户
-        MerchantAccount account = new MerchantAccount();
+        CustomerAccount account = new CustomerAccount();
         
         if (TARGET_TYPE_USERNAME.equalsIgnoreCase(targetType)) {
             account.setUsername(target);
@@ -77,13 +77,13 @@ public class MerchantAccountService {
         } else if (TARGET_TYPE_EMAIL.equalsIgnoreCase(targetType)) {
             account.setEmail(target);
         }
-        
+        account.setUsername(target);
         account.setPassword(passwordEncoder.encode(request.getPassword()));
         account.setStatus(1); // 启用状态
 
-        merchantAccountMapper.insert(account);
+        customerAccountMapper.insert(account);
 
-        log.info("New merchant account registered: {}", account.getId());
+        log.info("New customer account registered: {}", account.getId());
     }
 
     /**
@@ -91,9 +91,9 @@ public class MerchantAccountService {
      */
     public AuthLoginResponse login(String username, String password) {
         // 用户名登录
-        LambdaQueryWrapper<MerchantAccount> query = new LambdaQueryWrapper<>();
-        query.eq(MerchantAccount::getUsername, username);
-        MerchantAccount account = merchantAccountMapper.selectOne(query);
+        LambdaQueryWrapper<CustomerAccount> query = new LambdaQueryWrapper<>();
+        query.eq(CustomerAccount::getUsername, username);
+        CustomerAccount account = customerAccountMapper.selectOne(query);
 
         // 验证用户是否存在
         if (account == null) {
@@ -124,7 +124,7 @@ public class MerchantAccountService {
         user.setStatus(account.getStatus());
         response.setUser(user);
 
-        log.info("Merchant account logged in: {}", account.getId());
+        log.info("Customer account logged in: {}", account.getId());
         return response;
     }
 
@@ -141,14 +141,14 @@ public class MerchantAccountService {
     /**
      * 根据ID获取账户信息
      */
-    public MerchantAccount getById(Long id) {
-        return merchantAccountMapper.selectById(id);
+    public CustomerAccount getById(Long id) {
+        return customerAccountMapper.selectById(id);
     }
 
     /**
      * 更新账户信息
      */
-    public void updateAccount(MerchantAccount account) {
-        merchantAccountMapper.updateById(account);
+    public void updateAccount(CustomerAccount account) {
+        customerAccountMapper.updateById(account);
     }
 }
