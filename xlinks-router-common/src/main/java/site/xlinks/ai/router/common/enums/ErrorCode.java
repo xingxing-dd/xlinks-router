@@ -23,6 +23,11 @@ public enum ErrorCode {
     ROUTE_ERROR(4012, "路由错误"),
     USER_NOT_FOUND(4013, "用户不存在"),
     ACCOUNT_DISABLED(4014, "账号已禁用"),
+    VERIFY_CODE_ERROR(4015, "验证码错误"),
+    PHONE_ALREADY_EXISTS(4016, "手机号已被注册"),
+    EMAIL_ALREADY_EXISTS(4017, "邮箱已被注册"),
+    PASSWORD_ERROR(4018, "密码错误"),
+    USER_DISABLED(4019, "用户已被禁用"),
 
     // 服务端错误 5xxx
     SYSTEM_ERROR(5000, "系统异常"),

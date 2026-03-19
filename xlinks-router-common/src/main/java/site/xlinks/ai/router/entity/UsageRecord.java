@@ -23,6 +23,11 @@ public class UsageRecord extends BaseEntity {
     private Long id;
 
     /**
+     * 账户 ID
+     */
+    private Long accountId;
+
+    /**
      * 请求 ID
      */
     private String requestId;

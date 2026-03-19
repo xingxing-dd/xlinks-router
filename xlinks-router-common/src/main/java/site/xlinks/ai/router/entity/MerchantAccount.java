@@ -2,19 +2,18 @@ package site.xlinks.ai.router.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.time.LocalDateTime;
-
 /**
- * Customer Token 实体类
+ * 商户账户实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("customer_tokens")
-public class CustomerToken extends BaseEntity {
+@TableName("merchant_accounts")
+public class MerchantAccount extends BaseEntity {
 
     /**
      * 主键
@@ -23,24 +22,24 @@ public class CustomerToken extends BaseEntity {
     private Long id;
 
     /**
-     * 账户 ID
+     * 用户名
      */
-    private Long accountId;
+    private String username;
 
     /**
-     * 客户名称
+     * 手机号
      */
-    private String customerName;
+    private String phone;
 
     /**
-     * Token 名称
+     * 邮箱
      */
-    private String tokenName;
+    private String email;
 
     /**
-     * Token 值（SHA256 哈希存储）
+     * 密码（加密存储）
      */
-    private String tokenValue;
+    private String password;
 
     /**
      * 状态：1-启用，0-禁用
@@ -48,14 +47,10 @@ public class CustomerToken extends BaseEntity {
     private Integer status;
 
     /**
-     * 过期时间
+     * 逻辑删除：0-未删除，1-已删除
      */
-    private LocalDateTime expireTime;
-
-    /**
-     * 允许访问的模型列表（JSON）
-     */
-    private String allowedModels;
+    @TableLogic
+    private Integer deleted;
 
     /**
      * 备注

@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.client.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,11 +12,18 @@ import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
 import site.xlinks.ai.router.client.dto.auth.RsaPublicKeyResponse;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendRequest;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
+import site.xlinks.ai.router.client.service.MerchantAccountService;
 import site.xlinks.ai.router.common.result.Result;
 
+/**
+ * 认证控制器
+ */
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
+
+    private final MerchantAccountService merchantAccountService;
 
     @PostMapping("/rsa-public-key")
     public Result<RsaPublicKeyResponse> getRsaPublicKey() {
@@ -27,6 +35,7 @@ public class AuthController {
 
     @PostMapping("/verify-code")
     public Result<VerifyCodeSendResponse> sendVerifyCode(@Valid @RequestBody VerifyCodeSendRequest request) {
+        // TODO: 集成短信/邮箱服务发送验证码
         VerifyCodeSendResponse response = new VerifyCodeSendResponse();
         String message = "email".equalsIgnoreCase(request.getCodeType()) ? "邮箱验证码发送成功" : "短信验证码发送成功";
         response.setMessage(message);
@@ -37,20 +46,19 @@ public class AuthController {
 
     @PostMapping("/register")
     public Result<String> register(@Valid @RequestBody AuthRegisterRequest request) {
+        merchantAccountService.register(request);
         return Result.success("注册成功", null);
     }
 
     @PostMapping("/login")
     public Result<AuthLoginResponse> login(@Valid @RequestBody AuthLoginRequest request) {
-        AuthLoginResponse response = new AuthLoginResponse();
-        response.setAccessToken("mock-access-token-client-module");
-        response.setExpiresIn(7200L);
-
-        AuthLoginResponse.AuthUser user = new AuthLoginResponse.AuthUser();
-        user.setId(1L);
-        user.setEmail(request.getUsername());
-        user.setStatus(1);
-        response.setUser(user);
+        AuthLoginResponse response = merchantAccountService.login(request.getUsername(), request.getPassword());
         return Result.success(response);
+    }
+
+    @PostMapping("/logout")
+    public Result<String> logout() {
+        merchantAccountService.logout();
+        return Result.success("登出成功", null);
     }
 }
