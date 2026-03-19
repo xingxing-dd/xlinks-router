@@ -27,6 +27,12 @@ public class ProviderCreateDTO {
     @NotBlank(message = "基础请求 URL 不能为空")
     private String baseUrl;
 
+    @Schema(description = "服务商 Logo URL")
+    private String providerLogo;
+
+    @Schema(description = "服务商官网 URL")
+    private String providerWebsite;
+
     @Schema(description = "状态：1-启用，0-禁用")
     private Integer status = 1;
 

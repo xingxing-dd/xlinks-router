@@ -16,6 +16,12 @@ public class ProviderUpdateDTO {
     @Schema(description = "基础请求 URL")
     private String baseUrl;
 
+    @Schema(description = "服务商 Logo URL")
+    private String providerLogo;
+
+    @Schema(description = "服务商官网 URL")
+    private String providerWebsite;
+
     @Schema(description = "备注")
     private String remark;
 }

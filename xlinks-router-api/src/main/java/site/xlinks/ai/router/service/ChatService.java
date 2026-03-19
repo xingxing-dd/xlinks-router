@@ -10,8 +10,8 @@ import site.xlinks.ai.router.context.RouteTarget;
 import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
-import site.xlinks.ai.router.entity.CustomerModel;
 import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.ProviderToken;
 
 import java.util.List;
@@ -41,7 +41,7 @@ public class ChatService {
     private final UsageRecordService usageRecordService;
     private final ChatProviderAdapterFactory adapterFactory;
 
-    private final site.xlinks.ai.router.mapper.CustomerModelMapper customerModelMapper;
+    private final site.xlinks.ai.router.mapper.ModelMapper modelMapper;
 
     /**
      * 处理 Chat Completion 请求
@@ -72,7 +72,7 @@ public class ChatService {
             }
 
             // ========== 5. 模型路由层：路由到目标 Provider/Model ==========
-            RouteTarget routeTarget = modelRouteService.route(request.getModel(), usageDecision.getCurrentUsageType());
+            RouteTarget routeTarget = modelRouteService.route(request.getModel());
 
             // ========== 6. Token 选择层：选择可用 Provider Token ==========
             ProviderToken providerToken = providerTokenSelectService.selectToken(routeTarget.getProviderId());
@@ -103,7 +103,7 @@ public class ChatService {
             // ========== 9. 后置处理：记录使用情况 ==========
             long latencyMs = System.currentTimeMillis() - startTime;
             recordUsage(requestId, customerToken.getId(), routeTarget.getProviderId(),
-                    null, providerToken.getId(), request.getModel(), response, latencyMs,
+                    routeTarget.getModelId(), providerToken.getId(), request.getModel(), response, latencyMs,
                     null, null);
 
             return response;
@@ -131,18 +131,15 @@ public class ChatService {
         // 验证 Token
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
 
-        // 查询客户可用的模型列表
-        // 这里简化处理：返回所有启用的模型
-        // 后续可根据 customerToken 的 allowedModels 进行过滤
-
-        List<CustomerModel> models = customerModelMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerModel>()
-                        .eq(CustomerModel::getStatus, 1)
+        // 查询所有启用的模型
+        List<Model> models = modelMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Model>()
+                        .eq(Model::getStatus, 1)
         );
 
         List<Object> modelList = models.stream()
                 .map(m -> java.util.Map.of(
-                        "id", m.getLogicModelCode(),
+                        "id", m.getModelCode(),
                         "object", "model",
                         "created", System.currentTimeMillis() / 1000,
                         "owned_by", "xlinks-router"

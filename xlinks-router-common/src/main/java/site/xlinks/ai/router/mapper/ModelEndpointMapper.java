@@ -2,11 +2,11 @@ package site.xlinks.ai.router.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import site.xlinks.ai.router.entity.ProviderModel;
+import site.xlinks.ai.router.entity.ModelEndpoint;
 
 /**
- * Provider Model Mapper 接口
+ * Model Endpoint Mapper 接口
  */
 @Mapper
-public interface ProviderModelMapper extends BaseMapper<ProviderModel> {
+public interface ModelEndpointMapper extends BaseMapper<ModelEndpoint> {
 }

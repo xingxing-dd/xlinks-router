@@ -2,11 +2,11 @@ package site.xlinks.ai.router.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import site.xlinks.ai.router.entity.CustomerModel;
+import site.xlinks.ai.router.entity.Model;
 
 /**
- * Customer Model Mapper 接口
+ * Model Mapper 接口
  */
 @Mapper
-public interface CustomerModelMapper extends BaseMapper<CustomerModel> {
+public interface ModelMapper extends BaseMapper<Model> {
 }

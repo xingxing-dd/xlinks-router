@@ -37,6 +37,11 @@ public class RouteTarget {
     private String providerModel;
 
     /**
+     * 模型 ID
+     */
+    private Long modelId;
+
+    /**
      * 优先级
      */
     private Integer priority;

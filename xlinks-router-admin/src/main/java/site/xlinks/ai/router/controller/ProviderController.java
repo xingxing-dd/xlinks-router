@@ -30,6 +30,8 @@ public class ProviderController {
         provider.setProviderName(dto.getProviderName());
         provider.setProviderType(dto.getProviderType());
         provider.setBaseUrl(dto.getBaseUrl());
+        provider.setProviderLogo(dto.getProviderLogo());
+        provider.setProviderWebsite(dto.getProviderWebsite());
         provider.setStatus(dto.getStatus());
         provider.setRemark(dto.getRemark());
         
@@ -71,6 +73,12 @@ public class ProviderController {
         }
         if (dto.getBaseUrl() != null) {
             provider.setBaseUrl(dto.getBaseUrl());
+        }
+        if (dto.getProviderLogo() != null) {
+            provider.setProviderLogo(dto.getProviderLogo());
+        }
+        if (dto.getProviderWebsite() != null) {
+            provider.setProviderWebsite(dto.getProviderWebsite());
         }
         if (dto.getRemark() != null) {
             provider.setRemark(dto.getRemark());
