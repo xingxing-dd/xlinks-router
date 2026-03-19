@@ -1,7 +1,6 @@
 package site.xlinks.ai.router.client.dto.token;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
@@ -13,6 +12,5 @@ public class CreateCustomerTokenRequest {
 
     private List<String> allowedModels;
 
-    @NotNull(message = "expireDays不能为空")
     private Integer expireDays;
 }
