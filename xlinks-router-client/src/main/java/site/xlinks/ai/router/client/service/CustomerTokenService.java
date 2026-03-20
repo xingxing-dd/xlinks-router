@@ -37,7 +37,7 @@ public class CustomerTokenService {
         return customerTokenMapper.selectPage(new Page<>(page, pageSize), wrapper);
     }
 
-    public CustomerToken createToken(Long accountId, String customerName, CreateCustomerTokenRequest request) {
+    public CustomerToken createToken(Long accountId, String customerName, CreateCustomerTokenRequest request, String operator) {
         CustomerToken token = new CustomerToken();
         token.setAccountId(accountId);
         token.setCustomerName(customerName);
@@ -46,12 +46,14 @@ public class CustomerTokenService {
         token.setTokenValue(generateTokenValue());
         token.setAllowedModels(toJson(request.getAllowedModels()));
         token.setExpireTime(resolveExpireTime(request.getExpireDays()));
+        token.setCreateBy(operator);
+        token.setUpdateBy(operator);
 
         customerTokenMapper.insert(token);
         return token;
     }
 
-    public void updateToken(Long accountId, Long id, UpdateCustomerTokenRequest request) {
+    public void updateToken(Long accountId, Long id, UpdateCustomerTokenRequest request, String operator) {
         CustomerToken existing = getByIdAndAccount(id, accountId);
 
         CustomerToken update = new CustomerToken();
@@ -60,15 +62,17 @@ public class CustomerTokenService {
         update.setStatus(request.getStatus());
         update.setAllowedModels(toJson(request.getAllowedModels()));
         update.setExpireTime(parseExpireTime(request.getExpireTime()));
+        update.setUpdateBy(operator);
 
         customerTokenMapper.updateById(update);
     }
 
-    public void updateStatus(Long accountId, Long id, Integer status) {
+    public void updateStatus(Long accountId, Long id, Integer status, String operator) {
         CustomerToken existing = getByIdAndAccount(id, accountId);
         CustomerToken update = new CustomerToken();
         update.setId(existing.getId());
         update.setStatus(status);
+        update.setUpdateBy(operator);
         customerTokenMapper.updateById(update);
     }
 
@@ -77,11 +81,12 @@ public class CustomerTokenService {
         customerTokenMapper.deleteById(existing.getId());
     }
 
-    public CustomerToken refreshToken(Long accountId, Long id) {
+    public CustomerToken refreshToken(Long accountId, Long id, String operator) {
         CustomerToken existing = getByIdAndAccount(id, accountId);
         CustomerToken update = new CustomerToken();
         update.setId(existing.getId());
         update.setTokenValue(generateTokenValue());
+        update.setUpdateBy(operator);
         customerTokenMapper.updateById(update);
         existing.setTokenValue(update.getTokenValue());
         return existing;
@@ -99,7 +104,7 @@ public class CustomerTokenService {
     }
 
     private String generateTokenValue() {
-        return "xlr_ct_" + UUID.randomUUID().toString().replace("-", "");
+        return "sk-" + UUID.randomUUID().toString().replace("-", "");
     }
 
     private String toJson(List<String> values) {

@@ -11,17 +11,25 @@ export function useTokens() {
   const isCreateModalOpen = ref(false)
   const newTokenName = ref('')
   const searchQuery = ref('')
+  const selectedStatus = ref('all')
   const loading = ref(false)
   const submitting = ref(false)
   const actionMessage = ref('')
 
   const filteredTokens = computed(() => {
     const query = searchQuery.value.trim().toLowerCase()
-    return tokens.value.filter(
-      token =>
+    const status = selectedStatus.value
+
+    return tokens.value.filter(token => {
+      const matchesSearch = 
         token.name.toLowerCase().includes(query) ||
         token.key.toLowerCase().includes(query)
-    )
+      
+      const matchesStatus = 
+        status === 'all' || token.status === status
+      
+      return matchesSearch && matchesStatus
+    })
   })
 
   const normalizeToken = (item) => ({
@@ -165,6 +173,7 @@ export function useTokens() {
     isCreateModalOpen,
     newTokenName,
     searchQuery,
+    selectedStatus,
     loading,
     submitting,
     actionMessage,

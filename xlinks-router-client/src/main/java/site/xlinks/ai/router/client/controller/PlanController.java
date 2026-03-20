@@ -1,31 +1,97 @@
 package site.xlinks.ai.router.client.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import site.xlinks.ai.router.client.context.CustomerAccountContext;
+import site.xlinks.ai.router.client.dto.plan.ActiveSubscriptionResponse;
+import site.xlinks.ai.router.client.dto.plan.ActivationCodeConsumeRequest;
+import site.xlinks.ai.router.client.dto.plan.ActivationCodeConsumeResponse;
 import site.xlinks.ai.router.client.dto.plan.CreateOrderRequest;
 import site.xlinks.ai.router.client.dto.plan.CreateOrderResponse;
+import site.xlinks.ai.router.client.dto.plan.HistoricalSubscriptionResponse;
 import site.xlinks.ai.router.client.dto.plan.PlanItemResponse;
 import site.xlinks.ai.router.client.dto.plan.RechargeOptionResponse;
+import site.xlinks.ai.router.client.service.ActivationCodeService;
+import site.xlinks.ai.router.client.service.PlanOrderService;
+import site.xlinks.ai.router.client.service.PlanService;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.entity.CustomerPlan;
+import site.xlinks.ai.router.entity.Plan;
+import site.xlinks.ai.router.mapper.CustomerPlanMapper;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1")
+@RequiredArgsConstructor
 public class PlanController {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private final PlanService planService;
+    private final PlanOrderService planOrderService;
+    private final ActivationCodeService activationCodeService;
+    private final CustomerPlanMapper customerPlanMapper;
 
     @GetMapping("/plans")
     public Result<List<PlanItemResponse>> getPlans() {
-        return Result.success(List.of(
-                buildPlan("small", "Codex小包套餐", new BigDecimal("45.00"), 30, 900, 8, false),
-                buildPlan("medium", "Codex中包套餐", new BigDecimal("60.00"), 60, 1800, 12, true),
-                buildPlan("large", "Codex大包套餐", new BigDecimal("75.00"), 90, 2700, 16, false)
-        ));
+        List<Plan> plans = planService.listVisiblePlans();
+        List<PlanItemResponse> responses = plans.stream()
+                .map(this::toPlanResponse)
+                .toList();
+        return Result.success(responses);
+    }
+
+    @GetMapping("/subscriptions/active")
+    public Result<List<ActiveSubscriptionResponse>> getActiveSubscriptions() {
+        Long accountId = CustomerAccountContext.getAccountId();
+        if (accountId == null) {
+            return Result.success(List.of());
+        }
+        List<CustomerPlan> plans = customerPlanMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerPlan>()
+                        .eq(CustomerPlan::getAccountId, accountId)
+                        .eq(CustomerPlan::getStatus, 1)
+                        .orderByDesc(CustomerPlan::getPlanExpireTime)
+        );
+        LocalDateTime now = LocalDateTime.now();
+        List<ActiveSubscriptionResponse> responses = plans.stream()
+                .map(plan -> toActiveSubscriptionResponse(plan, now))
+                .toList();
+        return Result.success(responses);
+    }
+
+    @GetMapping("/subscriptions/history")
+    public Result<List<HistoricalSubscriptionResponse>> getHistoricalSubscriptions() {
+        Long accountId = CustomerAccountContext.getAccountId();
+        if (accountId == null) {
+            return Result.success(List.of());
+        }
+        List<CustomerPlan> plans = customerPlanMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerPlan>()
+                        .eq(CustomerPlan::getAccountId, accountId)
+                        .orderByDesc(CustomerPlan::getPlanExpireTime)
+        );
+        LocalDateTime now = LocalDateTime.now();
+        List<HistoricalSubscriptionResponse> responses = plans.stream()
+                .map(plan -> toHistoricalSubscriptionResponse(plan, now))
+                .toList();
+        return Result.success(responses);
+    }
+
+    @PostMapping("/activation-codes/consume")
+    public Result<ActivationCodeConsumeResponse> consumeActivationCode(@Valid @RequestBody ActivationCodeConsumeRequest request) {
+        return Result.success(activationCodeService.consume(request.getCode()));
     }
 
     @GetMapping("/recharge-options")
@@ -42,31 +108,105 @@ public class PlanController {
 
     @PostMapping("/orders")
     public Result<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+        var paymentResult = planOrderService.createOrder(request.getPlanId(), request.getPaymentMethod());
         CreateOrderResponse response = new CreateOrderResponse();
-        response.setOrderId("ORDER202603171500001");
-        response.setPayUrl("https://pay.example.com/alipay?order_id=ORDER202603171500001");
-        response.setExpireTime("2026-03-17 16:30:00");
+        response.setOrderId(paymentResult.getOrderId());
+        response.setPayUrl(paymentResult.getPayUrl());
+        response.setExpireTime(planOrderService.buildExpireTime());
         return Result.success(response);
     }
 
-    private PlanItemResponse buildPlan(String id, String name, BigDecimal price, Integer dailyLimit,
-                                       Integer monthlyQuota, Integer concurrency, Boolean recommended) {
+    private PlanItemResponse toPlanResponse(Plan plan) {
         PlanItemResponse response = new PlanItemResponse();
-        response.setId(id);
-        response.setName(name);
-        response.setPrice(price);
-        response.setDailyLimit(new BigDecimal(String.valueOf(dailyLimit)));
-        response.setMonthlyQuota(new BigDecimal(String.valueOf(monthlyQuota)));
-        response.setConcurrency(concurrency);
+        response.setId(String.valueOf(plan.getId()));
+        response.setName(plan.getPlanName());
+        response.setPrice(plan.getPrice());
+        response.setDailyLimit(new BigDecimal(String.valueOf(plan.getDailyQuota())));
+        response.setMonthlyQuota(new BigDecimal(String.valueOf(plan.getTotalQuota())));
         response.setFeatures(List.of(
-                "有效期 30 天",
                 "仅可用 Codex",
-                "月度可用 $" + monthlyQuota + " 额度",
-                "每日可用 $" + dailyLimit + " + 昨日未用完额度",
-                "单套餐并发量为 " + concurrency,
+                "月度可用 $" + plan.getTotalQuota() + " 额度",
+                "每日可用 $" + plan.getDailyQuota() + " + 昨日未用完额度",
                 "套餐多买只叠加额度，不叠加时间"
         ));
-        response.setRecommended(recommended);
+        response.setRecommended(false);
         return response;
+    }
+
+    private ActiveSubscriptionResponse toActiveSubscriptionResponse(CustomerPlan plan, LocalDateTime now) {
+        ActiveSubscriptionResponse response = new ActiveSubscriptionResponse();
+        response.setId(String.valueOf(plan.getId()));
+        response.setPlanId(String.valueOf(plan.getPlanId()));
+        response.setPlanName(plan.getPlanName());
+        response.setPurchaseDate(formatDateTime(plan.getCreatedAt()));
+        response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
+        response.setTotalQuota(toBigDecimal(plan.getTotalQuota()));
+        response.setDailyReset(false);
+
+        int dailyQuota = defaultInteger(plan.getDailyQuota());
+        int usedQuota = defaultInteger(plan.getUsedQuota());
+        response.setRemainingQuota(new BigDecimal(Math.max(dailyQuota - usedQuota, 0)));
+
+        if (plan.getPlanExpireTime() != null) {
+            long daysRemaining = ChronoUnit.DAYS.between(now, plan.getPlanExpireTime());
+            response.setDaysRemaining(Math.max((int) daysRemaining, 0));
+        } else {
+            response.setRemainingQuota(BigDecimal.ZERO);
+        }
+
+        response.setUsedPercentage(calculateUsedPercentage(usedQuota, dailyQuota));
+        return response;
+    }
+
+    private HistoricalSubscriptionResponse toHistoricalSubscriptionResponse(CustomerPlan plan, LocalDateTime now) {
+        HistoricalSubscriptionResponse response = new HistoricalSubscriptionResponse();
+        response.setId(String.valueOf(plan.getId()));
+        response.setPlanId(String.valueOf(plan.getPlanId()));
+        response.setPlanName(plan.getPlanName());
+        response.setPurchaseDate(formatDateTime(plan.getCreatedAt()));
+        response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
+        response.setTotalQuota(toBigDecimal(plan.getTotalQuota()));
+
+        int totalQuota = defaultInteger(plan.getTotalQuota());
+        int totalUsed = plan.getTotalUsedQuota() == null ? defaultInteger(plan.getUsedQuota()) : plan.getTotalUsedQuota();
+        response.setUsedQuota(new BigDecimal(Math.max(totalUsed, 0)));
+        response.setUsedPercentage(calculateUsedPercentage(totalUsed, totalQuota));
+        response.setStatus(resolveHistoryStatus(plan, now));
+        return response;
+    }
+
+    private String formatDateTime(LocalDateTime time) {
+        if (time == null) {
+            return null;
+        }
+        return DATE_TIME_FORMATTER.format(time);
+    }
+
+    private BigDecimal toBigDecimal(Integer value) {
+        return value == null ? BigDecimal.ZERO : new BigDecimal(value);
+    }
+
+    private int defaultInteger(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private Integer calculateUsedPercentage(int usedQuota, int dailyQuota) {
+        if (dailyQuota <= 0) {
+            return 0;
+        }
+        BigDecimal ratio = new BigDecimal(usedQuota)
+                .multiply(new BigDecimal("100"))
+                .divide(new BigDecimal(dailyQuota), 0, RoundingMode.HALF_UP);
+        return ratio.intValue();
+    }
+
+    private String resolveHistoryStatus(CustomerPlan plan, LocalDateTime now) {
+        if (plan.getPlanExpireTime() != null && plan.getPlanExpireTime().isBefore(now)) {
+            return "expired";
+        }
+        if (plan.getStatus() == 1) {
+            return "success";
+        }
+        return "cancelled";
     }
 }

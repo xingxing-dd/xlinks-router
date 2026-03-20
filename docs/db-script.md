@@ -243,7 +243,142 @@ CREATE TABLE `usage_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='使用记录表';
 ```
 
-## 10. 脚本与执行建议
+## 10. Plan（订阅套餐）
+
+用于定义订阅计划（可见/隐藏），用于前端展示与订阅。
+
+```sql
+CREATE TABLE `plans` (
+  `id` BIGINT NOT NULL COMMENT '主键',
+  `plan_name` VARCHAR(100) NOT NULL COMMENT '套餐名称',
+  `price` DECIMAL(12, 2) NOT NULL COMMENT '套餐价格（元）',
+  `duration_days` INT NOT NULL COMMENT '有效期天数',
+  `daily_quota` INT NOT NULL COMMENT '每日额度（美元）',
+  `total_quota` INT NOT NULL COMMENT '总额度（美元）',
+  `allowed_models` JSON DEFAULT NULL COMMENT '允许访问的模型列表',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `visible` TINYINT NOT NULL DEFAULT 1 COMMENT '是否可见：1-可见，0-隐藏',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_visible` (`visible`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订阅套餐表';
+
+INSERT INTO `plans` (`id`, `plan_name`, `price`, `duration_days`, `daily_quota`, `total_quota`, `allowed_models`, `status`, `visible`, `remark`, `create_by`, `update_by`)
+VALUES
+(10001, 'Codex小包套餐', 45.00, 30, 30, 900, '["codex"]', 1, 1, '仅可用 Codex', 'system', 'system'),
+(10002, 'Codex中包套餐', 60.00, 30, 60, 1800, '["codex"]', 1, 1, '仅可用 Codex', 'system', 'system'),
+(10003, 'Codex大包套餐', 75.00, 30, 90, 2700, '["codex"]', 1, 1, '仅可用 Codex', 'system', 'system');
+```
+
+## 11. Customer Subscription（客户订阅）
+
+用于维护客户订阅关系与生效周期，可支持后台发放的隐藏套餐。
+
+```sql
+CREATE TABLE `customer_plans` (
+  `id` BIGINT NOT NULL COMMENT '主键',
+  `account_id` BIGINT NOT NULL COMMENT '客户账户 ID',
+  `plan_id` BIGINT NOT NULL COMMENT '订阅套餐 ID',
+  `plan_name` VARCHAR(100) NOT NULL COMMENT '套餐名称',
+  `price` DECIMAL(12, 2) NOT NULL COMMENT '订阅价格（元）',
+  `duration_days` INT NOT NULL COMMENT '订阅周期天数',
+  `daily_quota` INT NOT NULL COMMENT '每日额度（美元）',
+  `total_quota` INT NOT NULL COMMENT '总额度（美元）',
+  `used_quota` INT NOT NULL DEFAULT 0 COMMENT '已使用额度（美元）',
+  `total_used_quota` INT NOT NULL DEFAULT 0 COMMENT '总共已使用额度（美元）',
+  `quota_refresh_time` DATETIME NOT NULL COMMENT '额度刷新时间',
+  `plan_expire_time` DATETIME NOT NULL COMMENT '订阅过期时间',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-生效，0-失效',
+  `source` VARCHAR(50) DEFAULT NULL COMMENT '订阅来源：purchase/grant/admin 等',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  KEY `idx_account_id` (`account_id`),
+  KEY `idx_plan_id` (`plan_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_end_time` (`end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户订阅表';
+```
+
+## 12. Payment Method（支付方式）
+
+用于维护支付方式及其配置（JSON）。
+
+```sql
+CREATE TABLE `payment_methods` (
+  `id` BIGINT NOT NULL COMMENT '主键',
+  `method_code` VARCHAR(50) NOT NULL COMMENT '支付方式编码',
+  `method_name` VARCHAR(100) NOT NULL COMMENT '支付方式名称',
+  `config` VARCHAR(2000) DEFAULT NULL COMMENT '支付方式配置（JSON字符串）',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_method_code` (`method_code`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付方式表';
+```
+
+## 13. Third Party Pay Link（第三方支付链接）
+
+用于配置第三方支付跳转链接，可按目标类型与目标ID区分。
+
+```sql
+CREATE TABLE `third_party_pay_links` (
+  `id` BIGINT NOT NULL COMMENT '主键',
+  `target_id` BIGINT NOT NULL COMMENT '目标ID（如 plan_id）',
+  `target_type` VARCHAR(50) NOT NULL COMMENT '目标类型（如 plan）',
+  `pay_url` VARCHAR(500) NOT NULL COMMENT '第三方支付跳转链接',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  KEY `idx_target` (`target_type`, `target_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方支付链接表';
+```
+
+## 14. Activation Code Stock（激活码库存）
+
+用于第三方支付后发放激活码，绑定套餐并控制可用状态。
+
+```sql
+CREATE TABLE `activation_code_stocks` (
+  `id` BIGINT NOT NULL COMMENT '主键',
+  `activation_code` VARCHAR(100) NOT NULL COMMENT '激活码',
+  `plan_id` BIGINT NOT NULL COMMENT '绑定套餐 ID',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-可用，0-禁用，2-已使用',
+  `used_at` DATETIME DEFAULT NULL COMMENT '使用时间',
+  `used_by` BIGINT DEFAULT NULL COMMENT '使用者账号 ID',
+  `subscription_id` BIGINT DEFAULT NULL COMMENT '对应客户订阅记录 ID',
+  `order_id` VARCHAR(64) DEFAULT NULL COMMENT '支付订单号',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_activation_code` (`activation_code`),
+  KEY `idx_plan_id` (`plan_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='激活码库存表';
+```
+
+## 15. 脚本与执行建议
 
 - 核心模型关系已调整为 `providers -> model_endpoints -> models`
 - OpenAPI 请求中的 `model` 字段应直接对应 `models.model_code`
@@ -251,3 +386,4 @@ CREATE TABLE `usage_records` (
 - Provider、Model Endpoint、Model 默认按 `deleted = 0` 查询
 - 建表脚本建议统一沉淀到模块内的 `resources/db/` 目录
 - 后续如引入 Flyway / Liquibase，可将本文件内容进一步拆分为版本化迁移脚本
+

@@ -1,22 +1,20 @@
 package site.xlinks.ai.router.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 /**
- * 客户账户实体
+ * 订阅套餐实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("customer_accounts")
-public class CustomerAccount extends BaseEntity {
+@TableName("plans")
+public class Plan extends BaseEntity {
 
     /**
      * 主键
@@ -25,24 +23,34 @@ public class CustomerAccount extends BaseEntity {
     private Long id;
 
     /**
-     * 用户名
+     * 套餐名称
      */
-    private String username;
+    private String planName;
 
     /**
-     * 手机号
+     * 套餐价格（元）
      */
-    private String phone;
+    private BigDecimal price;
 
     /**
-     * 邮箱
+     * 有效期天数
      */
-    private String email;
+    private Integer durationDays;
 
     /**
-     * 密码（加密存储）
+     * 每日额度（美元）
      */
-    private String password;
+    private Integer dailyQuota;
+
+    /**
+     * 总额度（美元）
+     */
+    private Integer totalQuota;
+
+    /**
+     * 允许访问的模型列表（JSON）
+     */
+    private String allowedModels;
 
     /**
      * 状态：1-启用，0-禁用
@@ -50,10 +58,9 @@ public class CustomerAccount extends BaseEntity {
     private Integer status;
 
     /**
-     * 逻辑删除：0-未删除，1-已删除
+     * 是否可见：1-可见，0-隐藏
      */
-    @TableLogic
-    private Integer deleted;
+    private Integer visible;
 
     /**
      * 备注

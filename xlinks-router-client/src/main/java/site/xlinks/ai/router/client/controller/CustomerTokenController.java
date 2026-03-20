@@ -40,7 +40,7 @@ public class CustomerTokenController {
     @GetMapping
     public Result<PageResult<CustomerTokenItemResponse>> getTokens(@RequestParam(name = "page", defaultValue = "1") Integer page,
                                                                    @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
-        CustomerAccount account = requireAccount();
+        CustomerAccount account = CustomerAccountContext.getAccount();
         var tokenPage = customerTokenService.pageTokens(account.getId(), page, pageSize);
 
         List<CustomerTokenItemResponse> records = tokenPage.getRecords().stream()
@@ -51,8 +51,8 @@ public class CustomerTokenController {
 
     @PostMapping
     public Result<CreateCustomerTokenResponse> createToken(@Valid @RequestBody CreateCustomerTokenRequest request) {
-        CustomerAccount account = requireAccount();
-        CustomerToken token = customerTokenService.createToken(account.getId(), account.getEmail(), request);
+        CustomerAccount account = CustomerAccountContext.getAccount();
+        CustomerToken token = customerTokenService.createToken(account.getId(), account.getEmail(), request, account.getUsername());
 
         CreateCustomerTokenResponse response = new CreateCustomerTokenResponse();
         response.setId(token.getId());
@@ -65,43 +65,35 @@ public class CustomerTokenController {
 
     @PutMapping("/{id}")
     public Result<Void> updateToken(@PathVariable Long id, @RequestBody UpdateCustomerTokenRequest request) {
-        CustomerAccount account = requireAccount();
-        customerTokenService.updateToken(account.getId(), id, request);
+        CustomerAccount account = CustomerAccountContext.getAccount();
+        customerTokenService.updateToken(account.getId(), id, request, account.getUsername());
         return Result.success();
     }
 
     @PutMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestBody UpdateCustomerTokenRequest request) {
-        CustomerAccount account = requireAccount();
+        CustomerAccount account = CustomerAccountContext.getAccount();
         if (request == null || request.getStatus() == null) {
             throw new IllegalArgumentException("status不能为空");
         }
-        customerTokenService.updateStatus(account.getId(), id, request.getStatus());
+        customerTokenService.updateStatus(account.getId(), id, request.getStatus(), account.getUsername());
         return Result.success();
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> deleteToken(@PathVariable Long id) {
-        CustomerAccount account = requireAccount();
+        CustomerAccount account = CustomerAccountContext.getAccount();
         customerTokenService.deleteToken(account.getId(), id);
         return Result.success();
     }
 
     @PostMapping("/{id}/refresh")
     public Result<RefreshCustomerTokenResponse> refreshToken(@PathVariable Long id) {
-        CustomerAccount account = requireAccount();
-        CustomerToken token = customerTokenService.refreshToken(account.getId(), id);
+        CustomerAccount account = CustomerAccountContext.getAccount();
+        CustomerToken token = customerTokenService.refreshToken(account.getId(), id, account.getUsername());
         RefreshCustomerTokenResponse response = new RefreshCustomerTokenResponse();
         response.setTokenValue(token.getTokenValue());
         return Result.success(response);
-    }
-
-    private CustomerAccount requireAccount() {
-        CustomerAccount account = CustomerAccountContext.getAccount();
-        if (account == null) {
-            throw new IllegalStateException("未登录或登录已过期");
-        }
-        return account;
     }
 
     private CustomerTokenItemResponse toItemResponse(CustomerToken token) {

@@ -27,10 +27,10 @@ public class AuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         // 获取Token
         String authHeader = request.getHeader(TOKEN_HEADER);
-        
+
         if (authHeader != null && authHeader.startsWith(TOKEN_PREFIX)) {
             String token = authHeader.substring(TOKEN_PREFIX.length());
-            
+
             // 验证Token
             var account = tokenService.validateToken(token);
             if (account != null) {
@@ -40,10 +40,10 @@ public class AuthInterceptor implements HandlerInterceptor {
                 return true;
             }
         }
-
-        // Token无效或不存在
-        log.debug("No valid token found in request: {}", request.getRequestURI());
-        return true; // 放行，让Controller判断是否需要登录
+        // Token无效
+        log.debug("Invalid token for request: {}", request.getRequestURI());
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        return false;
     }
 
     @Override

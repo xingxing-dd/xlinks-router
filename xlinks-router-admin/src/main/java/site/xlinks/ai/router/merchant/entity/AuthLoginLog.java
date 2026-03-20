@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @TableName("auth_login_logs")
 public class AuthLoginLog {
 
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
     private Long userId;

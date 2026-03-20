@@ -20,9 +20,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                        "/api/auth/login",
-                        "/api/auth/register",
-                        "/api/auth/sendCode",
+                        "/api/v1/auth/rsa-public-key",
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/verify-code",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/swagger-resources/**"

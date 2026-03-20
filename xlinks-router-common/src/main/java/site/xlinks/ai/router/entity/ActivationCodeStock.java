@@ -9,12 +9,12 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 /**
- * Provider Token 实体类
+ * 激活码库存实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("provider_tokens")
-public class ProviderToken extends BaseEntity {
+@TableName("activation_code_stocks")
+public class ActivationCodeStock extends BaseEntity {
 
     /**
      * 主键
@@ -23,44 +23,39 @@ public class ProviderToken extends BaseEntity {
     private Long id;
 
     /**
-     * Provider ID
+     * 激活码
      */
-    private Long providerId;
+    private String activationCode;
 
     /**
-     * Token 名称
+     * 绑定套餐 ID
      */
-    private String tokenName;
+    private Long planId;
 
     /**
-     * Token 值（加密存储）
+     * 状态：1-可用，0-禁用，2-已使用
      */
-    private String tokenValue;
+    private Integer status;
 
     /**
-     * Token 状态：1-正常，0-禁用
+     * 使用时间
      */
-    private Integer tokenStatus;
+    private LocalDateTime usedAt;
 
     /**
-     * 配额总量
+     * 使用者账号 ID
      */
-    private Long quotaTotal;
+    private Long usedBy;
 
     /**
-     * 已使用配额
+     * 对应客户订阅记录 ID
      */
-    private Long quotaUsed;
+    private Long subscriptionId;
 
     /**
-     * 过期时间
+     * 支付订单号
      */
-    private LocalDateTime expireTime;
-
-    /**
-     * 最后使用时间
-     */
-    private LocalDateTime lastUsedAt;
+    private String orderId;
 
     /**
      * 备注

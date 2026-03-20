@@ -8,14 +8,11 @@ import java.math.BigDecimal;
 
 @Data
 public class CreateOrderRequest {
-    @NotBlank(message = "type不能为空")
-    private String type;
 
+    @NotBlank(message = "planId不能为空")
     private String planId;
-
-    @NotNull(message = "amount不能为空")
-    private BigDecimal amount;
 
     @NotBlank(message = "paymentMethod不能为空")
     private String paymentMethod;
+
 }

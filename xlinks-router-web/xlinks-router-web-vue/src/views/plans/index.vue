@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, Box, CreditCard, Calendar, Clock, ChevronDown, Ticket } from 'lucide-vue-next'
+import { Check, Box, CreditCard, Calendar, Clock, ChevronDown, Ticket, History, Eye } from 'lucide-vue-next'
 import { usePlans } from '@/composables/usePlans'
 import { formatCurrency } from '@/utils/formatters'
 
@@ -10,11 +10,14 @@ const { t } = useI18n()
 const {
   codexPlans,
   activeSubscriptions,
+  historicalSubscriptions,
   currentSubscriptionIndex,
   isDropdownOpen,
   selectedPayment,
   isCheckoutModalOpen,
   isActivationCodeModalOpen,
+  isHistoryDetailModalOpen,
+  selectedHistoricalSub,
   activationCode,
   loading,
   submitting,
@@ -28,9 +31,31 @@ const {
 } = usePlans()
 
 const paymentMethods = [
-  { id: 'alipay', name: t('plans.alipay'), icon: '💳' },
-  { id: 'wechat', name: t('plans.wechat'), icon: '💚' },
+  { id: 'alipay', name: t('plans.alipay'), icon: '💳', enabled: false, isDefault: false },
+  { id: 'wechat', name: t('plans.wechat'), icon: '💚', enabled: false, isDefault: false },
+  { id: 'third-party', name: t('plans.thirdParty'), icon: '🌐', enabled: true, isDefault: true },
 ]
+
+const historyStatusMeta = {
+  expired: { label: t('plans.status.expired'), badgeClass: 'bg-slate-100 text-slate-700' },
+  success: { label: t('plans.status.success'), badgeClass: 'bg-emerald-100 text-emerald-700' },
+  cancelled: { label: t('plans.status.cancelled'), badgeClass: 'bg-orange-100 text-orange-700' },
+}
+
+const getHistoryStatusLabel = (status) => {
+  return historyStatusMeta?.[status]?.label || status || '-'
+}
+
+const getHistoryStatusBadgeClass = (status) => {
+  return historyStatusMeta?.[status]?.badgeClass || 'bg-slate-100 text-slate-700'
+}
+
+onMounted(() => {
+  const defaultMethod = paymentMethods.find(m => m.isDefault && m.enabled)
+  if (defaultMethod) {
+    selectedPayment.value = defaultMethod.id
+  }
+})
 
 const handleConfirmPurchase = () => {
   createOrder()
@@ -121,9 +146,6 @@ onMounted(loadPlans)
               </div>
             </template>
           </div>
-          <div v-else class="w-16 h-16 bg-white/25 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
-            <Box class="w-8 h-8 text-white" />
-          </div>
         </div>
       </div>
 
@@ -168,7 +190,7 @@ onMounted(loadPlans)
             <p class="text-sm text-white/80">{{ t('plans.remainingQuota') }}</p>
           </div>
           <div class="text-right">
-            <p class="text-xl font-bold">${{ currentSubscription.remainingQuota.toFixed(6) }} / ${{ currentSubscription.totalQuota }}</p>
+            <p class="text-xl font-bold">${{ currentSubscription.remainingQuota.toFixed(2) }} / ${{ currentSubscription.totalQuota }}</p>
           </div>
         </div>
         
@@ -186,6 +208,20 @@ onMounted(loadPlans)
       </div>
     </div>
 
+    <!-- 重要提示 -->
+    <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-2xl p-4 mb-6 shadow-sm">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center mt-0.5">
+          <span class="text-white text-sm font-bold">!</span>
+        </div>
+        <div class="flex-1">
+          <p class="text-amber-900 font-medium text-sm md:text-base">
+            {{ t('plans.importantNote') }}
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- 套餐列表 -->
     <div v-if="loading" class="rounded-2xl border border-slate-200 bg-white py-12 text-center text-slate-500">
       {{ t('common.loading') }}
@@ -194,21 +230,9 @@ onMounted(loadPlans)
       <div
         v-for="(plan, index) in codexPlans"
         :key="plan.id"
-        class="relative bg-white rounded-3xl border-2 overflow-hidden transition-all duration-200"
-        :class="[
-          index === 1
-            ? 'border-violet-500 shadow-2xl md:scale-105 shadow-violet-500/50'
-            : 'border-slate-200 shadow-sm hover:shadow-lg'
-        ]"
+        class="relative bg-white rounded-3xl border-2 border-slate-200 shadow-sm hover:shadow-lg overflow-hidden transition-all duration-200"
       >
-        <div v-if="index === 1" class="absolute top-0 left-0 right-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-center py-2 text-sm font-semibold">
-          🌟 {{ t('plans.recommended') }}
-        </div>
-
-        <div 
-          class="bg-gradient-to-br from-slate-900 to-slate-800 p-8"
-          :class="{ 'pt-14': index === 1 }"
-        >
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 p-8">
           <div class="flex items-center justify-between mb-4">
             <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
               <Box class="w-6 h-6 text-white" />
@@ -223,7 +247,6 @@ onMounted(loadPlans)
             <span class="text-4xl font-bold">{{ formatCurrency(plan.price) }}</span>
             <span class="ml-2 text-white text-opacity-80">{{ t('plans.perMonth') }}</span>
           </div>
-          <p class="text-white text-opacity-80 text-sm">{{ t('plans.monthlyQuota') }} ${{ plan.monthlyQuota }}</p>
         </div>
 
         <div class="p-6">
@@ -238,15 +261,149 @@ onMounted(loadPlans)
 
           <button
             @click="handlePurchasePlan(plan.id)"
-            class="w-full py-3 rounded-xl font-semibold transition-all duration-200"
-            :class="[
-              index === 1
-                ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:shadow-lg hover:shadow-violet-500/50'
-                : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
-            ]"
+            class="w-full py-3 rounded-xl font-semibold transition-all duration-200 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:shadow-lg hover:shadow-violet-500/50"
           >
             {{ t('plans.buyNow') }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史订阅区域 -->
+    <div class="mt-12 bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center">
+            <History class="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-white">{{ t('plans.historyTitle') }}</h2>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6">
+        <!-- 桌面端表格视图 -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b-2 border-slate-200">
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.planName') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.purchaseDate') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.expiryDate') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.totalQuota') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.usage') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.status') }}</th>
+                <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="sub in historicalSubscriptions" :key="sub.id" class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <td class="py-4 px-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                      <Box class="w-4 h-4 text-white" />
+                    </div>
+                    <span class="font-medium text-slate-900">{{ sub.planName }}</span>
+                  </div>
+                </td>
+                <td class="py-4 px-4 text-sm text-slate-600">{{ sub.purchaseDate }}</td>
+                <td class="py-4 px-4 text-sm text-slate-600">{{ sub.expiryDate }}</td>
+                <td class="py-4 px-4 text-sm font-semibold text-slate-900">${{ sub.totalQuota }}</td>
+                <td class="py-4 px-4">
+                  <div class="flex items-center gap-2">
+                    <div class="flex-1 bg-slate-200 rounded-full h-2 max-w-[80px]">
+                      <div 
+                        class="bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full h-2 transition-all duration-300"
+                        :style="{ width: `${sub.usedPercentage}%` }"
+                      />
+                    </div>
+                    <span class="text-sm font-medium text-slate-700">{{ sub.usedPercentage }}%</span>
+                  </div>
+                </td>
+                <td class="py-4 px-4">
+                  <span 
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    :class="getHistoryStatusBadgeClass(sub.status)"
+                  >
+                    {{ getHistoryStatusLabel(sub.status) }}
+                  </span>
+                </td>
+                <td class="py-4 px-4 text-right">
+                  <button 
+                    @click="() => { selectedHistoricalSub = sub; isHistoryDetailModalOpen = true }"
+                    class="inline-flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
+                  >
+                    <Eye class="w-4 h-4" />
+                    {{ t('plans.viewDetail') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 移动端卡片视图 -->
+        <div class="md:hidden space-y-4">
+          <div v-for="sub in historicalSubscriptions" :key="sub.id" class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                  <Box class="w-4 h-4 text-white" />
+                </div>
+                <span class="font-semibold text-slate-900">{{ sub.planName }}</span>
+              </div>
+              <span 
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                :class="getHistoryStatusBadgeClass(sub.status)"
+              >
+                {{ getHistoryStatusLabel(sub.status) }}
+              </span>
+            </div>
+
+            <div class="space-y-2 mb-3">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">{{ t('plans.table.purchaseDate') }}</span>
+                <span class="text-slate-900">{{ sub.purchaseDate }}</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">{{ t('plans.table.expiryDate') }}</span>
+                <span class="text-slate-900">{{ sub.expiryDate }}</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-600">{{ t('plans.table.totalQuota') }}</span>
+                <span class="font-semibold text-slate-900">${{ sub.totalQuota }}</span>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="flex items-center justify-between text-sm mb-1">
+                <span class="text-slate-600">{{ t('plans.table.usage') }}</span>
+                <span class="font-medium text-slate-700">{{ sub.usedPercentage }}%</span>
+              </div>
+              <div class="w-full bg-slate-200 rounded-full h-2">
+                <div 
+                  class="bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full h-2 transition-all duration-300"
+                  :style="{ width: `${sub.usedPercentage}%` }"
+                />
+              </div>
+            </div>
+
+            <button 
+              @click="() => { selectedHistoricalSub = sub; isHistoryDetailModalOpen = true }"
+              class="w-full flex items-center justify-center gap-2 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors py-2"
+            >
+              <Eye class="w-4 h-4" />
+              {{ t('plans.viewDetail') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="historicalSubscriptions.length === 0" class="text-center py-12">
+          <div class="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <History class="w-8 h-8 text-slate-400" />
+          </div>
+          <p class="text-slate-500">{{ t('common.noData') }}</p>
         </div>
       </div>
     </div>
@@ -287,11 +444,11 @@ onMounted(loadPlans)
             <label
               v-for="method in paymentMethods"
               :key="method.id"
-              class="flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors"
+              class="flex items-center gap-3 p-3 border-2 rounded-xl transition-colors"
               :class="[
-                selectedPayment === method.id
-                  ? 'border-violet-500 bg-violet-50'
-                  : 'border-slate-200 hover:border-slate-300'
+                method.enabled 
+                  ? (selectedPayment === method.id ? 'border-violet-500 bg-violet-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer')
+                  : 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
               ]"
             >
               <input
@@ -299,10 +456,14 @@ onMounted(loadPlans)
                 name="payment"
                 :value="method.id"
                 v-model="selectedPayment"
-                class="w-4 h-4 text-violet-600"
+                :disabled="!method.enabled"
+                class="w-4 h-4 text-violet-600 disabled:opacity-50"
               />
               <span class="text-2xl">{{ method.icon }}</span>
-              <span class="font-medium text-slate-900">{{ method.name }}</span>
+              <span class="font-medium" :class="method.enabled ? 'text-slate-900' : 'text-slate-400'">{{ method.name }}</span>
+              <span v-if="!method.enabled" class="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                {{ t('models.status.unavailable') }}
+              </span>
             </label>
           </div>
         </div>
@@ -364,6 +525,82 @@ onMounted(loadPlans)
             class="flex-1 px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium disabled:opacity-50"
           >
             {{ submitting ? t('common.submitting') || '处理中...' : t('plans.confirmActivation') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史订阅详情模态框 -->
+    <div v-if="isHistoryDetailModalOpen && selectedHistoricalSub" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
+            <History class="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">{{ t('plans.historyDetailTitle') }}</h2>
+            <p class="text-sm text-slate-500">{{ selectedHistoricalSub.planName }}</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 rounded-2xl p-4 mb-6">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-slate-600">{{ t('plans.table.planName') }}</span>
+            <span class="font-semibold text-slate-900">{{ selectedHistoricalSub.planName }}</span>
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-slate-600">{{ t('plans.table.totalQuota') }}</span>
+            <span class="font-semibold text-slate-900">${{ selectedHistoricalSub.totalQuota }}</span>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+            <span class="text-slate-900 font-semibold">{{ t('plans.total') }}</span>
+            <span class="text-2xl font-bold text-slate-900">
+              ${{ selectedHistoricalSub.usedQuota.toFixed(2) }} / ${{ selectedHistoricalSub.totalQuota }}
+            </span>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-sm font-semibold text-slate-900 mb-3">{{ t('plans.subscriptionInfo') }}</h3>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 p-3 border-2 rounded-xl border-slate-100">
+              <div class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                <Calendar class="w-4 h-4 text-slate-500" />
+              </div>
+              <div>
+                <p class="text-xs text-slate-500">{{ t('plans.table.purchaseDate') }}</p>
+                <p class="text-sm font-semibold text-slate-900">{{ selectedHistoricalSub.purchaseDate }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 p-3 border-2 rounded-xl border-slate-100">
+              <div class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                <Calendar class="w-4 h-4 text-slate-500" />
+              </div>
+              <div>
+                <p class="text-xs text-slate-500">{{ t('plans.table.expiryDate') }}</p>
+                <p class="text-sm font-semibold text-slate-900">{{ selectedHistoricalSub.expiryDate }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 p-3 border-2 rounded-xl border-slate-100">
+              <div class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                <Eye class="w-4 h-4 text-slate-500" />
+              </div>
+              <div>
+                <p class="text-xs text-slate-500">{{ t('plans.table.status') }}</p>
+                <p class="text-sm font-semibold text-slate-900">
+                  {{ getHistoryStatusLabel(selectedHistoricalSub.status) }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            @click="isHistoryDetailModalOpen = false"
+            class="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+          >
+            {{ t('plans.close') }}
           </button>
         </div>
       </div>

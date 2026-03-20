@@ -6,15 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.time.LocalDateTime;
-
 /**
- * Customer Token 实体类
+ * 第三方支付链接实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("customer_tokens")
-public class CustomerToken extends BaseEntity {
+@TableName("third_party_pay_links")
+public class ThirdPartyPayLink extends BaseEntity {
 
     /**
      * 主键
@@ -23,39 +21,24 @@ public class CustomerToken extends BaseEntity {
     private Long id;
 
     /**
-     * 账户 ID
+     * 目标ID（如 plan_id）
      */
-    private Long accountId;
+    private Long targetId;
 
     /**
-     * 客户名称
+     * 目标类型（如 plan）
      */
-    private String customerName;
+    private String targetType;
 
     /**
-     * Token 名称
+     * 第三方支付跳转链接
      */
-    private String tokenName;
-
-    /**
-     * Token 值（SHA256 哈希存储）
-     */
-    private String tokenValue;
+    private String payUrl;
 
     /**
      * 状态：1-启用，0-禁用
      */
     private Integer status;
-
-    /**
-     * 过期时间
-     */
-    private LocalDateTime expireTime;
-
-    /**
-     * 允许访问的模型列表（JSON）
-     */
-    private String allowedModels;
 
     /**
      * 备注

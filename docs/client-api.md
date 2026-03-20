@@ -744,7 +744,7 @@
 
 ---
 
-## 6. 套餐与充值模块
+## 6. 套餐模块（plans/index.vue）
 
 ### 6.1 获取套餐列表
 
@@ -759,9 +759,8 @@
 | price | BigDecimal | 价格(元) |
 | dailyLimit | BigDecimal | 每日额度(美元) |
 | monthlyQuota | BigDecimal | 月度额度(美元) |
-| concurrency | Integer | 并发限制 |
-| features | Array | 特性列表 |
-| isRecommended | Boolean | 是否推荐 |
+| features | Array | 套餐特性列表 |
+| isRecommended | Boolean | 是否推荐（用于高亮） |
 
 **响应示例**:
 ```json
@@ -775,7 +774,6 @@
       "price": 45.00,
       "dailyLimit": 30,
       "monthlyQuota": 900,
-      "concurrency": 8,
       "features": [
         "有效期 30 天",
         "仅可用 Codex",
@@ -790,17 +788,28 @@
 
 ---
 
-### 6.2 获取充值选项
+### 6.2 获取当前生效订阅列表（我的订阅）
 
-**请求地址**: `GET /api/v1/recharge-options`
+**请求地址**: `GET /api/v1/subscriptions/active`
 
 **响应参数**:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| usd | BigDecimal | 美元金额 |
-| cny | BigDecimal | 人民币金额 |
-| bonus | BigDecimal | 赠送金额（如有） |
+| id | String | 订阅记录 ID |
+| planId | String | 套餐 ID |
+| planName | String | 套餐名称 |
+| daysRemaining | Integer | 剩余天数 |
+| purchaseDate | DateTime | 购买时间 |
+| expiryDate | DateTime | 到期时间 |
+| dailyReset | Boolean | 今日额度是否已重置 |
+| remainingQuota | BigDecimal | 剩余额度（美元） |
+| totalQuota | BigDecimal | 总额度（美元） |
+| usedPercentage | Integer | 已使用比例（0-100） |
+
+说明：
+- 返回列表用于右上角下拉切换与当前订阅卡片展示。
+- 建议按 `expiryDate` 升序排序，默认取第一条展示。
 
 **响应示例**:
 ```json
@@ -808,19 +817,66 @@
   "code": 0,
   "message": "success",
   "data": [
-    { "usd": 100, "cny": 20, "bonus": 0 },
-    { "usd": 200, "cny": 40, "bonus": 0 },
-    { "usd": 500, "cny": 100, "bonus": 10 },
-    { "usd": 1000, "cny": 200, "bonus": 30 },
-    { "usd": 2000, "cny": 400, "bonus": 80 },
-    { "usd": 5000, "cny": 1000, "bonus": 250 }
+    {
+      "id": "sub-1",
+      "planId": "medium",
+      "planName": "Codex中包套餐",
+      "daysRemaining": 24,
+      "purchaseDate": "2026-03-11 16:15",
+      "expiryDate": "2026-04-10 16:15",
+      "dailyReset": true,
+      "remainingQuota": 58.049198,
+      "totalQuota": 60,
+      "usedPercentage": 3
+    }
   ]
 }
 ```
 
 ---
 
-### 6.3 创建订单
+### 6.3 获取历史订阅列表
+
+**请求地址**: `GET /api/v1/subscriptions/history`
+
+**响应参数**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 订阅记录 ID |
+| planId | String | 套餐 ID |
+| planName | String | 套餐名称 |
+| purchaseDate | DateTime | 购买时间 |
+| expiryDate | DateTime | 到期时间 |
+| totalQuota | BigDecimal | 总额度（美元） |
+| usedQuota | BigDecimal | 已使用额度（美元） |
+| usedPercentage | Integer | 已使用比例（0-100） |
+| status | String | 状态：expired/cancelled |
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    {
+      "id": "hist-1",
+      "planId": "small",
+      "planName": "Codex小包套餐",
+      "purchaseDate": "2026-01-15 10:30",
+      "expiryDate": "2026-02-14 10:30",
+      "totalQuota": 30,
+      "usedQuota": 29.5,
+      "usedPercentage": 98,
+      "status": "expired"
+    }
+  ]
+}
+```
+
+---
+
+### 6.4 创建套餐订单
 
 **请求地址**: `POST /api/v1/orders`
 
@@ -828,10 +884,8 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| type | String | 是 | 订单类型：plan/recharge |
-| planId | String | 是（type=plan） | 套餐 ID |
-| amount | BigDecimal | 是（type=recharge） | 充值金额(人民币) |
-| paymentMethod | String | 是 | 支付方式：alipay/wechat |
+| planId | String | 是 | 套餐 ID |
+| paymentMethod | String | 是 | 支付方式：third-party（当前仅支持） |
 
 **响应参数**:
 
@@ -848,7 +902,7 @@
   "message": "success",
   "data": {
     "orderId": "ORDER202603171500001",
-    "payUrl": "https://pay.example.com/alipay?order_id=...",
+    "payUrl": "https://pay.example.com/third-party?order_id=...",
     "expireTime": "2026-03-17 15:30:00"
   }
 }
@@ -856,38 +910,41 @@
 
 ---
 
-### 6.4 获取用户订阅详情
+### 6.5 使用激活码兑换套餐
 
-**请求地址**: `GET /api/v1/subscriptions/{planId}`
+**请求地址**: `POST /api/v1/activation-codes/consume`
 
-**路径参数**:
+**请求头**: `Authorization: Bearer {accessToken}`
+
+**请求参数**:
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| planId | String | 是 | 套餐 ID；前端“我的订阅”右上角切换时传入 |
+| code | String | 是 | 激活码 |
 
 **响应参数**:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| planId | String | 当前查询的套餐 ID |
-| planName | String | 套餐名称 |
-| dailyLimit | BigDecimal | 每日额度 |
-| dailyUsed | BigDecimal | 今日已用 |
-| monthlyQuota | BigDecimal | 月度额度 |
-| monthlyUsed | BigDecimal | 月度已用 |
-| concurrency | Integer | 并发限制 |
-| currentConcurrency | Integer | 当前并发数 |
-| expireTime | DateTime | 套餐过期时间 |
-| status | String | 套餐状态：active/expired/frozen |
-| purchaseTime | DateTime | 购买时间 |
-| daysRemaining | Integer | 剩余天数 |
-| dailyReset | Boolean | 今日额度是否已重置 |
+| message | String | 兑换结果提示 |
+| activatedPlanId | String | 兑换的套餐 ID |
+| activatedPlanName | String | 兑换的套餐名称 |
+| expireTime | DateTime | 兑换套餐到期时间 |
+| subscriptionId | String | 新生成的用户套餐记录 ID |
 
-说明：
-- 为遵循 RESTful 风格，订阅详情查询改为资源路径 `/api/v1/subscriptions/{planId}`。
-- 该接口用于 `plans/index.vue` 右上角套餐切换后的详情展示。
-- 若前端需要默认展示当前生效订阅，建议额外提供 `GET /api/v1/subscriptions/current`，避免将“当前态查询”和“按 ID 查询”混在同一个接口中。
+**状态流转**:
+- `activation_code_stocks.status = 1`（可用） -> 兑换成功后置为 `2`（已使用）
+- `activation_code_stocks.status = 0`（禁用） -> 返回错误码 `400`（参数/状态错误）
+- `activation_code_stocks.status = 2`（已使用）
+  - 若 `used_by` 为当前用户：返回成功（幂等）
+  - 若 `used_by` 为其他用户：返回错误码 `403`
+
+**幂等说明**:
+- 相同用户重复兑换同一激活码，返回同一次兑换的套餐信息，不重复创建订阅记录。
+
+**错误码**:
+- `400` 激活码不存在或状态不可用
+- `403` 激活码已被其他用户使用
 
 **响应示例**:
 ```json
@@ -895,19 +952,11 @@
   "code": 0,
   "message": "success",
   "data": {
-    "planId": "medium",
-    "planName": "Codex中包套餐",
-    "dailyLimit": 60,
-    "dailyUsed": 25.5,
-    "monthlyQuota": 1800,
-    "monthlyUsed": 450,
-    "concurrency": 12,
-    "currentConcurrency": 3,
+    "message": "激活成功",
+    "activatedPlanId": "medium",
+    "activatedPlanName": "Codex中包套餐",
     "expireTime": "2026-04-15 00:00:00",
-    "status": "active",
-    "purchaseTime": "2026-03-18 09:30:00",
-    "daysRemaining": 28,
-    "dailyReset": true
+    "subscriptionId": "SUB202603201530001"
   }
 }
 ```

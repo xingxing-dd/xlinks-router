@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @TableName("auth_users")
 public class AuthUser extends BaseEntity {
 
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
     private String passwordHash;

@@ -57,44 +57,9 @@ export function usePlans() {
     },
   ])
 
-  const activeSubscriptions = ref([
-    {
-      id: "sub-1",
-      planName: "Codex中包套餐",
-      planType: "medium",
-      daysRemaining: 24,
-      purchaseDate: "2026-03-11 16:15",
-      expiryDate: "2026-04-10 16:15",
-      dailyReset: true,
-      remainingQuota: 58.049198,
-      totalQuota: 60,
-      usedPercentage: 3,
-    },
-    {
-      id: "sub-2",
-      planName: "Codex大包套餐",
-      planType: "large",
-      daysRemaining: 15,
-      purchaseDate: "2026-02-28 10:30",
-      expiryDate: "2026-03-30 10:30",
-      dailyReset: false,
-      remainingQuota: 72.5,
-      totalQuota: 90,
-      usedPercentage: 19,
-    },
-    {
-      id: "sub-3",
-      planName: "Codex小包套餐",
-      planType: "small",
-      daysRemaining: 8,
-      purchaseDate: "2026-03-05 14:20",
-      expiryDate: "2026-03-25 14:20",
-      dailyReset: true,
-      remainingQuota: 28.3,
-      totalQuota: 30,
-      usedPercentage: 5,
-    },
-  ])
+  const activeSubscriptions = ref([])
+
+  const historicalSubscriptions = ref([])
 
   const currentSubscriptionIndex = ref(0)
   const isDropdownOpen = ref(false)
@@ -102,21 +67,53 @@ export function usePlans() {
   const selectedPayment = ref('alipay')
   const isCheckoutModalOpen = ref(false)
   const isActivationCodeModalOpen = ref(false)
+  const isHistoryDetailModalOpen = ref(false)
+  const selectedHistoricalSub = ref(null)
   const activationCode = ref('')
   const loading = ref(false)
   const submitting = ref(false)
   const actionMessage = ref('')
 
-  const currentSubscription = computed(() => activeSubscriptions.value[currentSubscriptionIndex.value])
+  const emptySubscription = {
+    planName: '',
+    daysRemaining: 0,
+    purchaseDate: '-',
+    expiryDate: '-',
+    dailyReset: false,
+    remainingQuota: 0,
+    totalQuota: 0,
+    usedPercentage: 0,
+  }
+
+  const currentSubscription = computed(() => activeSubscriptions.value[currentSubscriptionIndex.value] || emptySubscription)
   const selectedPlanData = computed(() => codexPlans.value.find((p) => p.id === selectedPlan.value))
 
   const loadPlans = async () => {
     loading.value = true
 
     try {
-      const remotePlans = await getApi('/v1/plans')
+      const [remotePlans, remoteActiveSubs, remoteHistorySubs] = await Promise.all([
+        getApi('/v1/plans'),
+        getApi('/v1/subscriptions/active'),
+        getApi('/v1/subscriptions/history'),
+      ])
+
       if (remotePlans && remotePlans.length > 0) {
         codexPlans.value = remotePlans
+      }
+
+      if (Array.isArray(remoteActiveSubs)) {
+        activeSubscriptions.value = remoteActiveSubs.map((item) => ({
+          ...item,
+          planType: item.planId,
+        }))
+      }
+
+      if (Array.isArray(remoteHistorySubs)) {
+        historicalSubscriptions.value = remoteHistorySubs.map((item) => ({
+          ...item,
+          planType: item.planId,
+        }))
       }
     } catch (error) {
       // toast.error(t('plans.loadFailed'), error.message)
@@ -141,7 +138,18 @@ export function usePlans() {
         paymentMethod: selectedPayment.value,
       })
       isCheckoutModalOpen.value = false
-      actionMessage.value = `订单已创建，支付链接：${result.payUrl}`
+      const payUrl = String(result?.payUrl || '')
+        .trim()
+        .replace(/`/g, '')
+        .replace(/^"+|"+$/g, '')
+        .replace(/^'+|'+$/g, '')
+
+      actionMessage.value = `订单已创建：${result?.orderId || ''}`
+
+      if (payUrl) {
+        window.open(payUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
     } catch (error) {
       toast.error(t('plans.orderFailed'), error.message)
     } finally {
@@ -162,14 +170,13 @@ export function usePlans() {
 
     submitting.value = true
     try {
-      // 模拟 API 调用
-      if (activationCode.value.trim() === "TEST2024") {
-        toast.success(t('plans.activationSuccess'), t('plans.activationSuccessDetail'))
-        isActivationCodeModalOpen.value = false
-        activationCode.value = ""
-      } else {
-        toast.error(t('plans.activationFailed'), t('plans.activationFailedDetail'))
-      }
+      const result = await postApi('/v1/activation-codes/consume', {
+        code: activationCode.value.trim(),
+      })
+      toast.success(t('plans.activationSuccess'), result?.message || t('plans.activationSuccessDetail'))
+      isActivationCodeModalOpen.value = false
+      activationCode.value = ""
+      await loadPlans()
     } catch (error) {
       toast.error(t('plans.activationFailed'), error.message)
     } finally {
@@ -180,12 +187,15 @@ export function usePlans() {
   return {
     codexPlans,
     activeSubscriptions,
+    historicalSubscriptions,
     currentSubscriptionIndex,
     isDropdownOpen,
     selectedPlan,
     selectedPayment,
     isCheckoutModalOpen,
     isActivationCodeModalOpen,
+    isHistoryDetailModalOpen,
+    selectedHistoricalSub,
     activationCode,
     loading,
     submitting,

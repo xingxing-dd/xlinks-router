@@ -12,7 +12,6 @@ public class PlanItemResponse {
     private BigDecimal price;
     private BigDecimal dailyLimit;
     private BigDecimal monthlyQuota;
-    private Integer concurrency;
     private List<String> features;
     private Boolean isRecommended;
 
