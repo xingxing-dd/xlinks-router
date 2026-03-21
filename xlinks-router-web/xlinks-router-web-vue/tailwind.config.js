@@ -94,9 +94,9 @@ export default {
         "collapsible-up": "collapsible-up 0.2s ease-in-out",
       },
       backgroundImage: {
-        'gradient-main': 'linear-gradient(119.06deg, #0f172b 0%, #59168b 50%, #0f172b 100%)',
-        'gradient-button': 'linear-gradient(90deg, #7f22fe 0%, #c800de 100%)',
-        'gradient-icon': 'linear-gradient(135deg, #8e51ff 0%, #e12afb 100%)',
+        'gradient-main': 'linear-gradient(135deg, #fff7ed 0%, #fce7f3 45%, #ede9fe 100%)',
+        'gradient-button': 'linear-gradient(90deg, #f97316 0%, #ec4899 100%)',
+        'gradient-icon': 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
       },
     },
   },
