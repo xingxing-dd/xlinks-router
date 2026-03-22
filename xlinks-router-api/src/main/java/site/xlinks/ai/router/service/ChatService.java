@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,9 +14,7 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.ModelEndpoint;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
-import site.xlinks.ai.router.mapper.ModelEndpointMapper;
 import site.xlinks.ai.router.mapper.ModelMapper;
-import site.xlinks.ai.router.mapper.ProviderMapper;
 
 import java.util.List;
 import java.util.UUID;
@@ -43,9 +40,8 @@ public class ChatService {
     private final CustomerTokenAuthService customerTokenAuthService;
     private final ProviderTokenSelectService providerTokenSelectService;
     private final ChatProviderAdapterFactory adapterFactory;
-    private final ModelEndpointMapper modelEndpointMapper;
+    private final RouteCacheService routeCacheService;
     private final ModelMapper modelMapper;
-    private final ProviderMapper providerMapper;
 
     /**
      * 处理 Chat Completion 请求
@@ -95,7 +91,7 @@ public class ChatService {
      */
     public Object listModels(String token) {
         // 验证 Token
-        CustomerToken customerToken = customerTokenAuthService.validateToken(token);
+        customerTokenAuthService.validateToken(token);
 
         // 查询所有启用的模型
         List<Model> models = modelMapper.selectList(
@@ -143,30 +139,21 @@ public class ChatService {
         validateRequest(request);
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
 
-        ModelEndpoint modelEndpoint = modelEndpointMapper.selectOne(
-                new LambdaQueryWrapper<ModelEndpoint>()
-                        .eq(ModelEndpoint::getEndpointCode, endpoint)
-                        .eq(ModelEndpoint::getStatus, 1)
-        );
+        ModelEndpoint modelEndpoint = routeCacheService.getEndpoint(endpoint);
         if (modelEndpoint == null) {
             throw new site.xlinks.ai.router.common.exception.BusinessException(
                     ErrorCode.PARAM_ERROR,
                     "无效的 endpoint: " + endpoint);
         }
 
-        Model model = modelMapper.selectOne(
-                new LambdaQueryWrapper<Model>()
-                        .eq(Model::getModelCode, request.getModel())
-                        .eq(Model::getEndpointId, modelEndpoint.getId())
-                        .eq(Model::getStatus, 1)
-        );
+        Model model = routeCacheService.getModel(modelEndpoint.getId(), request.getModel());
         if (model == null) {
             throw new site.xlinks.ai.router.common.exception.BusinessException(
                     ErrorCode.PARAM_ERROR,
                     "模型不存在或不可用: " + request.getModel());
         }
 
-        Provider provider = providerMapper.selectById(model.getProviderId());
+        Provider provider = routeCacheService.getProvider(model.getProviderId());
         if (provider == null || provider.getStatus() == null || provider.getStatus() != 1) {
             throw new site.xlinks.ai.router.common.exception.BusinessException(
                     ErrorCode.ROUTE_ERROR,

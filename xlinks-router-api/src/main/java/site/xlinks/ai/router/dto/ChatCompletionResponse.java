@@ -1,9 +1,11 @@
 package site.xlinks.ai.router.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Chat Completion 响应 DTO
@@ -36,13 +38,14 @@ public class ChatCompletionResponse {
     @Data
     @Schema(description = "选择")
     public static class Choice {
-        
+
         @Schema(description = "索引")
         private Integer index;
-        
+
         @Schema(description = "消息")
         private Message message;
-        
+
+        @JsonProperty("finish_reason")
         @Schema(description = "完成原因")
         private String finishReason;
     }
@@ -53,10 +56,10 @@ public class ChatCompletionResponse {
     @Data
     @Schema(description = "消息")
     public static class Message {
-        
+
         @Schema(description = "角色")
         private String role;
-        
+
         @Schema(description = "内容")
         private String content;
     }
@@ -67,14 +70,25 @@ public class ChatCompletionResponse {
     @Data
     @Schema(description = "使用统计")
     public static class Usage {
-        
+
+        @JsonProperty("prompt_tokens")
         @Schema(description = "提示词 token 数")
         private Integer promptTokens;
-        
+
+        @JsonProperty("completion_tokens")
         @Schema(description = "补全 token 数")
         private Integer completionTokens;
-        
+
+        @JsonProperty("total_tokens")
         @Schema(description = "总 token 数")
         private Integer totalTokens;
+
+        @JsonProperty("prompt_tokens_details")
+        @Schema(description = "提示词 token 详情")
+        private Map<String, Object> promptTokensDetails;
+
+        @JsonProperty("completion_tokens_details")
+        @Schema(description = "补全 token 详情")
+        private Map<String, Object> completionTokensDetails;
     }
 }

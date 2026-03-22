@@ -43,12 +43,12 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
         try {
             // 构建请求 URL
             String url = context.getBaseUrl() + "/chat/completions";
-            
+
             // 构建请求体（将模型名替换为底层模型名）
             ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), false);
-            
+
             String requestJson = objectMapper.writeValueAsString(adaptedRequest);
-            
+
             // 构建 HTTP 请求
             Request httpRequest = new Request.Builder()
                     .url(url)
@@ -56,19 +56,19 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(requestJson, JSON))
                     .build();
-            
+
             // 执行请求
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
                     log.error("Provider API call failed: {} - {}", response.code(), response.message());
                     throw new RuntimeException("Provider API call failed: " + response.code());
                 }
-                
+
                 ResponseBody body = response.body();
                 if (body == null) {
                     throw new RuntimeException("Empty response from provider");
                 }
-                
+
                 String responseJson = body.string();
                 log.info("========>{}", responseJson);
                 return objectMapper.readValue(responseJson, ChatCompletionResponse.class);
@@ -96,7 +96,7 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
 
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    log.error("Provider API call failed: {} - {}", response.code(), response.message());
+                    log.error("Provider Stream API call failed: {} - {}", response.code(), response.message());
                     throw new RuntimeException("Provider API call failed: " + response.code());
                 }
                 ResponseBody body = response.body();

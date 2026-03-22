@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +21,7 @@ import java.util.List;
 public class ProviderTokenSelectService {
 
     private final site.xlinks.ai.router.mapper.ProviderTokenMapper providerTokenMapper;
+    private final RouteCacheService routeCacheService;
 
     /**
      * 选择可用的 Provider Token
@@ -33,15 +33,8 @@ public class ProviderTokenSelectService {
     public ProviderToken selectToken(Long providerId) {
         log.debug("Selecting token for provider: {}", providerId);
 
-        // 1. 查询状态正常的 Token
-        LambdaQueryWrapper<ProviderToken> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ProviderToken::getProviderId, providerId)
-               .eq(ProviderToken::getTokenStatus, 1)
-               .gt(ProviderToken::getExpireTime, LocalDateTime.now())
-               .or()
-               .isNull(ProviderToken::getExpireTime);
-
-        List<ProviderToken> tokens = providerTokenMapper.selectList(wrapper);
+        // 1. 获取缓存中的 Token 列表
+        List<ProviderToken> tokens = routeCacheService.getProviderTokens(providerId);
 
         if (tokens == null || tokens.isEmpty()) {
             throw new BusinessException(ErrorCode.ROUTE_ERROR, "无可用的 Provider Token");
