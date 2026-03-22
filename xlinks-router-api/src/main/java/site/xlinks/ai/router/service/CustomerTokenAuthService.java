@@ -36,12 +36,9 @@ public class CustomerTokenAuthService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 不能为空");
         }
 
-        // 计算 Token 哈希值
-        String hashedToken = hashToken(token);
-
         // 查询数据库
         LambdaQueryWrapper<CustomerToken> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CustomerToken::getTokenValue, hashedToken);
+        wrapper.eq(CustomerToken::getTokenValue, token);
         CustomerToken customerToken = customerTokenMapper.selectOne(wrapper);
 
         if (customerToken == null) {
@@ -49,7 +46,7 @@ public class CustomerTokenAuthService {
         }
 
         // 检查状态
-        if (customerToken.getStatus() == null || customerToken.getStatus() != 1) {
+        if (customerToken.getStatus() == null || customerToken.getStatus() != 0) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 已禁用");
         }
 

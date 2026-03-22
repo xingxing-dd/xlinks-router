@@ -46,15 +46,15 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-orange-100 via-pink-100 to-purple-200 flex">
+  <div class="min-h-screen bg-gradient-main flex">
     <div class="hidden lg:flex lg:w-1/2 items-center justify-center p-12">
       <div class="max-w-xl">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-14 h-14 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-xl shadow-violet-500/30">
+          <div class="w-14 h-14 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-xl shadow-primary/20">
             <Key class="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 class="text-5xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
+            <h1 class="text-5xl font-bold bg-gradient-icon bg-clip-text text-transparent">
               {{ t('auth.brandName') }}
             </h1>
           </div>
@@ -64,8 +64,8 @@ const handleSubmit = async () => {
         </p>
         <div class="space-y-4">
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-              <Sparkles class="w-5 h-5 text-violet-600" />
+            <div class="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+              <Sparkles class="w-5 h-5 text-primary" />
             </div>
             <div>
               <h3 class="font-semibold text-slate-800 mb-1">{{ t('auth.feature1Title') }}</h3>
@@ -73,8 +73,8 @@ const handleSubmit = async () => {
             </div>
           </div>
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 bg-fuchsia-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-              <Sparkles class="w-5 h-5 text-fuchsia-600" />
+            <div class="w-8 h-8 bg-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+              <Sparkles class="w-5 h-5 text-secondary" />
             </div>
             <div>
               <h3 class="font-semibold text-slate-800 mb-1">{{ t('auth.feature2Title') }}</h3>
@@ -82,8 +82,8 @@ const handleSubmit = async () => {
             </div>
           </div>
           <div class="flex items-start gap-3">
-            <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-              <Sparkles class="w-5 h-5 text-purple-600" />
+            <div class="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+              <Sparkles class="w-5 h-5 text-primary" />
             </div>
             <div>
               <h3 class="font-semibold text-slate-800 mb-1">{{ t('auth.feature3Title') }}</h3>
@@ -98,7 +98,7 @@ const handleSubmit = async () => {
       <div class="w-full max-w-md">
         <div class="bg-white rounded-3xl shadow-2xl p-8 lg:p-10">
           <div class="flex lg:hidden items-center justify-center mb-6">
-            <div class="w-14 h-14 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/30">
+            <div class="w-14 h-14 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
               <Key class="w-7 h-7 text-white" />
             </div>
           </div>
@@ -124,7 +124,7 @@ const handleSubmit = async () => {
                 <input
                   v-model="email"
                   type="text"
-                  class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all bg-white text-slate-900"
+                  class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none transition-all bg-white text-slate-900"
                   :placeholder="t('login.emailPlaceholder')"
                   required
                 />
@@ -140,7 +140,7 @@ const handleSubmit = async () => {
                 <input
                   v-model="password"
                   type="password"
-                  class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition-all bg-white text-slate-900"
+                  class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none transition-all bg-white text-slate-900"
                   :placeholder="t('login.passwordPlaceholder')"
                   required
                 />
@@ -151,11 +151,11 @@ const handleSubmit = async () => {
               <label class="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  class="w-4 h-4 text-violet-600 border-slate-300 rounded focus:ring-violet-500"
+                  class="w-4 h-4 text-primary border-slate-300 rounded focus:ring-ring"
                 />
                 <span class="ml-2 text-slate-600">{{ t('login.rememberMe') }}</span>
               </label>
-              <a href="#" class="text-violet-600 hover:text-violet-700 font-medium">
+              <a href="#" class="text-primary hover:text-primary font-medium">
                 {{ t('login.forgotPassword') }}
               </a>
             </div>
@@ -181,12 +181,12 @@ const handleSubmit = async () => {
               <span class="text-slate-600">{{ t('login.noAccount') }}</span>
               <router-link
                 to="/register"
-                class="ml-1 text-violet-600 hover:text-violet-700 font-semibold"
+                class="ml-1 text-primary hover:text-primary font-semibold"
               >
                 {{ t('login.register') }}
               </router-link>
               <span class="mx-2 text-slate-300">|</span>
-              <a href="#" class="text-violet-600 hover:text-violet-700 font-medium">
+              <a href="#" class="text-primary hover:text-primary font-medium">
                 {{ t('login.forgotPasswordSecondary') }}
               </a>
             </div>

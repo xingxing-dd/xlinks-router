@@ -1,5 +1,6 @@
 package site.xlinks.ai.router.adapter;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,13 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class ChatProviderAdapterFactory {
 
+    private final List<ChatProviderAdapter> chatProviderAdapters;
+
     private final Map<String, ChatProviderAdapter> adapterMap = new ConcurrentHashMap<>();
 
     public ChatProviderAdapterFactory(List<ChatProviderAdapter> adapters) {
-        // 注册所有实现了 ChatProviderAdapter 的 Bean
-        for (ChatProviderAdapter adapter : adapters) {
-            log.info("Registered adapter: {} for provider types", adapter.getClass().getSimpleName());
-        }
+        this.chatProviderAdapters = adapters;
     }
 
     /**
@@ -34,7 +34,7 @@ public class ChatProviderAdapterFactory {
         ChatProviderAdapter adapter = adapterMap.get(providerType);
         if (adapter == null) {
             // 尝试获取第一个支持该类型或默认的适配器
-            for (ChatProviderAdapter a : adapterMap.values()) {
+            for (ChatProviderAdapter a : chatProviderAdapters) {
                 if (a.supports(providerType)) {
                     adapterMap.put(providerType, a);
                     return a;

@@ -45,7 +45,7 @@ const baseUrl = 'https://xlinks.site/v1/codex'
 <template>
   <div class="p-4 md:p-8 max-w-7xl mx-auto">
     <!-- 快速开始卡片 -->
-    <div class="bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 rounded-3xl p-8 text-white mb-8 shadow-2xl">
+    <div class="bg-gradient-hero rounded-3xl p-8 text-white mb-8 shadow-2xl">
       <div class="flex items-center gap-3 mb-4">
         <div class="w-12 h-12 bg-white/30 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
           <Zap class="w-6 h-6 text-white" />
@@ -194,7 +194,7 @@ main();</pre>
         <!-- cURL 示例 -->
         <div>
           <h3 class="text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2">
-            <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium">cURL</span>
+            <span class="px-3 py-1 bg-primary/10 text-primary rounded-lg text-sm font-medium">cURL</span>
             直接 HTTP 请求
           </h3>
           <div class="relative bg-slate-900 rounded-xl p-4 font-mono text-sm overflow-x-auto">
@@ -231,8 +231,8 @@ main();</pre>
       <div class="p-6">
         <div class="space-y-4">
           <div class="flex items-start gap-3">
-            <div class="w-6 h-6 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Check class="w-4 h-4 text-violet-600" />
+            <div class="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Check class="w-4 h-4 text-primary" />
             </div>
             <div>
               <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.supportedModels') }}</h4>
@@ -243,8 +243,8 @@ main();</pre>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-6 h-6 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Check class="w-4 h-4 text-violet-600" />
+            <div class="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Check class="w-4 h-4 text-primary" />
             </div>
             <div>
               <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.recommendedModels') }}</h4>
@@ -260,8 +260,8 @@ main();</pre>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-6 h-6 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Check class="w-4 h-4 text-violet-600" />
+            <div class="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Check class="w-4 h-4 text-primary" />
             </div>
             <div>
               <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.apiCompatibility') }}</h4>
@@ -272,8 +272,8 @@ main();</pre>
           </div>
 
           <div class="flex items-start gap-3">
-            <div class="w-6 h-6 bg-violet-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Check class="w-4 h-4 text-violet-600" />
+            <div class="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Check class="w-4 h-4 text-primary" />
             </div>
             <div>
               <h4 class="font-semibold text-slate-900 mb-1">{{ t('docs.concurrencyLimit') }}</h4>

@@ -60,30 +60,28 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-slate-50">
+  <div class="flex h-screen bg-gradient-main">
     <!-- Sidebar - Desktop -->
-    <aside class="hidden md:flex md:flex-col md:w-72 bg-slate-900 shadow-2xl overflow-hidden">
-      <div class="p-6 border-b border-slate-700/50 bg-slate-900">
+    <aside class="hidden md:flex md:flex-col md:w-72 bg-white shadow-xl border-r border-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-200">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
             <Key class="w-5 h-5 text-white" />
           </div>
-          <h1 class="text-xl font-bold text-white tracking-tight">
-            Xlinks Token Hub
-          </h1>
+          <h1 class="text-xl font-bold bg-gradient-icon bg-clip-text text-transparent tracking-tight">Xlinks Token Hub</h1>
         </div>
       </div>
 
-      <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto bg-slate-900">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <router-link
           v-for="item in navItems"
           :key="item.path"
           :to="item.path"
-          class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group relative overflow-hidden"
+          class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group"
           :class="[
             isActive(item.path)
-              ? 'bg-gradient-button text-white shadow-md shadow-primary/25'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              ? 'bg-gradient-button text-white shadow-lg shadow-primary/25'
+              : 'text-slate-600 hover:bg-primary/5 hover:text-slate-900'
           ]"
         >
           <component
@@ -99,18 +97,16 @@ const handleLogout = () => {
     <!-- Content Area -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header - Desktop -->
-      <header class="hidden md:flex items-center justify-between px-8 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
+      <header class="hidden md:flex items-center justify-between px-6 py-4 bg-white/90 backdrop-blur-lg border-b border-slate-200 shadow-sm z-10">
         <div class="flex items-center gap-4">
-          <h2 class="text-xl font-semibold text-slate-900 tracking-tight">
-            {{ currentLabel }}
-          </h2>
+          <h2 class="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent tracking-tight">{{ currentLabel }}</h2>
         </div>
         
         <div class="flex items-center gap-5">
           <!-- Language Switch -->
           <button
             @click="toggleLanguage"
-            class="flex items-center gap-2 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all group"
+            class="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/15 rounded-xl border border-primary/15 transition-all group"
           >
             <Globe class="w-4 h-4 text-slate-500 group-hover:scale-110 transition-transform duration-300" />
             <span class="text-sm font-medium text-slate-700">
@@ -122,7 +118,7 @@ const handleLogout = () => {
           <div class="relative">
             <button
               @click="isUserMenuOpen = !isUserMenuOpen"
-              class="flex items-center gap-3 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all group"
+              class="flex items-center gap-3 px-4 py-2 bg-secondary/10 hover:bg-secondary/15 rounded-xl border border-secondary/15 transition-all group"
             >
               <div class="w-8 h-8 bg-gradient-icon rounded-full flex items-center justify-center shadow-sm">
                 <User class="w-4 h-4 text-white" />
@@ -147,7 +143,7 @@ const handleLogout = () => {
       </header>
 
       <!-- Mobile Header -->
-      <div class="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-50 shadow-sm">
+      <div class="md:hidden fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-b border-slate-200 z-50 shadow-sm">
         <div class="flex items-center justify-between p-4">
           <div class="flex items-center gap-2">
             <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
@@ -195,7 +191,7 @@ const handleLogout = () => {
       </div>
 
       <!-- Main Content -->
-      <main class="flex-1 overflow-auto mt-[65px] md:mt-0 bg-slate-50/50">
+      <main class="flex-1 overflow-auto mt-[73px] md:mt-0">
         <router-view />
       </main>
     </div>

@@ -73,7 +73,7 @@ const handleSubmit = async () => {
         </p>
         <a
           href="mailto:support@token-hub.com"
-          class="text-violet-600 hover:text-violet-700 font-medium"
+          class="text-primary hover:text-primary font-medium"
         >
           support@token-hub.com
         </a>
@@ -95,7 +95,7 @@ const handleSubmit = async () => {
       </div>
 
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl flex items-center justify-center mb-4 shadow-lg">
+        <div class="w-12 h-12 bg-gradient-icon rounded-xl flex items-center justify-center mb-4 shadow-lg">
           <Phone class="w-6 h-6 text-white" />
         </div>
         <h3 class="font-semibold text-slate-900 mb-2">
@@ -106,7 +106,7 @@ const handleSubmit = async () => {
         </p>
         <a
           href="tel:+8640012345678"
-          class="text-violet-600 hover:text-violet-700 font-medium"
+          class="text-primary hover:text-primary font-medium"
         >
           400-123-4567
         </a>
@@ -127,7 +127,7 @@ const handleSubmit = async () => {
             <input
               v-model="formData.name"
               type="text"
-              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none"
+              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
               :placeholder="t('contact.namePlaceholder')"
               required
             />
@@ -140,7 +140,7 @@ const handleSubmit = async () => {
             <input
               v-model="formData.email"
               type="email"
-              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none"
+              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none"
               :placeholder="t('contact.emailPlaceholder')"
               required
             />
@@ -152,7 +152,7 @@ const handleSubmit = async () => {
             </label>
             <select
               v-model="formData.subject"
-              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white"
+              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none bg-white"
               required
             >
               <option value="">{{ t('contact.subjectPlaceholder') }}</option>
@@ -171,7 +171,7 @@ const handleSubmit = async () => {
             <textarea
               v-model="formData.message"
               rows="6"
-              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none resize-none"
+              class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none resize-none"
               :placeholder="t('contact.messagePlaceholder')"
               required
             />
@@ -180,7 +180,7 @@ const handleSubmit = async () => {
           <button
             type="submit"
             :disabled="submitting"
-            class="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium flex items-center justify-center gap-2"
+            class="w-full bg-gradient-button text-white py-3 rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium flex items-center justify-center gap-2"
           >
             <Send class="w-5 h-5" />
             <span>{{ submitting ? t('contact.sendingBtn') : t('contact.sendBtn') }}</span>
@@ -235,7 +235,7 @@ const handleSubmit = async () => {
         </div>
 
         <!-- 社交媒体 -->
-        <div class="bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 rounded-2xl p-8 text-white shadow-2xl">
+        <div class="bg-gradient-hero rounded-2xl p-8 text-white shadow-2xl">
           <h2 class="text-xl font-bold mb-4 text-white">
             {{ t('contact.followUs') }}
           </h2>
@@ -272,31 +272,31 @@ const handleSubmit = async () => {
           <div class="space-y-3">
             <a
               href="#"
-              class="block text-violet-600 hover:text-violet-700 hover:underline font-medium"
+              class="block text-primary hover:text-primary hover:underline font-medium"
             >
               {{ t('contact.faq1') }}
             </a>
             <a
               href="#"
-              class="block text-violet-600 hover:text-violet-700 hover:underline font-medium"
+              class="block text-primary hover:text-primary hover:underline font-medium"
             >
               {{ t('contact.faq2') }}
             </a>
             <a
               href="#"
-              class="block text-violet-600 hover:text-violet-700 hover:underline font-medium"
+              class="block text-primary hover:text-primary hover:underline font-medium"
             >
               {{ t('contact.faq3') }}
             </a>
             <a
               href="#"
-              class="block text-violet-600 hover:text-violet-700 hover:underline font-medium"
+              class="block text-primary hover:text-primary hover:underline font-medium"
             >
               {{ t('contact.faq4') }}
             </a>
             <a
               href="#"
-              class="block text-violet-600 hover:text-violet-700 hover:underline font-medium"
+              class="block text-primary hover:text-primary hover:underline font-medium"
             >
               {{ t('contact.faq5') }}
             </a>

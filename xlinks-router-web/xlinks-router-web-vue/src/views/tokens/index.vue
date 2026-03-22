@@ -61,7 +61,7 @@ onMounted(loadTokens)
             v-model="searchQuery"
             type="text"
             :placeholder="t('tokens.searchPlaceholder')"
-            class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white transition-all text-slate-900"
+            class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none bg-white transition-all text-slate-900"
           />
         </div>
 
@@ -69,7 +69,7 @@ onMounted(loadTokens)
         <div class="relative">
           <button
             @click="isStatusDropdownOpen = !isStatusDropdownOpen"
-            class="flex items-center justify-between gap-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 whitespace-nowrap font-medium min-w-[160px]"
+            class="flex items-center justify-between gap-3 bg-gradient-button text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 whitespace-nowrap font-medium min-w-[160px]"
           >
             <span>{{ currentStatusLabel }}</span>
             <ChevronDown
@@ -87,7 +87,7 @@ onMounted(loadTokens)
             />
 
             <!-- 下拉选项 -->
-            <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border-2 border-violet-200 overflow-hidden z-20 min-w-[160px] animate-in fade-in zoom-in duration-200">
+            <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border-2 border-primary/20 overflow-hidden z-20 min-w-[160px] animate-in fade-in zoom-in duration-200">
               <button
                 v-for="option in statusOptions"
                 :key="option.value"
@@ -95,15 +95,15 @@ onMounted(loadTokens)
                   selectedStatus = option.value;
                   isStatusDropdownOpen = false;
                 }"
-                class="w-full px-4 py-3 text-left hover:bg-gradient-to-r hover:from-violet-50 hover:to-fuchsia-50 transition-all duration-150 flex items-center justify-between"
+                class="w-full px-4 py-3 text-left hover:bg-primary/5 transition-all duration-150 flex items-center justify-between"
                 :class="[
                   selectedStatus === option.value
-                    ? 'bg-gradient-to-r from-violet-100 to-fuchsia-100 text-violet-700 font-semibold'
+                    ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-slate-700'
                 ]"
               >
                 <span>{{ option.label }}</span>
-                <span v-if="selectedStatus === option.value" class="text-violet-600">✓</span>
+                <span v-if="selectedStatus === option.value" class="text-primary">✓</span>
               </button>
             </div>
           </template>
@@ -113,10 +113,10 @@ onMounted(loadTokens)
 
     <!-- Token 列表 -->
     <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden">
-      <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6">
+      <div class="bg-gradient-hero p-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center">
+            <div class="w-10 h-10 bg-white/25 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30">
               <Key class="w-5 h-5 text-white" />
             </div>
             <h2 class="text-xl font-bold text-white">
@@ -125,7 +125,7 @@ onMounted(loadTokens)
           </div>
           <button
             @click="isCreateModalOpen = true"
-            class="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium"
+            class="flex items-center gap-2 bg-white text-primary px-4 md:px-6 py-2.5 md:py-3 rounded-xl hover:bg-white/90 hover:shadow-lg transition-all duration-200 font-semibold"
           >
             <Plus class="w-4 h-4 md:w-5 md:h-5" />
             <span class="hidden md:inline">{{ t('tokens.create') }}</span>
@@ -136,7 +136,7 @@ onMounted(loadTokens)
       <div class="p-6">
         <!-- 加载状态 -->
         <div v-if="loading" class="text-center py-12">
-          <div class="w-12 h-12 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin mx-auto mb-4" />
+          <div class="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4" />
           <p class="text-slate-500">{{ t('common.loading') }}</p>
         </div>
 
@@ -154,7 +154,7 @@ onMounted(loadTokens)
           <button
             v-if="!searchQuery"
             @click="isCreateModalOpen = true"
-            class="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium"
+            class="inline-flex items-center gap-2 bg-gradient-button text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
           >
             <Plus class="w-5 h-5" />
             <span>{{ t('tokens.create') }}</span>
@@ -198,7 +198,7 @@ onMounted(loadTokens)
                 >
                   <td class="py-4 px-4">
                     <div class="flex items-center gap-2">
-                      <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                      <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
                         <Key class="w-4 h-4 text-white" />
                       </div>
                       <span class="font-medium text-slate-900">
@@ -220,10 +220,10 @@ onMounted(loadTokens)
                       </button>
                       <button
                         @click="copyToClipboard(token.key, token.name)"
-                        class="p-1.5 hover:bg-violet-100 rounded transition-colors opacity-0 group-hover:opacity-100"
+                        class="p-1.5 hover:bg-primary/10 rounded transition-colors opacity-0 group-hover:opacity-100"
                         :title="t('common.copy')"
                       >
-                        <Copy class="w-3.5 h-3.5 text-violet-600" />
+                        <Copy class="w-3.5 h-3.5 text-primary" />
                       </button>
                     </div>
                   </td>
@@ -235,7 +235,7 @@ onMounted(loadTokens)
                   </td>
                   <td class="py-4 px-4">
                     <div class="flex items-center gap-2">
-                      <TrendingUp class="w-4 h-4 text-violet-600" />
+                      <TrendingUp class="w-4 h-4 text-primary" />
                       <span class="text-sm font-semibold text-slate-900">
                         {{ token.requests.toLocaleString() }}
                       </span>
@@ -286,7 +286,7 @@ onMounted(loadTokens)
             >
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                  <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
                     <Key class="w-4 h-4 text-white" />
                   </div>
                   <span class="font-semibold text-slate-900">
@@ -326,9 +326,9 @@ onMounted(loadTokens)
                   </button>
                   <button
                     @click="copyToClipboard(token.key, token.name)"
-                    class="p-1.5 hover:bg-violet-100 rounded transition-colors"
+                    class="p-1.5 hover:bg-primary/10 rounded transition-colors"
                   >
-                    <Copy class="w-4 h-4 text-violet-600" />
+                    <Copy class="w-4 h-4 text-primary" />
                   </button>
                 </div>
               </div>
@@ -355,7 +355,7 @@ onMounted(loadTokens)
                     {{ t('tokens.table.requests') }}
                   </span>
                   <div class="flex items-center gap-1">
-                    <TrendingUp class="w-4 h-4 text-violet-600" />
+                    <TrendingUp class="w-4 h-4 text-primary" />
                     <span class="font-semibold text-slate-900">
                       {{ token.requests.toLocaleString() }}
                     </span>
@@ -379,7 +379,7 @@ onMounted(loadTokens)
     <!-- 创建 Token 模态框 -->
     <div v-if="isCreateModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
       <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in duration-200">
-        <div class="bg-gradient-to-r from-violet-600 to-fuchsia-600 p-6 text-white">
+        <div class="bg-gradient-button p-6 text-white">
           <h2 class="text-2xl font-bold mb-1">{{ t('tokens.modal.title') }}</h2>
           <p class="text-white/80 text-sm">{{ t('tokens.modal.subtitle') }}</p>
         </div>
@@ -389,7 +389,7 @@ onMounted(loadTokens)
             <input
               v-model="newTokenName"
               type="text"
-              class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all text-slate-900"
+              class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-primary outline-none transition-all text-slate-900"
               :placeholder="t('tokens.modal.namePlaceholder')"
               autoFocus
               @keyup.enter="handleCreateToken"
@@ -406,7 +406,7 @@ onMounted(loadTokens)
             <button
               @click="handleCreateToken"
               :disabled="submitting"
-              class="flex-1 px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium"
+              class="flex-1 px-6 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
             >
               {{ submitting ? t('tokens.creating') : t('common.confirm') }}
             </button>

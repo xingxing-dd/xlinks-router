@@ -33,7 +33,7 @@ onMounted(loadModels)
             v-model="searchQuery"
             type="text"
             :placeholder="t('models.searchPlaceholder')"
-            class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white transition-all text-slate-900"
+            class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none bg-white transition-all text-slate-900"
           />
         </div>
         
@@ -41,7 +41,7 @@ onMounted(loadModels)
         <div class="relative">
           <button
             @click="isProviderDropdownOpen = !isProviderDropdownOpen"
-            class="flex items-center justify-between gap-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 whitespace-nowrap font-medium min-w-[160px]"
+            class="flex items-center justify-between gap-3 bg-gradient-button text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 whitespace-nowrap font-medium min-w-[160px]"
           >
             <span>{{ selectedProvider }}</span>
             <ChevronDown class="w-5 h-5 transition-transform duration-200" :class="{ 'rotate-180': isProviderDropdownOpen }" />
@@ -56,15 +56,15 @@ onMounted(loadModels)
             />
             
             <!-- 下拉选项 -->
-            <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border-2 border-violet-200 overflow-hidden z-20 min-w-[160px] animate-in fade-in zoom-in duration-200">
+            <div class="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border-2 border-primary/20 overflow-hidden z-20 min-w-[160px] animate-in fade-in zoom-in duration-200">
               <button
                 v-for="provider in providers"
                 :key="provider"
                 @click="() => { selectedProvider = provider; isProviderDropdownOpen = false }"
-                class="w-full px-4 py-3 text-left hover:bg-gradient-to-r hover:from-violet-50 hover:to-fuchsia-50 transition-all duration-150"
+                class="w-full px-4 py-3 text-left hover:bg-primary/5 transition-all duration-150"
                 :class="[
                   selectedProvider === provider
-                    ? 'bg-gradient-to-r from-violet-100 to-fuchsia-100 text-violet-700 font-semibold'
+                    ? 'bg-primary/10 text-primary font-semibold'
                     : 'text-slate-700'
                 ]"
               >
@@ -85,7 +85,7 @@ onMounted(loadModels)
       <div
         v-for="model in filteredModels"
         :key="model.id"
-        class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-lg hover:border-violet-200 transition-all duration-200 group"
+        class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-lg hover:border-primary/20 transition-all duration-200 group"
       >
         <div class="flex items-start justify-between mb-4">
           <div class="flex-1">
@@ -93,10 +93,10 @@ onMounted(loadModels)
               <h3 class="text-lg font-bold text-slate-900">{{ model.name }}</h3>
               <button
                 @click="copyModelName(model.name)"
-                class="p-1 hover:bg-violet-100 rounded-md transition-colors duration-200"
+                class="p-1 hover:bg-primary/10 rounded-md transition-colors duration-200"
                 :title="t('models.copyModelName')"
               >
-                <Copy class="w-4 h-4 text-slate-400 hover:text-violet-600" />
+                <Copy class="w-4 h-4 text-slate-400 hover:text-primary" />
               </button>
               <span 
                 class="px-2 py-1 rounded-full text-xs font-medium"
@@ -107,7 +107,7 @@ onMounted(loadModels)
             </div>
             <p class="text-sm text-slate-500">{{ model.provider }}</p>
           </div>
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+          <div class="w-12 h-12 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
             <Cpu class="w-6 h-6 text-white" />
           </div>
         </div>

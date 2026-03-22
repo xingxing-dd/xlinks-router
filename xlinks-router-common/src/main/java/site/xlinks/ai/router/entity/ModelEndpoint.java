@@ -18,9 +18,12 @@ public class ModelEndpoint extends BaseEntity {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private String endpointName;
+    /**
+     * 端点编码，如 chat/completions
+     */
+    private String endpointCode;
 
-    private String endpointDesc;
+    private String endpointName;
 
     private String endpointUrl;
 

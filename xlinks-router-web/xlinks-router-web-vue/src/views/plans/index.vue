@@ -71,7 +71,7 @@ onMounted(loadPlans)
     </div>
 
     <!-- 我的订阅卡片 -->
-    <div class="mb-8 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-3xl p-6 md:p-8 text-white shadow-xl relative z-10">
+    <div class="mb-8 bg-gradient-hero rounded-3xl p-6 md:p-8 text-white shadow-xl relative z-10">
       <div class="flex items-center justify-between mb-6">
         <div>
           <h2 class="text-2xl font-bold mb-1">{{ t('plans.mySubscription') }}</h2>
@@ -117,27 +117,27 @@ onMounted(loadPlans)
                     class="w-full text-left px-4 py-3 rounded-xl transition-all duration-150 border-2"
                     :class="[
                       index === currentSubscriptionIndex
-                        ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200'
+                        ? 'bg-primary/10 border-primary/20'
                         : 'hover:bg-slate-50 border-transparent'
                     ]"
                   >
                     <div class="flex items-center justify-between mb-1">
-                      <span class="font-semibold" :class="[index === currentSubscriptionIndex ? 'text-indigo-700' : 'text-slate-900']">
+                      <span class="font-semibold" :class="[index === currentSubscriptionIndex ? 'text-primary' : 'text-slate-900']">
                         {{ sub.planName }}
                       </span>
-                      <div v-if="index === currentSubscriptionIndex" class="w-5 h-5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <div v-if="index === currentSubscriptionIndex" class="w-5 h-5 bg-gradient-button rounded-full flex items-center justify-center">
                         <Check class="w-3 h-3 text-white" />
                       </div>
                     </div>
                     <div class="flex items-center gap-3 text-xs">
-                      <span class="flex items-center gap-1" :class="[index === currentSubscriptionIndex ? 'text-indigo-600' : 'text-slate-500']">
+                      <span class="flex items-center gap-1" :class="[index === currentSubscriptionIndex ? 'text-primary' : 'text-slate-500']">
                         <Clock class="w-3 h-3" />
                         {{ t('plans.remainingDays') }} {{ sub.daysRemaining }} {{ t('plans.dayUnit') }}
                       </span>
-                      <span :class="[index === currentSubscriptionIndex ? 'text-indigo-600' : 'text-slate-500']">
+                      <span :class="[index === currentSubscriptionIndex ? 'text-primary' : 'text-slate-500']">
                         •
                       </span>
-                      <span :class="[index === currentSubscriptionIndex ? 'text-indigo-600' : 'text-slate-500']">
+                      <span :class="[index === currentSubscriptionIndex ? 'text-primary' : 'text-slate-500']">
                         ${{ sub.remainingQuota.toFixed(2) }} / ${{ sub.totalQuota }}
                       </span>
                     </div>
@@ -234,7 +234,7 @@ onMounted(loadPlans)
       >
         <div class="bg-gradient-to-br from-slate-900 to-slate-800 p-8">
           <div class="flex items-center justify-between mb-4">
-            <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
+            <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
               <Box class="w-6 h-6 text-white" />
             </div>
             <div class="text-right">
@@ -261,7 +261,7 @@ onMounted(loadPlans)
 
           <button
             @click="handlePurchasePlan(plan.id)"
-            class="w-full py-3 rounded-xl font-semibold transition-all duration-200 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:shadow-lg hover:shadow-violet-500/50"
+            class="w-full py-3 rounded-xl font-semibold transition-all duration-200 bg-gradient-button text-white hover:shadow-lg hover:shadow-primary/25"
           >
             {{ t('plans.buyNow') }}
           </button>
@@ -271,9 +271,9 @@ onMounted(loadPlans)
 
     <!-- 历史订阅区域 -->
     <div class="mt-12 bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden">
-      <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6">
+      <div class="bg-gradient-hero p-6">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center">
+          <div class="w-10 h-10 bg-white/25 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30">
             <History class="w-5 h-5 text-white" />
           </div>
           <div>
@@ -286,7 +286,7 @@ onMounted(loadPlans)
         <!-- 桌面端表格视图 -->
         <div class="hidden md:block overflow-x-auto">
           <table class="w-full">
-            <thead>
+            <thead class="bg-primary/5">
               <tr class="border-b-2 border-slate-200">
                 <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.planName') }}</th>
                 <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.purchaseDate') }}</th>
@@ -301,7 +301,7 @@ onMounted(loadPlans)
               <tr v-for="sub in historicalSubscriptions" :key="sub.id" class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                 <td class="py-4 px-4">
                   <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                    <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
                       <Box class="w-4 h-4 text-white" />
                     </div>
                     <span class="font-medium text-slate-900">{{ sub.planName }}</span>
@@ -314,7 +314,7 @@ onMounted(loadPlans)
                   <div class="flex items-center gap-2">
                     <div class="flex-1 bg-slate-200 rounded-full h-2 max-w-[80px]">
                       <div 
-                        class="bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full h-2 transition-all duration-300"
+                        class="bg-gradient-button rounded-full h-2 transition-all duration-300"
                         :style="{ width: `${sub.usedPercentage}%` }"
                       />
                     </div>
@@ -332,7 +332,7 @@ onMounted(loadPlans)
                 <td class="py-4 px-4 text-right">
                   <button 
                     @click="() => { selectedHistoricalSub = sub; isHistoryDetailModalOpen = true }"
-                    class="inline-flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors"
+                    class="inline-flex items-center gap-1 text-sm text-primary hover:text-primary font-medium transition-colors"
                   >
                     <Eye class="w-4 h-4" />
                     {{ t('plans.viewDetail') }}
@@ -348,7 +348,7 @@ onMounted(loadPlans)
           <div v-for="sub in historicalSubscriptions" :key="sub.id" class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+                <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
                   <Box class="w-4 h-4 text-white" />
                 </div>
                 <span class="font-semibold text-slate-900">{{ sub.planName }}</span>
@@ -383,7 +383,7 @@ onMounted(loadPlans)
               </div>
               <div class="w-full bg-slate-200 rounded-full h-2">
                 <div 
-                  class="bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full h-2 transition-all duration-300"
+                  class="bg-gradient-button rounded-full h-2 transition-all duration-300"
                   :style="{ width: `${sub.usedPercentage}%` }"
                 />
               </div>
@@ -391,7 +391,7 @@ onMounted(loadPlans)
 
             <button 
               @click="() => { selectedHistoricalSub = sub; isHistoryDetailModalOpen = true }"
-              class="w-full flex items-center justify-center gap-2 text-sm text-violet-600 hover:text-violet-700 font-medium transition-colors py-2"
+              class="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary font-medium transition-colors py-2"
             >
               <Eye class="w-4 h-4" />
               {{ t('plans.viewDetail') }}
@@ -412,7 +412,7 @@ onMounted(loadPlans)
     <div v-if="isCheckoutModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
             <CreditCard class="w-6 h-6 text-white" />
           </div>
           <div>
@@ -447,7 +447,7 @@ onMounted(loadPlans)
               class="flex items-center gap-3 p-3 border-2 rounded-xl transition-colors"
               :class="[
                 method.enabled 
-                  ? (selectedPayment === method.id ? 'border-violet-500 bg-violet-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer')
+                  ? (selectedPayment === method.id ? 'border-primary bg-primary/5 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer')
                   : 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
               ]"
             >
@@ -457,7 +457,7 @@ onMounted(loadPlans)
                 :value="method.id"
                 v-model="selectedPayment"
                 :disabled="!method.enabled"
-                class="w-4 h-4 text-violet-600 disabled:opacity-50"
+                class="w-4 h-4 text-primary disabled:opacity-50"
               />
               <span class="text-2xl">{{ method.icon }}</span>
               <span class="font-medium" :class="method.enabled ? 'text-slate-900' : 'text-slate-400'">{{ method.name }}</span>
@@ -478,7 +478,7 @@ onMounted(loadPlans)
           <button
             @click="handleConfirmPurchase"
             :disabled="submitting"
-            class="flex-1 px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium"
+            class="flex-1 px-4 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
           >
             {{ submitting ? t('plans.creatingOrder') : t('plans.confirmPay') }}
           </button>
@@ -490,7 +490,7 @@ onMounted(loadPlans)
     <div v-if="isActivationCodeModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
             <Ticket class="w-6 h-6 text-white" />
           </div>
           <div>
@@ -507,7 +507,7 @@ onMounted(loadPlans)
           <input
             type="text"
             v-model="activationCode"
-            class="w-full px-4 py-3 border border-slate-300 text-slate-700 rounded-xl focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50"
+            class="w-full px-4 py-3 border border-slate-300 text-slate-700 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring"
             :placeholder="t('plans.activationCodePlaceholder')"
           />
         </div>
@@ -522,7 +522,7 @@ onMounted(loadPlans)
           <button
             @click="handleActivateCode"
             :disabled="submitting"
-            class="flex-1 px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/50 transition-all duration-200 font-medium disabled:opacity-50"
+            class="flex-1 px-4 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium disabled:opacity-50"
           >
             {{ submitting ? t('common.submitting') || '处理中...' : t('plans.confirmActivation') }}
           </button>
@@ -534,7 +534,7 @@ onMounted(loadPlans)
     <div v-if="isHistoryDetailModalOpen && selectedHistoricalSub" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
       <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
             <History class="w-6 h-6 text-white" />
           </div>
           <div>

@@ -50,7 +50,7 @@ onMounted(loadPromotionData)
 
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
         <div class="flex items-center justify-between mb-4">
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg">
             <DollarSign class="w-6 h-6 text-white" />
           </div>
         </div>
@@ -71,7 +71,7 @@ onMounted(loadPromotionData)
 
     <!-- 推广链接和邀请码 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div class="bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 rounded-3xl p-8 text-white shadow-2xl">
+      <div class="bg-gradient-hero rounded-3xl p-8 text-white shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
           <div class="w-12 h-12 bg-white/30 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-lg">
             <Gift class="w-6 h-6 text-white" />
@@ -89,7 +89,7 @@ onMounted(loadPromotionData)
             </code>
             <button
               @click="copyToClipboard(referralLink)"
-              class="bg-white text-violet-600 px-4 py-2 rounded-xl hover:bg-white/90 transition-all shadow-lg flex items-center gap-2 flex-shrink-0 font-medium"
+              class="bg-white text-primary px-4 py-2 rounded-xl hover:bg-white/90 transition-all shadow-lg flex items-center gap-2 flex-shrink-0 font-medium"
             >
               <Copy class="w-4 h-4" />
               <span>{{ t('promotion.copy') }}</span>
@@ -104,7 +104,7 @@ onMounted(loadPromotionData)
             </code>
             <button
               @click="copyToClipboard(referralCode)"
-              class="bg-white text-violet-600 px-4 py-2 rounded-xl hover:bg-white/90 transition-all shadow-lg flex items-center gap-2 font-medium"
+              class="bg-white text-primary px-4 py-2 rounded-xl hover:bg-white/90 transition-all shadow-lg flex items-center gap-2 font-medium"
             >
               <Copy class="w-4 h-4" />
               <span>{{ t('promotion.copy') }}</span>
@@ -142,7 +142,7 @@ onMounted(loadPromotionData)
           </div>
 
           <div class="flex items-start gap-4">
-            <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+            <div class="w-10 h-10 bg-gradient-icon rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
               <span class="text-white font-bold">3</span>
             </div>
             <div>

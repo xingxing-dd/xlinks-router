@@ -88,8 +88,8 @@ CREATE TABLE `providers` (
 ```sql
 CREATE TABLE `model_endpoints` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `endpoint_name` VARCHAR(100) NOT NULL COMMENT '端点名称，如 chat/completions',
-  `endpoint_desc` VARCHAR(500) DEFAULT NULL COMMENT '端点描述',
+  `endpoint_code` VARCHAR(100) NOT NULL COMMENT '端点编码，如 chat/completions',
+  `endpoint_name` VARCHAR(500) DEFAULT NULL COMMENT '端点名称',
   `endpoint_url` VARCHAR(255) NOT NULL COMMENT '端点 URL，如 /v1/chat/completions',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
@@ -141,7 +141,7 @@ CREATE TABLE `models` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `model_name` VARCHAR(100) NOT NULL COMMENT '模型名称',
   `model_code` VARCHAR(100) NOT NULL COMMENT '模型编码',
-  `endpoint_id` BIGINT NOT NULL COMMENT '模型端点 ID',
+  `endpoint_code` BIGINT NOT NULL COMMENT '模型端点code',
   `provider_id` BIGINT NOT NULL COMMENT '服务商 ID',
   `model_desc` VARCHAR(500) DEFAULT NULL COMMENT '模型描述',
   `input_price` DECIMAL(12, 2) DEFAULT NULL COMMENT '输入价格，单位：每百万 token',

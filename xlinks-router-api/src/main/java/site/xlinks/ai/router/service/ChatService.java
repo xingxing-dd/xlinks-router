@@ -1,21 +1,27 @@
 package site.xlinks.ai.router.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.adapter.ChatProviderAdapter;
 import site.xlinks.ai.router.adapter.ChatProviderAdapterFactory;
+import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
-import site.xlinks.ai.router.context.RouteTarget;
-import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.Model;
+import site.xlinks.ai.router.entity.ModelEndpoint;
+import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.mapper.ModelEndpointMapper;
+import site.xlinks.ai.router.mapper.ModelMapper;
+import site.xlinks.ai.router.mapper.ProviderMapper;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Chat Service - 核心编排服务
@@ -35,13 +41,11 @@ import java.util.UUID;
 public class ChatService {
 
     private final CustomerTokenAuthService customerTokenAuthService;
-    private final UsageEntitlementService usageEntitlementService;
-    private final ModelRouteService modelRouteService;
     private final ProviderTokenSelectService providerTokenSelectService;
-    private final UsageRecordService usageRecordService;
     private final ChatProviderAdapterFactory adapterFactory;
-
-    private final site.xlinks.ai.router.mapper.ModelMapper modelMapper;
+    private final ModelEndpointMapper modelEndpointMapper;
+    private final ModelMapper modelMapper;
+    private final ProviderMapper providerMapper;
 
     /**
      * 处理 Chat Completion 请求
@@ -50,76 +54,38 @@ public class ChatService {
      * @param request 请求对象
      * @return 响应对象
      */
-    public ChatCompletionResponse chatCompletions(String token, ChatCompletionRequest request) {
-        long startTime = System.currentTimeMillis();
+    public ChatCompletionResponse chatCompletions(String token, String endpoint, ChatCompletionRequest request) {
         String requestId = "chatcmpl-" + UUID.randomUUID().toString().substring(0, 8);
 
         try {
-            // ========== 1. 入口层：参数校验 ==========
-            validateRequest(request);
-
-            // ========== 2. 鉴权层：验证客户 Token ==========
-            CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-
-            // ========== 3. 权益判定层：判断使用套餐还是余额 ==========
-            UsageDecision usageDecision = usageEntitlementService.decide(customerToken, request.getModel());
-
-            // ========== 4. 鉴权层（额外）：检查模型权限 ==========
-            if (!customerTokenAuthService.hasPermissionForModel(customerToken, request.getModel())) {
-                throw new site.xlinks.ai.router.common.exception.BusinessException(
-                        site.xlinks.ai.router.common.enums.ErrorCode.FORBIDDEN,
-                        "无权访问该模型: " + request.getModel());
-            }
-
-            // ========== 5. 模型路由层：路由到目标 Provider/Model ==========
-            RouteTarget routeTarget = modelRouteService.route(request.getModel());
-
-            // ========== 6. Token 选择层：选择可用 Provider Token ==========
-            ProviderToken providerToken = providerTokenSelectService.selectToken(routeTarget.getProviderId());
-
-            // ========== 7. 构建调用上下文 ==========
-            ProviderInvokeContext context = ProviderInvokeContext.builder()
-                    .requestId(requestId)
-                    .providerId(routeTarget.getProviderId())
-                    .providerCode(routeTarget.getProviderCode())
-                    .providerType(routeTarget.getProviderType())
-                    .baseUrl(routeTarget.getBaseUrl())
-                    .providerToken(providerToken.getTokenValue())
-                    .providerModel(routeTarget.getProviderModel())
-                    .customerTokenId(customerToken.getId())
-                    .customerModel(request.getModel())
-                    .build();
-
-            // ========== 8. 适配器调用层：调用下游 Provider ==========
-            ChatProviderAdapter adapter = adapterFactory.getAdapter(routeTarget.getProviderType());
-            if (adapter == null) {
-                throw new site.xlinks.ai.router.common.exception.BusinessException(
-                        site.xlinks.ai.router.common.enums.ErrorCode.ROUTE_ERROR,
-                        "不支持的 Provider 类型: " + routeTarget.getProviderType());
-            }
-
-            ChatCompletionResponse response = adapter.chatCompletion(request, context);
-
-            // ========== 9. 后置处理：记录使用情况 ==========
-            long latencyMs = System.currentTimeMillis() - startTime;
-            recordUsage(requestId, customerToken.getId(), routeTarget.getProviderId(),
-                    routeTarget.getModelId(), providerToken.getId(), request.getModel(), response, latencyMs,
-                    null, null);
-
-            return response;
-
+            ProviderInvokeContext context = buildContext(token, endpoint, request, requestId);
+            ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
+            return adapter.chatCompletion(request, context);
         } catch (site.xlinks.ai.router.common.exception.BusinessException e) {
-            // 业务异常处理
-            long latencyMs = System.currentTimeMillis() - startTime;
-            handleError(requestId, token, request, startTime, e);
             throw e;
         } catch (Exception e) {
-            // 未知异常处理
-            long latencyMs = System.currentTimeMillis() - startTime;
             log.error("Chat completion failed", e);
-            handleError(requestId, token, request, startTime, e);
             throw new site.xlinks.ai.router.common.exception.BusinessException(
-                    site.xlinks.ai.router.common.enums.ErrorCode.INTERNAL_ERROR,
+                    ErrorCode.INTERNAL_ERROR,
+                    "请求处理失败: " + e.getMessage());
+        }
+    }
+
+    public void chatCompletionsStream(String token,
+                                      String endpoint,
+                                      ChatCompletionRequest request,
+                                      Consumer<String> onEvent) {
+        String requestId = "chatcmpl-" + UUID.randomUUID().toString().substring(0, 8);
+        try {
+            ProviderInvokeContext context = buildContext(token, endpoint, request, requestId);
+            ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
+            adapter.chatCompletionStream(request, context, onEvent);
+        } catch (site.xlinks.ai.router.common.exception.BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Chat completion stream failed", e);
+            throw new site.xlinks.ai.router.common.exception.BusinessException(
+                    ErrorCode.INTERNAL_ERROR,
                     "请求处理失败: " + e.getMessage());
         }
     }
@@ -170,48 +136,65 @@ public class ChatService {
         }
     }
 
-    /**
-     * 记录使用情况
-     */
-    private void recordUsage(String requestId, Long customerTokenId, Long providerId,
-                             Long modelId, Long providerTokenId, String requestModel,
-                             ChatCompletionResponse response, long latencyMs,
-                             String errorCode, String errorMessage) {
-        try {
-            usageRecordService.recordAsync(requestId, customerTokenId, providerId,
-                    modelId, providerTokenId, requestModel, response, latencyMs,
-                    errorCode, errorMessage);
-        } catch (Exception e) {
-            log.error("Failed to record usage", e);
+    private ProviderInvokeContext buildContext(String token,
+                                               String endpoint,
+                                               ChatCompletionRequest request,
+                                               String requestId) {
+        validateRequest(request);
+        CustomerToken customerToken = customerTokenAuthService.validateToken(token);
+
+        ModelEndpoint modelEndpoint = modelEndpointMapper.selectOne(
+                new LambdaQueryWrapper<ModelEndpoint>()
+                        .eq(ModelEndpoint::getEndpointCode, endpoint)
+                        .eq(ModelEndpoint::getStatus, 1)
+        );
+        if (modelEndpoint == null) {
+            throw new site.xlinks.ai.router.common.exception.BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "无效的 endpoint: " + endpoint);
         }
+
+        Model model = modelMapper.selectOne(
+                new LambdaQueryWrapper<Model>()
+                        .eq(Model::getModelCode, request.getModel())
+                        .eq(Model::getEndpointId, modelEndpoint.getId())
+                        .eq(Model::getStatus, 1)
+        );
+        if (model == null) {
+            throw new site.xlinks.ai.router.common.exception.BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "模型不存在或不可用: " + request.getModel());
+        }
+
+        Provider provider = providerMapper.selectById(model.getProviderId());
+        if (provider == null || provider.getStatus() == null || provider.getStatus() != 1) {
+            throw new site.xlinks.ai.router.common.exception.BusinessException(
+                    ErrorCode.ROUTE_ERROR,
+                    "Provider 不可用");
+        }
+
+        ProviderToken providerToken = providerTokenSelectService.selectToken(provider.getId());
+
+        return ProviderInvokeContext.builder()
+                .requestId(requestId)
+                .providerId(provider.getId())
+                .providerCode(provider.getProviderCode())
+                .providerType(provider.getProviderType())
+                .baseUrl(provider.getBaseUrl())
+                .providerToken(providerToken.getTokenValue())
+                .providerModel(model.getModelName())
+                .customerTokenId(customerToken.getId())
+                .customerModel(request.getModel())
+                .build();
     }
 
-    /**
-     * 处理错误
-     */
-    private void handleError(String requestId, String token, ChatCompletionRequest request,
-                             long startTime, Exception e) {
-        try {
-            CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-            long latencyMs = System.currentTimeMillis() - startTime;
-
-            String errorCode = null;
-            String errorMessage = null;
-
-            if (e instanceof site.xlinks.ai.router.common.exception.BusinessException) {
-                site.xlinks.ai.router.common.exception.BusinessException be =
-                        (site.xlinks.ai.router.common.exception.BusinessException) e;
-                errorCode = String.valueOf(be.getCode());
-                errorMessage = be.getMessage();
-            } else {
-                errorCode = "INTERNAL_ERROR";
-                errorMessage = e.getMessage();
-            }
-
-            usageRecordService.recordError(requestId, customerToken.getId(), null,
-                    null, null, request.getModel(), 500, errorCode, errorMessage, latencyMs);
-        } catch (Exception ex) {
-            log.error("Failed to record error", ex);
+    private ChatProviderAdapter resolveAdapter(String providerType) {
+        ChatProviderAdapter adapter = adapterFactory.getAdapter(providerType);
+        if (adapter == null) {
+            throw new site.xlinks.ai.router.common.exception.BusinessException(
+                    ErrorCode.ROUTE_ERROR,
+                    "不支持的 Provider 类型: " + providerType);
         }
+        return adapter;
     }
 }

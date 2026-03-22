@@ -97,6 +97,7 @@ export default {
         'gradient-main': 'linear-gradient(135deg, #fff7ed 0%, #fce7f3 45%, #ede9fe 100%)',
         'gradient-button': 'linear-gradient(90deg, #f97316 0%, #ec4899 100%)',
         'gradient-icon': 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+        'gradient-hero': 'linear-gradient(90deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%)',
       },
     },
   },

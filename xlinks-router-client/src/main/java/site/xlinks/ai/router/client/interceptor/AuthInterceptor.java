@@ -39,11 +39,16 @@ public class AuthInterceptor implements HandlerInterceptor {
                 log.debug("Authenticated account: {}", account.getId());
                 return true;
             }
+
+            // Token无效或过期
+            log.debug("Invalid token for request: {}", request.getRequestURI());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
         }
-        // Token无效
-        log.debug("Invalid token for request: {}", request.getRequestURI());
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        return false;
+
+        // 未携带 Token，放行交由 Controller 判断是否需要登录
+        log.debug("No valid token found in request: {}", request.getRequestURI());
+        return true;
     }
 
     @Override

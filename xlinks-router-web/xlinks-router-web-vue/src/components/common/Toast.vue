@@ -48,9 +48,9 @@ const styles = computed(() => {
       }
     case 'info':
       return {
-        bg: 'bg-gradient-to-r from-indigo-500 to-purple-500',
+        bg: 'bg-gradient-button',
         icon: Info,
-        progressBg: 'bg-indigo-300'
+        progressBg: 'bg-primary/30'
       }
     default:
       return {

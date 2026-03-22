@@ -93,15 +93,15 @@ const lineOption = computed(() => ({
       smooth: true,
       symbol: 'circle',
       symbolSize: 10,
-      itemStyle: { color: '#8b5cf6' },
+      itemStyle: { color: '#f97316' },
       lineStyle: {
         width: 3,
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 1, y2: 0,
           colorStops: [
-            { offset: 0, color: '#8b5cf6' },
-            { offset: 1, color: '#d946ef' }
+            { offset: 0, color: '#f97316' },
+            { offset: 1, color: '#ec4899' }
           ]
         }
       }
@@ -148,8 +148,8 @@ const barOption = computed(() => ({
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: '#8b5cf6' },
-            { offset: 1, color: '#d946ef' }
+            { offset: 0, color: '#f97316' },
+            { offset: 1, color: '#ec4899' }
           ]
         }
       }
@@ -202,7 +202,7 @@ onMounted(loadDashboard)
 
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
         <div class="flex items-center justify-between mb-4">
-          <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg">
             <DollarSign class="w-6 h-6 text-white" />
           </div>
           <span class="flex items-center text-sm font-medium" :class="dashboardStats.todayCostChange >= 0 ? 'text-green-600' : 'text-red-600'">
@@ -225,7 +225,7 @@ onMounted(loadDashboard)
           </div>
           <button
             @click="isRechargeModalOpen = true"
-            class="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-medium rounded-lg hover:shadow-lg transition-all"
+            class="flex items-center gap-1 px-3 py-1.5 bg-gradient-button text-white text-xs font-medium rounded-lg hover:shadow-lg hover:shadow-primary/25 transition-all"
           >
             <Plus class="w-3.5 h-3.5" />
             <span>{{ t('dashboard.recharge') }}</span>
@@ -300,7 +300,7 @@ onMounted(loadDashboard)
     <div v-if="isRechargeModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
             <CreditCard class="w-6 h-6 text-white" />
           </div>
           <div>
@@ -328,7 +328,7 @@ onMounted(loadDashboard)
                 :placeholder="t('dashboard.inputAmountPlaceholder')"
                 min="0"
                 step="0.01"
-                class="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+                class="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-white"
               />
             </div>
           </div>
@@ -368,7 +368,7 @@ onMounted(loadDashboard)
               class="flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors"
               :class="[
                 selectedPayment === method.id
-                  ? 'border-indigo-500 bg-indigo-50'
+                  ? 'border-primary bg-primary/5'
                   : 'border-slate-200 hover:border-slate-300'
               ]"
             >
@@ -377,7 +377,7 @@ onMounted(loadDashboard)
                 name="payment"
                 :value="method.id"
                 v-model="selectedPayment"
-                class="w-4 h-4 text-indigo-600"
+                class="w-4 h-4 text-primary"
               />
               <span class="text-2xl">{{ method.icon }}</span>
               <span class="font-medium text-slate-900">
@@ -396,7 +396,7 @@ onMounted(loadDashboard)
           </button>
           <button
             @click="handleConfirmRecharge"
-            class="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl hover:shadow-lg transition-all duration-200 font-medium"
+            class="flex-1 px-4 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
           >
             {{ t('common.confirm') }}
           </button>

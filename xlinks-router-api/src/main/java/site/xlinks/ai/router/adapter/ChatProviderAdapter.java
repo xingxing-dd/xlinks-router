@@ -31,13 +31,14 @@ public interface ChatProviderAdapter {
 
     /**
      * 执行 Chat Completion 请求（流式）
-     * MVP 阶段可先返回 null 或抛出 UnsupportedOperationException
      *
      * @param request  请求对象
      * @param context  调用上下文
-     * @return 流式响应（实现时可用 Flux 或 SSE）
+     * @param onEvent  逐条事件回调（仅传递 data payload）
      */
-    default Object chatCompletionStream(ChatCompletionRequest request, ProviderInvokeContext context) {
+    default void chatCompletionStream(ChatCompletionRequest request,
+                                      ProviderInvokeContext context,
+                                      java.util.function.Consumer<String> onEvent) {
         throw new UnsupportedOperationException("Stream not supported yet");
     }
 }
