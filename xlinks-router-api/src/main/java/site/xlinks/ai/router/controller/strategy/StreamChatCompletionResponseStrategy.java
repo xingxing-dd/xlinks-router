@@ -2,12 +2,8 @@ package site.xlinks.ai.router.controller.strategy;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.service.ChatService;
 
@@ -17,7 +13,7 @@ import site.xlinks.ai.router.service.ChatService;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class StreamChatCompletionResponseStrategy implements ChatCompletionResponseStrategy<Void> {
+public class StreamChatCompletionResponseStrategy implements ChatCompletionResponseStrategy<SseEmitter> {
 
     private final ChatService chatService;
 
@@ -26,9 +22,8 @@ public class StreamChatCompletionResponseStrategy implements ChatCompletionRespo
         return Boolean.TRUE.equals(request.getStream());
     }
 
-    @Async
     @Override
-    public Void handle(String token, String endpoint, ChatCompletionRequest request) {
+    public SseEmitter handle(String token, String endpoint, ChatCompletionRequest request) {
         SseEmitter emitter = new SseEmitter(0L);
         emitter.onCompletion(() -> log.debug("SSE completed for endpoint: {}", endpoint));
         emitter.onTimeout(() -> log.warn("SSE timeout for endpoint: {}", endpoint));
@@ -47,6 +42,6 @@ public class StreamChatCompletionResponseStrategy implements ChatCompletionRespo
         } catch (Exception e) {
             emitter.completeWithError(e);
         }
-        return null;
+        return emitter;
     }
 }

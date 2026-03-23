@@ -83,7 +83,7 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
     public void chatCompletionStream(ChatCompletionRequest request,
                                      ProviderInvokeContext context,
                                      Consumer<String> onEvent) {
-        String url = context.getBaseUrl() + "/v1/chat/completions";
+        String url = context.getBaseUrl() + "/chat/completions";
         ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), true);
         try {
             String requestJson = objectMapper.writeValueAsString(adaptedRequest);
