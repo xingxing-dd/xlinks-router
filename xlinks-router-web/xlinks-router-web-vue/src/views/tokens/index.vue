@@ -14,6 +14,7 @@ import {
   Key,
 } from 'lucide-vue-next'
 import { useTokens } from '@/composables/useTokens'
+import { cn } from '@/utils/cn'
 
 const { t } = useI18n()
 
@@ -208,7 +209,12 @@ onMounted(loadTokens)
                   </td>
                   <td class="py-4 px-4">
                     <div class="flex items-center gap-2 max-w-xs">
-                      <code class="text-xs font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded flex-1 truncate">
+                      <code
+                        :class="cn(
+                          'text-xs font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded flex-1',
+                          visibleKeys.has(token.id) ? 'overflow-x-auto whitespace-nowrap' : 'truncate'
+                        )"
+                      >
                         {{ visibleKeys.has(token.id) ? token.key : maskKey(token.key) }}
                       </code>
                       <button
@@ -315,7 +321,12 @@ onMounted(loadTokens)
 
               <div class="mb-3">
                 <div class="flex items-center gap-2">
-                  <code class="text-xs font-mono text-slate-700 bg-white px-2 py-1.5 rounded flex-1 truncate border border-slate-200">
+                  <code
+                    :class="cn(
+                      'text-xs font-mono text-slate-700 bg-white px-2 py-1.5 rounded flex-1 border border-slate-200',
+                      visibleKeys.has(token.id) ? 'overflow-x-auto whitespace-nowrap' : 'truncate'
+                    )"
+                  >
                     {{ visibleKeys.has(token.id) ? token.key : maskKey(token.key) }}
                   </code>
                   <button

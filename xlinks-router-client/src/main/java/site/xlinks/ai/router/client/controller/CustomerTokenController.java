@@ -101,7 +101,7 @@ public class CustomerTokenController {
                 token.getId(),
                 token.getCustomerName(),
                 token.getTokenName(),
-                maskToken(token.getTokenValue()),
+                token.getTokenValue(),
                 token.getStatus(),
                 formatDateTime(token.getExpireTime()),
                 parseAllowedModels(token.getAllowedModels()),

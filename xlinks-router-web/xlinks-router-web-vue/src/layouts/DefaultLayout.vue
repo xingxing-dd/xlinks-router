@@ -106,7 +106,7 @@ const handleLogout = () => {
           <!-- Language Switch -->
           <button
             @click="toggleLanguage"
-            class="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/15 rounded-xl border border-primary/15 transition-all group"
+            class="flex items-center gap-2 px-4 py-2 h-12 bg-primary/10 hover:bg-primary/15 rounded-xl border border-primary/15 transition-all group"
           >
             <Globe class="w-4 h-4 text-slate-500 group-hover:scale-110 transition-transform duration-300" />
             <span class="text-sm font-medium text-slate-700">
@@ -118,7 +118,7 @@ const handleLogout = () => {
           <div class="relative">
             <button
               @click="isUserMenuOpen = !isUserMenuOpen"
-              class="flex items-center gap-3 px-4 py-2 bg-secondary/10 hover:bg-secondary/15 rounded-xl border border-secondary/15 transition-all group"
+              class="flex items-center gap-3 px-4 py-2 h-12 bg-secondary/10 hover:bg-secondary/15 rounded-xl border border-secondary/15 transition-all group"
             >
               <div class="w-8 h-8 bg-gradient-icon rounded-full flex items-center justify-center shadow-sm">
                 <User class="w-4 h-4 text-white" />

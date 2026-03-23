@@ -60,27 +60,31 @@ export function useTokens() {
   }
 
   const toggleKeyVisibility = (id) => {
-    if (visibleKeys.value.has(id)) {
-      visibleKeys.value.delete(id)
+    const next = new Set(visibleKeys.value)
+    if (next.has(id)) {
+      next.delete(id)
     } else {
-      visibleKeys.value.add(id)
+      next.add(id)
     }
+    visibleKeys.value = next
   }
 
   const copyToClipboard = async (text, name) => {
+    const rawText = String(text ?? '')
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(rawText)
       toast.success(t('common.copySuccess'), t('tokens.copySuccessDetail', { name }))
       actionMessage.value = ''
     } catch {
       const textArea = document.createElement('textarea')
-      textArea.value = text
+      textArea.value = rawText
       textArea.style.position = 'fixed'
       textArea.style.left = '-999999px'
       textArea.style.top = '-999999px'
       document.body.appendChild(textArea)
       textArea.focus()
       textArea.select()
+      textArea.setSelectionRange(0, rawText.length)
       try {
         document.execCommand('copy')
         toast.success(t('common.copySuccess'), t('tokens.copySuccessDetail', { name }))
