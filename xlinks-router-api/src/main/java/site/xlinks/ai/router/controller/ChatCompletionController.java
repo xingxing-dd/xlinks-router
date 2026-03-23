@@ -3,6 +3,7 @@ package site.xlinks.ai.router.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -10,14 +11,16 @@ import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.controller.strategy.ChatCompletionResponseStrategy;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
+import site.xlinks.ai.router.interceptor.BearerTokenInterceptor;
 import site.xlinks.ai.router.service.ChatService;
 
 import java.util.List;
 
 /**
  * 对外 API - Chat Completions
- * 
- * 入口层：接收标准 OpenAI 请求 DTO，完成参数校验、Header 解析、traceId 注入
+ *
+ * 入口层：接收标准 OpenAI 请求 DTO
+ * - 鉴权已由 {@link BearerTokenInterceptor} 统一处理
  */
 @Slf4j
 @RestController
@@ -31,48 +34,32 @@ public class ChatCompletionController {
 
     @PostMapping("/{endpoint}/chat/completions")
     @Operation(summary = "Chat Completions",
-               description = "发送对话请求，返回模型生成的文本。兼容 OpenAI API 格式。")
+            description = "发送对话请求，返回模型生成的文本。兼容 OpenAI API 格式。")
     public Object chatCompletions(
-            @RequestHeader(value = "Authorization", required = false) String authorization,
+            HttpServletRequest servletRequest,
             @PathVariable(value = "endpoint") String endpoint,
             @RequestBody ChatCompletionRequest request) {
+        log.info("Received chat completion request,{} model: {}", endpoint, request.getModel());
 
-        try {
-            log.info("Received chat completion request,{} model: {}", endpoint, request.getModel());
+        String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
-            // 验证 Authorization header
-            if (authorization == null || !authorization.startsWith("Bearer ")) {
-                return Result.error(4002, "无效的 Authorization header，格式应为：Bearer {token}");
+        for (ChatCompletionResponseStrategy<?> strategy : responseStrategies) {
+            if (strategy.supports(request)) {
+                return strategy.handle(token, endpoint, request);
             }
-            String token = authorization.substring(7);
-
-            for (ChatCompletionResponseStrategy<?> strategy : responseStrategies) {
-                if (strategy.supports(request)) {
-                    return strategy.handle(token, endpoint, request);
-                }
-            }
-            return Result.error(500, "未找到匹配的响应策略");
-        } catch (BusinessException e) {
-            log.warn("chat error: {}", e.getMessage());
-            return Result.error(e.getCode(), e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error", e);
-            return Result.error(500, "服务器内部错误");
         }
+        return Result.error(500, "未找到匹配的响应策略");
     }
 
     @GetMapping("/models")
     @Operation(summary = "Models List", description = "获取可用的模型列表")
     public Result<Object> modelsList(
+            HttpServletRequest servletRequest,
             @Parameter(description = "Bearer Token", required = true)
             @RequestHeader(value = "Authorization", required = false) String authorization) {
-        
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return Result.error(4002, "无效的 Authorization header，格式应为：Bearer {token}");
-        }
-        
-        String token = authorization.substring(7);
-        
+
+        String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
+
         try {
             return Result.success(chatService.listModels(token));
         } catch (BusinessException e) {
