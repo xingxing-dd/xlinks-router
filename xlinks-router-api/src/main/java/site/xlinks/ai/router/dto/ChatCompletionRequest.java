@@ -1,5 +1,7 @@
 package site.xlinks.ai.router.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -49,11 +51,61 @@ public class ChatCompletionRequest {
     @Data
     @Schema(description = "消息")
     public static class ChatMessage {
-        
+
         @Schema(description = "角色：system、user、assistant", required = true)
         private String role;
 
-        @Schema(description = "消息内容", required = true)
-        private String content;
+        @Schema(description = "消息内容（兼容 string 或 array）", required = true)
+        private Object content;
+
+        @JsonIgnore
+        private String contentText;
+
+        @JsonSetter("content")
+        public void setContent(Object content) {
+            this.content = content;
+            this.contentText = extractContentText(content);
+        }
+
+        /**
+         * 将 content 兼容转换为纯文本，适配 LangChain4j 等仅支持文本输入的模型调用。
+         */
+        @JsonIgnore
+        public String contentAsText() {
+            if (contentText != null) {
+                return contentText;
+            }
+            contentText = extractContentText(content);
+            return contentText;
+        }
+
+        private String extractContentText(Object content) {
+            if (content == null) {
+                return null;
+            }
+            if (content instanceof String) {
+                return (String) content;
+            }
+            if (content instanceof List<?>) {
+                List<?> list = (List<?>) content;
+                StringBuilder sb = new StringBuilder();
+                for (Object item : list) {
+                    if (item == null) {
+                        continue;
+                    }
+                    if (item instanceof Map<?, ?>) {
+                        Map<?, ?> map = (Map<?, ?>) item;
+                        Object text = map.get("text");
+                        if (text != null) {
+                            sb.append(text);
+                        }
+                    } else if (item instanceof String) {
+                        sb.append((String) item);
+                    }
+                }
+                return sb.toString();
+            }
+            return String.valueOf(content);
+        }
     }
 }
