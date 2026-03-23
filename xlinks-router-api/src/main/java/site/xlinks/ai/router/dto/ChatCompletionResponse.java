@@ -1,5 +1,6 @@
 package site.xlinks.ai.router.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -37,6 +38,7 @@ public class ChatCompletionResponse {
      */
     @Data
     @Schema(description = "选择")
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Choice {
 
         @Schema(description = "索引")

@@ -62,7 +62,7 @@ public class PlanController {
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerPlan>()
                         .eq(CustomerPlan::getAccountId, accountId)
                         .eq(CustomerPlan::getStatus, 1)
-                        .orderByDesc(CustomerPlan::getPlanExpireTime)
+                        .orderByAsc(CustomerPlan::getPlanExpireTime)
         );
         LocalDateTime now = LocalDateTime.now();
         List<ActiveSubscriptionResponse> responses = plans.stream()
@@ -121,8 +121,8 @@ public class PlanController {
         response.setId(String.valueOf(plan.getId()));
         response.setName(plan.getPlanName());
         response.setPrice(plan.getPrice());
-        response.setDailyLimit(new BigDecimal(String.valueOf(plan.getDailyQuota())));
-        response.setMonthlyQuota(new BigDecimal(String.valueOf(plan.getTotalQuota())));
+        response.setDailyLimit(toBigDecimal(plan.getDailyQuota()));
+        response.setMonthlyQuota(toBigDecimal(plan.getTotalQuota()));
         response.setFeatures(List.of(
                 "仅可用 Codex",
                 "月度可用 $" + plan.getTotalQuota() + " 额度",
@@ -140,12 +140,16 @@ public class PlanController {
         response.setPlanName(plan.getPlanName());
         response.setPurchaseDate(formatDateTime(plan.getCreatedAt()));
         response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
-        response.setTotalQuota(toBigDecimal(plan.getTotalQuota()));
+        response.setTotalQuota(toBigDecimal(plan.getDailyQuota()));
         response.setDailyReset(false);
 
-        int dailyQuota = defaultInteger(plan.getDailyQuota());
-        int usedQuota = defaultInteger(plan.getUsedQuota());
-        response.setRemainingQuota(new BigDecimal(Math.max(dailyQuota - usedQuota, 0)));
+        BigDecimal dailyQuota = defaultDecimal(plan.getDailyQuota());
+        BigDecimal usedQuota = defaultDecimal(plan.getUsedQuota());
+        BigDecimal remaining = dailyQuota.subtract(usedQuota);
+        if (remaining.compareTo(BigDecimal.ZERO) < 0) {
+            remaining = BigDecimal.ZERO;
+        }
+        response.setRemainingQuota(remaining);
 
         if (plan.getPlanExpireTime() != null) {
             long daysRemaining = ChronoUnit.DAYS.between(now, plan.getPlanExpireTime());
@@ -167,10 +171,13 @@ public class PlanController {
         response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
         response.setTotalQuota(toBigDecimal(plan.getTotalQuota()));
 
-        int totalQuota = defaultInteger(plan.getTotalQuota());
-        int totalUsed = plan.getTotalUsedQuota() == null ? defaultInteger(plan.getUsedQuota()) : plan.getTotalUsedQuota();
-        response.setUsedQuota(new BigDecimal(Math.max(totalUsed, 0)));
-        response.setUsedPercentage(calculateUsedPercentage(totalUsed, totalQuota));
+        BigDecimal totalQuota = defaultDecimal(plan.getTotalQuota());
+        BigDecimal totalUsed = plan.getTotalUsedQuota() == null ? defaultDecimal(plan.getUsedQuota()) : plan.getTotalUsedQuota();
+        if (totalUsed.compareTo(BigDecimal.ZERO) < 0) {
+            totalUsed = BigDecimal.ZERO;
+        }
+        response.setUsedQuota(totalUsed);
+        response.setUsedPercentage(calculateOpenedPercentage(plan, now));
         response.setStatus(resolveHistoryStatus(plan, now));
         return response;
     }
@@ -182,21 +189,42 @@ public class PlanController {
         return DATE_TIME_FORMATTER.format(time);
     }
 
-    private BigDecimal toBigDecimal(Integer value) {
-        return value == null ? BigDecimal.ZERO : new BigDecimal(value);
+    private BigDecimal toBigDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
-    private int defaultInteger(Integer value) {
-        return value == null ? 0 : value;
+    private BigDecimal defaultDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
-    private Integer calculateUsedPercentage(int usedQuota, int dailyQuota) {
-        if (dailyQuota <= 0) {
+    private Integer calculateUsedPercentage(BigDecimal usedQuota, BigDecimal dailyQuota) {
+        if (dailyQuota == null || dailyQuota.compareTo(BigDecimal.ZERO) <= 0) {
             return 0;
         }
-        BigDecimal ratio = new BigDecimal(usedQuota)
+        BigDecimal ratio = usedQuota
                 .multiply(new BigDecimal("100"))
-                .divide(new BigDecimal(dailyQuota), 0, RoundingMode.HALF_UP);
+                .divide(dailyQuota, 0, RoundingMode.HALF_UP);
+        return ratio.intValue();
+    }
+
+    private Integer calculateOpenedPercentage(CustomerPlan plan, LocalDateTime now) {
+        if (plan.getCreatedAt() == null || now == null) {
+            return 0;
+        }
+        LocalDateTime end = now;
+        if (plan.getPlanExpireTime() != null && plan.getPlanExpireTime().isBefore(now)) {
+            end = plan.getPlanExpireTime();
+        }
+        long daysOpened = ChronoUnit.DAYS.between(plan.getCreatedAt(), end);
+        if (daysOpened < 0) {
+            return 0;
+        }
+        BigDecimal ratio = BigDecimal.valueOf(daysOpened)
+                .multiply(new BigDecimal("100"))
+                .divide(new BigDecimal("30"), 0, RoundingMode.HALF_UP);
+        if (ratio.compareTo(new BigDecimal("100")) > 0) {
+            return 100;
+        }
         return ratio.intValue();
     }
 

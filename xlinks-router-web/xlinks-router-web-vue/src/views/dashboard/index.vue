@@ -23,7 +23,7 @@ import {
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useDashboard } from '@/composables/useDashboard'
-import { formatCurrency, formatNumber } from '@/utils/formatters'
+import { formatCurrency, formatNumber, formatDateTime, formatCompactNumber } from '@/utils/formatters'
 
 const { t } = useI18n()
 
@@ -42,7 +42,7 @@ const {
   usageData,
   modelUsage,
   dashboardStats,
-  activities,
+  usageRecords,
   loading,
   isRechargeModalOpen,
   usdAmount,
@@ -263,36 +263,109 @@ onMounted(loadDashboard)
       </div>
     </div>
 
-    <!-- 最近活动 -->
-    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-      <h2 class="text-lg font-semibold text-slate-900 mb-6">{{ t('dashboard.recentActivity') }}</h2>
-      <div class="space-y-4">
-        <div
-          v-for="(activity, index) in activities"
-          :key="index"
-          class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0"
-        >
-          <div class="flex items-center gap-4">
+    <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden">
+      <div class="bg-gradient-hero p-6">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-white/25 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30">
+            <Activity class="w-5 h-5 text-white" />
+          </div>
+          <h2 class="text-xl font-bold text-white">{{ t('dashboard.usageRecords') }}</h2>
+        </div>
+      </div>
+
+      <div class="p-6">
+        <div v-if="loading && !usageRecords.length" class="py-12 text-center text-slate-500">
+          {{ t('common.loading') }}
+        </div>
+
+        <div v-else-if="!usageRecords.length" class="py-12 text-center text-slate-400">
+          {{ t('common.noData') }}
+        </div>
+
+        <template v-else>
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b-2 border-slate-200">
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.time') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[180px]">{{ t('dashboard.usageTable.token') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.channel') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[140px]">{{ t('dashboard.usageTable.model') }}</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.inputTokens') }}</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.outputTokens') }}</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.totalTokens') }}</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700 w-[120px]">{{ t('dashboard.usageTable.cost') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(record, index) in usageRecords"
+                  :key="index"
+                  class="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                >
+                  <td class="py-4 px-4 text-sm text-slate-600 whitespace-nowrap">{{ formatDateTime(record.time) }}</td>
+                  <td class="py-4 px-4 text-sm text-slate-700 font-medium">
+                    <div class="truncate max-w-[180px]" :title="record.token">{{ record.token }}</div>
+                  </td>
+                  <td class="py-4 px-4 text-sm text-slate-700 font-medium">
+                    <div class="truncate max-w-[160px]" :title="record.channel">{{ record.channel }}</div>
+                  </td>
+                  <td class="py-4 px-4">
+                    <div class="truncate max-w-[140px]" :title="record.model">
+                      <span class="font-medium text-slate-900">{{ record.model }}</span>
+                    </div>
+                  </td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="md:hidden space-y-4">
             <div
-              class="w-2 h-2 rounded-full"
-              :class="[
-                activity.status === 'success' ? 'bg-green-500' : 
-                activity.status === 'error' ? 'bg-red-500' : 
-                'bg-blue-500'
-              ]"
-            />
-            <div>
-              <p class="text-slate-900 font-medium">{{ activity.event }}</p>
-              <p class="text-sm text-slate-500">{{ activity.time }}</p>
+              v-for="(record, index) in usageRecords"
+              :key="index"
+              class="bg-slate-50 rounded-2xl p-4 border border-slate-200"
+            >
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p class="font-semibold text-slate-900">{{ record.model }}</p>
+                  <p class="text-sm text-slate-500">{{ formatDateTime(record.time) }}</p>
+                  <div class="flex flex-wrap items-center gap-2 mt-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/15">
+                      {{ t('dashboard.usageTable.token') }}：{{ record.token }}
+                    </span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/60 text-slate-700 border border-slate-200">
+                      {{ t('dashboard.usageTable.channel') }}：{{ record.channel }}
+                    </span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs text-slate-500">{{ t('dashboard.usageTable.cost') }}</p>
+                  <p class="font-bold text-slate-900">{{ formatCurrency(record.cost) }}</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-3">
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.inputTokens') }}</p>
+                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.inputTokens) }}</p>
+                </div>
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.outputTokens') }}</p>
+                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.outputTokens) }}</p>
+                </div>
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.totalTokens') }}</p>
+                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.totalTokens) }}</p>
+                </div>
+              </div>
             </div>
           </div>
-          <span v-if="activity.tokens" class="text-sm text-slate-600 font-medium">
-            {{ activity.tokens }}
-          </span>
-        </div>
-        <div v-if="!activities.length" class="py-8 text-center text-slate-400">
-          {{ loading ? t('common.loading') : t('common.noData') }}
-        </div>
+        </template>
       </div>
     </div>
 

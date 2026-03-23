@@ -40,12 +40,12 @@ public class Plan extends BaseEntity {
     /**
      * 每日额度（美元）
      */
-    private Integer dailyQuota;
+    private BigDecimal dailyQuota;
 
     /**
      * 总额度（美元）
      */
-    private Integer totalQuota;
+    private BigDecimal totalQuota;
 
     /**
      * 允许访问的模型列表（JSON）

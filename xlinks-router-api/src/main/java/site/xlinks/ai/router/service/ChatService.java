@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.adapter.ChatProviderAdapter;
 import site.xlinks.ai.router.adapter.ChatProviderAdapterFactory;
 import site.xlinks.ai.router.common.enums.ErrorCode;
+import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
@@ -42,6 +43,9 @@ public class ChatService {
     private final ChatProviderAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
     private final ModelMapper modelMapper;
+    private final UsageRecordService usageRecordService;
+    private final UsageEntitlementService usageEntitlementService;
+    private final CustomerPlanService customerPlanService;
 
     /**
      * 处理 Chat Completion 请求
@@ -52,16 +56,25 @@ public class ChatService {
      */
     public ChatCompletionResponse chatCompletions(String token, String endpoint, ChatCompletionRequest request) {
         String requestId = "chatcmpl-" + UUID.randomUUID().toString().substring(0, 8);
-
+        long startAt = System.currentTimeMillis();
+        ProviderInvokeContext context = null;
         try {
-            ProviderInvokeContext context = buildContext(token, endpoint, request, requestId);
+            context = buildContext(token, endpoint, request, requestId);
             ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
-            return adapter.chatCompletion(request, context);
-        } catch (site.xlinks.ai.router.common.exception.BusinessException e) {
+            ChatCompletionResponse response = adapter.chatCompletion(request, context);
+            usageRecordService.recordAsync(context, response, System.currentTimeMillis() - startAt, null, null);
+            return response;
+        } catch (BusinessException e) {
+            if (context != null) {
+                usageRecordService.recordError(context, e.getCode(), String.valueOf(e.getCode()), e.getMessage(), System.currentTimeMillis() - startAt);
+            }
             throw e;
         } catch (Exception e) {
             log.error("Chat completion failed", e);
-            throw new site.xlinks.ai.router.common.exception.BusinessException(
+            if (context != null) {
+                usageRecordService.recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), System.currentTimeMillis() - startAt);
+            }
+            throw new BusinessException(
                     ErrorCode.INTERNAL_ERROR,
                     "请求处理失败: " + e.getMessage());
         }
@@ -72,17 +85,49 @@ public class ChatService {
                                       ChatCompletionRequest request,
                                       Consumer<String> onEvent) {
         String requestId = "chatcmpl-" + UUID.randomUUID().toString().substring(0, 8);
+        long startAt = System.currentTimeMillis();
+        ProviderInvokeContext context = null;
         try {
-            ProviderInvokeContext context = buildContext(token, endpoint, request, requestId);
+            context = buildContext(token, endpoint, request, requestId);
             ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
-            adapter.chatCompletionStream(request, context, onEvent);
-        } catch (site.xlinks.ai.router.common.exception.BusinessException e) {
+            ProviderInvokeContext finalContext = context;
+            StringBuilder lastPayload = new StringBuilder();
+            adapter.chatCompletionStream(request, context, payload -> {
+                if (payload != null && !"[DONE]".equals(payload)) {
+                    lastPayload.setLength(0);
+                    lastPayload.append(payload);
+                }
+                onEvent.accept(payload);
+                if ("[DONE]".equals(payload) && !lastPayload.isEmpty()) {
+                    ChatCompletionResponse response = parseUsageResponse(lastPayload.toString());
+                    usageRecordService.recordAsync(finalContext, response, System.currentTimeMillis() - startAt, null, null);
+                }
+            });
+        } catch (BusinessException e) {
+            if (context != null) {
+                usageRecordService.recordError(context, e.getCode(), String.valueOf(e.getCode()), e.getMessage(), System.currentTimeMillis() - startAt);
+            }
             throw e;
         } catch (Exception e) {
             log.error("Chat completion stream failed", e);
-            throw new site.xlinks.ai.router.common.exception.BusinessException(
+            if (context != null) {
+                usageRecordService.recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), System.currentTimeMillis() - startAt);
+            }
+            throw new BusinessException(
                     ErrorCode.INTERNAL_ERROR,
                     "请求处理失败: " + e.getMessage());
+        }
+    }
+
+    private ChatCompletionResponse parseUsageResponse(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return null;
+        }
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, ChatCompletionResponse.class);
+        } catch (Exception e) {
+            log.debug("Failed to parse stream usage payload", e);
+            return null;
         }
     }
 
@@ -139,6 +184,12 @@ public class ChatService {
         validateRequest(request);
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
 
+        site.xlinks.ai.router.context.UsageDecision usageDecision =
+                usageEntitlementService.decide(customerToken, request.getModel());
+        if (usageDecision == null || Boolean.FALSE.equals(usageDecision.isPackageEnabled())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "套餐不可用");
+        }
+
         ModelEndpoint modelEndpoint = routeCacheService.getEndpoint(endpoint);
         if (modelEndpoint == null) {
             throw new site.xlinks.ai.router.common.exception.BusinessException(
@@ -166,11 +217,21 @@ public class ChatService {
                 .requestId(requestId)
                 .providerId(provider.getId())
                 .providerCode(provider.getProviderCode())
+                .providerName(provider.getProviderName())
                 .providerType(provider.getProviderType())
                 .baseUrl(provider.getBaseUrl())
                 .providerToken(providerToken.getTokenValue())
+                .customerToken(token)
+                .endpointCode(modelEndpoint.getEndpointCode())
+                .modelId(model.getId())
+                .modelCode(model.getModelCode())
+                .modelName(model.getModelName())
+                .inputPrice(model.getInputPrice())
+                .outputPrice(model.getOutputPrice())
                 .providerModel(model.getModelName())
+                .planId(usageDecision.getPlanId())
                 .customerTokenId(customerToken.getId())
+                .accountId(customerToken.getAccountId())
                 .customerModel(request.getModel())
                 .build();
     }

@@ -9,7 +9,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RecentActivityResponse {
     private String time;
-    private String event;
-    private String tokens;
-    private String status;
+    private String token;
+    private String channel;
+    private String model;
+    private Integer inputTokens;
+    private Integer outputTokens;
+    private Integer totalTokens;
+    private java.math.BigDecimal cost;
 }

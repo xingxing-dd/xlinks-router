@@ -85,6 +85,11 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
                                      Consumer<String> onEvent) {
         String url = context.getBaseUrl() + "/chat/completions";
         ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), true);
+        if (adaptedRequest.getStreamOptions() == null) {
+            adaptedRequest.setStreamOptions(new java.util.HashMap<>(java.util.Map.of("include_usage", true)));
+        } else {
+            adaptedRequest.getStreamOptions().put("include_usage", true);
+        }
         try {
             String requestJson = objectMapper.writeValueAsString(adaptedRequest);
             Request httpRequest = new Request.Builder()
@@ -141,6 +146,7 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
         adapted.setPresencePenalty(request.getPresencePenalty());
         adapted.setStop(request.getStop());
         adapted.setStream(stream);
+        adapted.setStreamOptions(request.getStreamOptions());
         adapted.setExtraParams(request.getExtraParams());
         return adapted;
     }

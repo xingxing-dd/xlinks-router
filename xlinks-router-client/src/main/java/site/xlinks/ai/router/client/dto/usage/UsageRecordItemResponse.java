@@ -12,14 +12,19 @@ import java.math.BigDecimal;
 public class UsageRecordItemResponse {
     private Long id;
     private String requestId;
-    private String model;
+    private String providerCode;
     private String providerName;
+    private String endpointCode;
+    private String modelCode;
+    private String modelName;
     private Integer promptTokens;
     private Integer completionTokens;
     private Integer totalTokens;
+    private BigDecimal promptCost;
+    private BigDecimal completionCost;
+    private BigDecimal totalCost;
     private Integer latencyMs;
     private Integer responseStatus;
     private String errorCode;
-    private BigDecimal cost;
     private String createdAt;
 }

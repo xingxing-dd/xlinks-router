@@ -24,6 +24,11 @@ public class UsageDecision {
     private String customerName;
 
     /**
+     * 可用套餐 ID
+     */
+    private Long planId;
+
+    /**
      * 套餐是否启用
      */
     private boolean packageEnabled;

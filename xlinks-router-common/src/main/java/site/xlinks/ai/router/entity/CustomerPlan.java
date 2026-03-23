@@ -51,22 +51,22 @@ public class CustomerPlan extends BaseEntity {
     /**
      * 每日额度（美元）
      */
-    private Integer dailyQuota;
+    private BigDecimal dailyQuota;
 
     /**
      * 总额度（美元）
      */
-    private Integer totalQuota;
+    private BigDecimal totalQuota;
 
     /**
      * 已使用额度（美元）
      */
-    private Integer usedQuota;
+    private BigDecimal usedQuota;
 
     /**
      * 总共已使用额度（美元）
      */
-    private Integer totalUsedQuota;
+    private BigDecimal totalUsedQuota;
 
     /**
      * 额度刷新时间

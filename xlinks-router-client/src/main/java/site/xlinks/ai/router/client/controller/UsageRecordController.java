@@ -22,8 +22,10 @@ public class UsageRecordController {
     public Result<PageResult<UsageRecordItemResponse>> getUsageRecords(@RequestParam(name = "page", defaultValue = "1") Integer page,
                                                                        @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
         List<UsageRecordItemResponse> records = List.of(
-                new UsageRecordItemResponse(1L, "req_abc123", "claude-sonnet", "OpenAI", 500, 745, 1245, 1500, 200, null, new BigDecimal("0.125"), "2026-03-17 14:00:00"),
-                new UsageRecordItemResponse(2L, "req_def456", "claude-haiku", "Anthropic", 300, 420, 720, 980, 200, null, new BigDecimal("0.052"), "2026-03-17 12:00:00")
+                new UsageRecordItemResponse(1L, "req_abc123", "openai", "OpenAI", "chat/completions", "gpt-4", "GPT-4", 500, 745, 1245,
+                        new BigDecimal("0.012"), new BigDecimal("0.038"), new BigDecimal("0.050"), 1500, 200, null, "2026-03-17 14:00:00"),
+                new UsageRecordItemResponse(2L, "req_def456", "anthropic", "Anthropic", "chat/completions", "claude-haiku", "Claude Haiku", 300, 420, 720,
+                        new BigDecimal("0.006"), new BigDecimal("0.018"), new BigDecimal("0.024"), 980, 200, null, "2026-03-17 12:00:00")
         );
         return Result.success(PageResult.of(records, records.size(), page, pageSize));
     }

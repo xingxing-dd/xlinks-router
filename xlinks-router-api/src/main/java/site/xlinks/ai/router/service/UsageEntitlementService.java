@@ -1,21 +1,24 @@
 package site.xlinks.ai.router.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.context.UsageDecision;
+import site.xlinks.ai.router.entity.CustomerPlan;
 import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.mapper.CustomerPlanMapper;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 权益判定服务
  * 根据客户的套餐和余额状态，决定本次请求应该使用套餐还是余额
- * 
- * MVP 阶段：使用 Mock 实现，后续可扩展为真实的套餐/余额查询
  */
 @Slf4j
 @Service
@@ -23,6 +26,7 @@ import java.util.List;
 public class UsageEntitlementService {
 
     private final ObjectMapper objectMapper;
+    private final CustomerPlanMapper customerPlanMapper;
 
     /**
      * 判定当前请求的使用类型
@@ -32,58 +36,96 @@ public class UsageEntitlementService {
      * @return 权益判定结果
      */
     public UsageDecision decide(CustomerToken customerToken, String requestModel) {
-        // MVP 阶段：默认返回无限权限
-        // 后续可根据 customerToken 的 allowedModels 和套餐/余额状态进行更精细的判定
-        
-        log.debug("Deciding usage type for customer: {}, model: {}", 
-                  customerToken.getCustomerName(), requestModel);
+        log.debug("Deciding usage type for customer: {}, model: {}",
+                customerToken.getCustomerName(), requestModel);
 
-        // 解析套餐允许的模型列表
+        // 解析套餐允许的模型列表（来自客户 Token 的 allowedModels）
         List<String> packageAllowedModels = parseAllowedModels(customerToken.getAllowedModels());
 
-        // MVP: 默认套餐和余额都启用
-        // 后续可从真实的套餐/余额服务获取
-        boolean packageEnabled = true;
-        boolean balanceEnabled = true;
+        // 余额逻辑暂未实现，先预留
+        boolean balanceEnabled = false;
 
-        // 计算当前使用类型
-        int currentUsageType = calculateUsageType(packageEnabled, balanceEnabled, 
-                                                   packageAllowedModels, requestModel);
+        // 套餐逻辑：按过期时间升序，过滤可用套餐
+        CustomerPlan plan = selectAvailablePlan(customerToken.getAccountId());
+        boolean packageEnabled = plan != null;
+
+        int currentUsageType = calculateUsageType(packageEnabled, balanceEnabled,
+                packageAllowedModels, requestModel);
 
         return UsageDecision.builder()
                 .customerTokenId(customerToken.getId())
                 .customerName(customerToken.getCustomerName())
+                .planId(plan == null ? null : plan.getId())
                 .packageEnabled(packageEnabled)
                 .balanceEnabled(balanceEnabled)
                 .currentUsageType(currentUsageType)
                 .packageAllowedModels(packageAllowedModels)
-                .unlimited(false) // MVP 阶段设为 false，后续可根据实际情况调整
+                .unlimited(false)
                 .build();
+    }
+
+    public CustomerPlan selectAvailablePlan(Long accountId) {
+        if (accountId == null) {
+            return null;
+        }
+        List<CustomerPlan> plans = customerPlanMapper.selectList(
+                new LambdaQueryWrapper<CustomerPlan>()
+                        .eq(CustomerPlan::getAccountId, accountId)
+                        .eq(CustomerPlan::getStatus, 1)
+                        .orderByAsc(CustomerPlan::getPlanExpireTime)
+        );
+        if (plans == null || plans.isEmpty()) {
+            return null;
+        }
+        LocalDate today = LocalDate.now();
+        for (CustomerPlan plan : plans) {
+            if (isPlanAvailable(plan, today)) {
+                return plan;
+            }
+        }
+        return null;
+    }
+
+    private boolean isPlanAvailable(CustomerPlan plan, LocalDate today) {
+        if (plan == null) {
+            return false;
+        }
+        java.math.BigDecimal dailyQuota = plan.getDailyQuota();
+        java.math.BigDecimal usedQuota = plan.getUsedQuota();
+        if (dailyQuota == null || usedQuota == null) {
+            return false;
+        }
+        if (usedQuota.compareTo(dailyQuota) >= 0) {
+            return false;
+        }
+        LocalDateTime refreshTime = plan.getQuotaRefreshTime();
+        if (refreshTime == null) {
+            return true;
+        }
+        return !refreshTime.toLocalDate().isEqual(today);
     }
 
     /**
      * 计算使用类型
-     * 
+     *
      * 规则：
      * - 套餐和余额都启用(0): 优先套餐，如果请求模型不在套餐允许列表则切余额
      * - 仅套餐(1): 只能走套餐模式
      * - 仅余额(2): 只能走余额模式
      */
     private int calculateUsageType(boolean packageEnabled, boolean balanceEnabled,
-                                    List<String> packageAllowedModels, String requestModel) {
+                                   List<String> packageAllowedModels, String requestModel) {
         if (packageEnabled && balanceEnabled) {
-            // 套餐优先：检查模型是否在套餐允许列表
             if (packageAllowedModels.isEmpty() || packageAllowedModels.contains(requestModel)) {
-                return 0; // 套餐优先模式
+                return 0;
             } else {
-                return 2; // 模型不在套餐列表，切到余额模式
+                return 2;
             }
         } else if (packageEnabled) {
-            return 1; // 仅套餐
+            return 1;
         } else if (balanceEnabled) {
-            return 2; // 仅余额
+            return 2;
         } else {
-            // 都没有：返回 0（无限权限 mock）
             return 0;
         }
     }

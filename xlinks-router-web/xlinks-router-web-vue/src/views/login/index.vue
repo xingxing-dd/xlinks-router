@@ -110,9 +110,9 @@ const handleSubmit = async () => {
             {{ t('login.subtitle') }}
           </p>
 
-          <p v-if="hintMessage" class="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+          <!-- <p v-if="hintMessage" class="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
             {{ hintMessage }}
-          </p>
+          </p> -->
 
           <form @submit.prevent="handleSubmit" class="space-y-5">
             <div>

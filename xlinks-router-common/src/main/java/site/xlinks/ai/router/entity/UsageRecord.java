@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -28,14 +29,29 @@ public class UsageRecord extends BaseEntity {
     private Long accountId;
 
     /**
+     * 客户 Token（明文）
+     */
+    private String customerToken;
+
+    /**
+     * Provider Token（明文）
+     */
+    private String providerToken;
+
+    /**
+     * 使用类型：balance/plan
+     */
+    private String usageType;
+
+    /**
+     * 使用来源：套餐 ID/为空
+     */
+    private String usageFrom;
+
+    /**
      * 请求 ID
      */
     private String requestId;
-
-    /**
-     * Customer Token ID
-     */
-    private Long customerTokenId;
 
     /**
      * Provider ID
@@ -43,19 +59,34 @@ public class UsageRecord extends BaseEntity {
     private Long providerId;
 
     /**
+     * Provider 编码
+     */
+    private String providerCode;
+
+    /**
+     * Provider 名称
+     */
+    private String providerName;
+
+    /**
+     * Endpoint 编码
+     */
+    private String endpointCode;
+
+    /**
      * 模型 ID
      */
     private Long modelId;
 
     /**
-     * Provider Token ID
+     * 模型编码
      */
-    private Long providerTokenId;
+    private String modelCode;
 
     /**
-     * 请求的模型名称
+     * 模型名称
      */
-    private String requestModel;
+    private String modelName;
 
     /**
      * 响应状态码
@@ -76,6 +107,21 @@ public class UsageRecord extends BaseEntity {
      * 总 token 数
      */
     private Integer totalTokens;
+
+    /**
+     * 输入 token 费用
+     */
+    private BigDecimal promptCost;
+
+    /**
+     * 输出 token 费用
+     */
+    private BigDecimal completionCost;
+
+    /**
+     * 总费用
+     */
+    private BigDecimal totalCost;
 
     /**
      * 延迟（毫秒）

@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -29,6 +30,10 @@ public class ChatCompletionRequest {
 
     @Schema(description = "是否流式返回")
     private Boolean stream;
+
+    @JsonProperty("stream_options")
+    @Schema(description = "流式选项")
+    private Map<String, Object> streamOptions;
 
     @Schema(description = "nucleus 采样")
     private Double topP;

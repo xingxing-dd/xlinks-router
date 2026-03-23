@@ -286,7 +286,7 @@ onMounted(loadPlans)
         <!-- 桌面端表格视图 -->
         <div class="hidden md:block overflow-x-auto">
           <table class="w-full">
-            <thead class="bg-primary/5">
+            <thead>
               <tr class="border-b-2 border-slate-200">
                 <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.planName') }}</th>
                 <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('plans.table.purchaseDate') }}</th>

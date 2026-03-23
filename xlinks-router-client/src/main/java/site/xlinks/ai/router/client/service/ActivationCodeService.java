@@ -77,8 +77,8 @@ public class ActivationCodeService {
         customerPlan.setDurationDays(plan.getDurationDays());
         customerPlan.setDailyQuota(plan.getDailyQuota());
         customerPlan.setTotalQuota(plan.getTotalQuota());
-        customerPlan.setUsedQuota(0);
-        customerPlan.setTotalUsedQuota(0);
+        customerPlan.setUsedQuota(java.math.BigDecimal.ZERO);
+        customerPlan.setTotalUsedQuota(java.math.BigDecimal.ZERO);
         customerPlan.setQuotaRefreshTime(LocalDateTime.now());
         customerPlan.setPlanExpireTime(LocalDateTime.now().plusDays(plan.getDurationDays()));
         customerPlan.setStatus(1);

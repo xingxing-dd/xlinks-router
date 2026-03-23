@@ -19,6 +19,7 @@ export function useDashboard() {
   })
 
   const activities = ref([])
+  const usageRecords = ref([])
   const loading = ref(false)
   const isRechargeModalOpen = ref(false)
   const usdAmount = ref('')
@@ -47,7 +48,30 @@ export function useDashboard() {
         model: item.model,
         requests: item.requests,
       }))
-      activities.value = recent
+      const recentList = Array.isArray(recent) ? recent : (Array.isArray(recent?.list) ? recent.list : [])
+      activities.value = recentList
+      usageRecords.value = recentList.map((item) => {
+        const inputTokens = Number(item?.inputTokens ?? item?.promptTokens ?? 0) || 0
+        const outputTokens = Number(item?.outputTokens ?? item?.completionTokens ?? 0) || 0
+        const totalTokens = Number(item?.totalTokens ?? inputTokens + outputTokens) || 0
+        const cost = Number(item?.cost ?? item?.amount ?? 0) || 0
+
+        const time = item?.time ?? item?.createdAt ?? item?.timestamp ?? ''
+        const model = item?.model ?? item?.modelName ?? item?.providerModel ?? item?.name ?? '-'
+        const token = item?.token ?? item?.tokenName ?? item?.tokenId ?? item?.apiKeyName ?? '-'
+        const channel = item?.channel ?? item?.route ?? item?.provider ?? item?.gateway ?? '-'
+
+        return {
+          time,
+          token,
+          channel,
+          model,
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          cost,
+        }
+      })
     } catch (error) {
       toast.error(t('common.error'), error.message)
     } finally {
@@ -73,6 +97,7 @@ export function useDashboard() {
     modelUsage,
     dashboardStats,
     activities,
+    usageRecords,
     loading,
     isRechargeModalOpen,
     usdAmount,

@@ -162,6 +162,35 @@ CREATE TABLE `models` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='统一模型表';
 ```
 
+### 6.4 初始化模型数据
+
+```sql
+INSERT INTO `models` (`model_name`, `model_code`, `endpoint_id`, `provider_id`, `model_desc`, `input_price`, `output_price`, `status`, `deleted`) VALUES
+('gpt-5', 'gpt-5', 1, 2, '通用旗舰模型', 1.25, 10.00, 1, 0),
+('gpt-5-codex', 'gpt-5-codex', 1, 2, '旗舰编码增强模型', 1.25, 10.00, 1, 0),
+('gpt-5-codex-mini', 'gpt-5-codex-mini', 1, 2, '轻量编码模型', 0.25, 2.00, 1, 0),
+('gpt-5.1', 'gpt-5.1', 1, 2, '高稳定通用模型', 1.25, 10.00, 1, 0),
+('gpt-5.1-codex', 'gpt-5.1-codex', 1, 2, '高稳定编码模型', 1.25, 10.00, 1, 0),
+('gpt-5.1-codex-max', 'gpt-5.1-codex-max', 1, 2, '高配编码模型', 1.25, 10.00, 1, 0),
+('gpt-5.1-codex-mini', 'gpt-5.1-codex-mini', 1, 2, '轻量稳定编码模型', 0.25, 2.00, 1, 0),
+('gpt-5.2', 'gpt-5.2', 1, 2, '高性能通用模型', 1.75, 14.00, 1, 0),
+('gpt-5.2-codex', 'gpt-5.2-codex', 1, 2, '高性能编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.2-high', 'gpt-5.2-high', 1, 2, '高性能高质量模型', 1.75, 14.00, 1, 0),
+('gpt-5.2-low', 'gpt-5.2-low', 1, 2, '高性能低延迟模型', 1.75, 14.00, 1, 0),
+('gpt-5.2-medium', 'gpt-5.2-medium', 1, 2, '高性能均衡模型', 1.75, 14.00, 1, 0),
+('gpt-5.2-xhigh', 'gpt-5.2-xhigh', 1, 2, '高性能极致质量模型', 1.75, 14.00, 1, 0),
+('gpt-5.3-codex', 'gpt-5.3-codex', 1, 2, '新一代编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.3-codex-high', 'gpt-5.3-codex-high', 1, 2, '新一代高质量编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.3-codex-low', 'gpt-5.3-codex-low', 1, 2, '新一代低延迟编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.3-codex-medium', 'gpt-5.3-codex-medium', 1, 2, '新一代均衡编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.3-codex-xhigh', 'gpt-5.3-codex-xhigh', 1, 2, '新一代极致质量编码模型', 1.75, 14.00, 1, 0),
+('gpt-5.4', 'gpt-5.4', 1, 2, '最新旗舰通用模型', 2.50, 15.00, 1, 0),
+('gpt-5.4-high', 'gpt-5.4-high', 1, 2, '最新高质量模型', 2.50, 15.00, 1, 0),
+('gpt-5.4-medium', 'gpt-5.4-medium', 1, 2, '最新均衡模型', 2.50, 15.00, 1, 0),
+('gpt-5.4-mini', 'gpt-5.4-mini', 1, 2, '最新轻量模型', 0.75, 4.50, 1, 0),
+('gpt-5.4-xhigh', 'gpt-5.4-xhigh', 1, 2, '最新极致质量模型', 2.50, 15.00, 1, 0);
+```
+
 ## 7. Provider Token
 
 ```sql
@@ -219,27 +248,39 @@ CREATE TABLE `usage_records` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `request_id` VARCHAR(64) NOT NULL COMMENT '请求 ID，全局唯一',
   `account_id` BIGINT NOT NULL COMMENT '账户 ID',
-  `customer_token_id` BIGINT NOT NULL COMMENT '客户 Token ID',
+  `customer_token` VARCHAR(128) DEFAULT NULL COMMENT '客户 Token（明文）',
+  `provider_token` VARCHAR(128) DEFAULT NULL COMMENT 'Provider Token（明文）',
+  `usage_type` VARCHAR(20) DEFAULT NULL COMMENT '使用类型：balance/plan',
+  `usage_from` VARCHAR(64) DEFAULT NULL COMMENT '使用来源（套餐 ID）',
   `provider_id` BIGINT NOT NULL COMMENT 'Provider ID',
+  `provider_code` VARCHAR(50) NOT NULL COMMENT 'Provider 编码',
+  `provider_name` VARCHAR(100) NOT NULL COMMENT 'Provider 名称',
+  `endpoint_code` VARCHAR(100) NOT NULL COMMENT '端点编码',
   `model_id` BIGINT NOT NULL COMMENT '模型 ID',
-  `provider_token_id` BIGINT NOT NULL COMMENT 'Provider Token ID',
-  `request_model` VARCHAR(100) NOT NULL COMMENT '请求的模型编码',
+  `model_code` VARCHAR(100) NOT NULL COMMENT '模型编码',
+  `model_name` VARCHAR(100) NOT NULL COMMENT '模型名称',
   `response_status` INT NOT NULL COMMENT '响应状态码',
   `prompt_tokens` INT DEFAULT 0 COMMENT '提示词 token 数',
   `completion_tokens` INT DEFAULT 0 COMMENT '补全 token 数',
   `total_tokens` INT DEFAULT 0 COMMENT '总 token 数',
+  `prompt_cost` DECIMAL(12, 6) DEFAULT 0 COMMENT '输入 token 费用',
+  `completion_cost` DECIMAL(12, 6) DEFAULT 0 COMMENT '输出 token 费用',
+  `total_cost` DECIMAL(12, 6) DEFAULT 0 COMMENT '总费用',
   `latency_ms` INT DEFAULT 0 COMMENT '延迟（毫秒）',
   `error_code` VARCHAR(50) DEFAULT NULL COMMENT '错误码',
   `error_message` TEXT DEFAULT NULL COMMENT '错误信息',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
   PRIMARY KEY (`id`),
   KEY `idx_request_id` (`request_id`),
   KEY `idx_account_id` (`account_id`),
-  KEY `idx_customer_token_id` (`customer_token_id`),
   KEY `idx_provider_id` (`provider_id`),
   KEY `idx_model_id` (`model_id`),
   KEY `idx_created_at` (`created_at`),
-  KEY `idx_request_model` (`request_model`)
+  KEY `idx_model_code` (`model_code`),
+  KEY `idx_endpoint_code` (`endpoint_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='使用记录表';
 ```
 
@@ -253,8 +294,8 @@ CREATE TABLE `plans` (
   `plan_name` VARCHAR(100) NOT NULL COMMENT '套餐名称',
   `price` DECIMAL(12, 2) NOT NULL COMMENT '套餐价格（元）',
   `duration_days` INT NOT NULL COMMENT '有效期天数',
-  `daily_quota` INT NOT NULL COMMENT '每日额度（美元）',
-  `total_quota` INT NOT NULL COMMENT '总额度（美元）',
+  `daily_quota` DECIMAL(12, 6) NOT NULL COMMENT '每日额度（美元）',
+  `total_quota` DECIMAL(12, 6) NOT NULL COMMENT '总额度（美元）',
   `allowed_models` JSON DEFAULT NULL COMMENT '允许访问的模型列表',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `visible` TINYINT NOT NULL DEFAULT 1 COMMENT '是否可见：1-可见，0-隐藏',
@@ -287,10 +328,10 @@ CREATE TABLE `customer_plans` (
   `plan_name` VARCHAR(100) NOT NULL COMMENT '套餐名称',
   `price` DECIMAL(12, 2) NOT NULL COMMENT '订阅价格（元）',
   `duration_days` INT NOT NULL COMMENT '订阅周期天数',
-  `daily_quota` INT NOT NULL COMMENT '每日额度（美元）',
-  `total_quota` INT NOT NULL COMMENT '总额度（美元）',
-  `used_quota` INT NOT NULL DEFAULT 0 COMMENT '已使用额度（美元）',
-  `total_used_quota` INT NOT NULL DEFAULT 0 COMMENT '总共已使用额度（美元）',
+  `daily_quota` DECIMAL(12, 6) NOT NULL COMMENT '每日额度（美元）',
+  `total_quota` DECIMAL(12, 6) NOT NULL COMMENT '总额度（美元）',
+  `used_quota` DECIMAL(12, 6) NOT NULL DEFAULT 0 COMMENT '已使用额度（美元）',
+  `total_used_quota` DECIMAL(12, 6) NOT NULL DEFAULT 0 COMMENT '总共已使用额度（美元）',
   `quota_refresh_time` DATETIME NOT NULL COMMENT '额度刷新时间',
   `plan_expire_time` DATETIME NOT NULL COMMENT '订阅过期时间',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-生效，0-失效',

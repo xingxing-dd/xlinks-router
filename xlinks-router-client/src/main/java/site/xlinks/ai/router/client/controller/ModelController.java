@@ -1,5 +1,7 @@
 package site.xlinks.ai.router.client.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,12 +13,29 @@ import site.xlinks.ai.router.client.dto.model.ModelDetailResponse;
 import site.xlinks.ai.router.client.dto.model.ModelRouteItemResponse;
 import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.entity.Model;
+import site.xlinks.ai.router.entity.Provider;
+import site.xlinks.ai.router.mapper.ModelMapper;
+import site.xlinks.ai.router.mapper.ProviderMapper;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1")
+@RequiredArgsConstructor
 public class ModelController {
+
+    private static final String PRICE_SUFFIX = "/M";
+
+    private final ModelMapper modelMapper;
+    private final ProviderMapper providerMapper;
 
     @GetMapping("/customer-models")
     public Result<PageResult<CustomerModelItemResponse>> getCustomerModels(@RequestParam(defaultValue = "1") Integer page,
@@ -30,11 +49,30 @@ public class ModelController {
 
     @GetMapping("/models/available")
     public Result<List<AvailableModelItemResponse>> getAvailableModels() {
-        return Result.success(List.of(
-                new AvailableModelItemResponse(1L, "claude-3-7-sonnet", "Anthropic", "高性能对话模型，适合复杂推理任务", "$3.00/M", "$15.00/M", "200K", "available"),
-                new AvailableModelItemResponse(2L, "claude-haiku-4-5", "Anthropic", "快速响应，高性价比的轻量级模型", "$1.00/M", "$5.00/M", "200K", "available"),
-                new AvailableModelItemResponse(3L, "claude-opus-4", "Anthropic", "最强大的推理模型，适合复杂任务", "$15.00/M", "$75.00/M", "200K", "limited")
-        ));
+        List<Model> models = modelMapper.selectList(new LambdaQueryWrapper<Model>()
+                .eq(Model::getStatus, 1)
+                .eq(Model::getDeleted, 0)
+                .orderByAsc(Model::getId));
+        if (models == null || models.isEmpty()) {
+            return Result.success(Collections.emptyList());
+        }
+        Map<Long, Provider> providerMap = loadProviders(models.stream()
+                .map(Model::getProviderId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet()));
+        List<AvailableModelItemResponse> responses = models.stream()
+                .map(model -> new AvailableModelItemResponse(
+                        model.getId(),
+                        model.getModelCode() == null ? model.getModelName() : model.getModelCode(),
+                        resolveProviderName(providerMap.get(model.getProviderId())),
+                        model.getModelDesc(),
+                        formatPrice(model.getInputPrice()),
+                        formatPrice(model.getOutputPrice()),
+                        formatContextWindow(model.getContextSize()),
+                        model.getStatus() != null && model.getStatus() == 1 ? "available" : "unavailable"
+                ))
+                .collect(Collectors.toList());
+        return Result.success(responses);
     }
 
     @GetMapping("/models/{id}")
@@ -52,5 +90,45 @@ public class ModelController {
                 new ModelRouteItemResponse(2L, "Anthropic Official", "claude-3-7-sonnet", 2)
         ));
         return Result.success(response);
+    }
+
+    private Map<Long, Provider> loadProviders(Collection<Long> providerIds) {
+        if (providerIds == null || providerIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Provider> providers = providerMapper.selectBatchIds(providerIds);
+        if (providers == null || providers.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Provider> providerMap = new HashMap<>();
+        for (Provider provider : providers) {
+            providerMap.put(provider.getId(), provider);
+        }
+        return providerMap;
+    }
+
+    private String resolveProviderName(Provider provider) {
+        if (provider == null) {
+            return "";
+        }
+        if (provider.getProviderName() != null && !provider.getProviderName().isBlank()) {
+            return provider.getProviderName();
+        }
+        return provider.getProviderCode() == null ? "" : provider.getProviderCode();
+    }
+
+    private String formatPrice(BigDecimal price) {
+        if (price == null) {
+            return "$0" + PRICE_SUFFIX;
+        }
+        BigDecimal scaled = price.setScale(2, RoundingMode.HALF_UP);
+        return "$" + scaled.toPlainString() + PRICE_SUFFIX;
+    }
+
+    private String formatContextWindow(Integer contextSize) {
+        if (contextSize == null || contextSize <= 0) {
+            return "-";
+        }
+        return contextSize + "K";
     }
 }

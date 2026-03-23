@@ -47,9 +47,12 @@ export function formatRelativeTime(value) {
   return `${Math.floor(diff / day)} 天前`
 }
 
-export function formatCurrency(value, currency = 'CNY') {
+export function formatCurrency(value, currency = 'USD', locale) {
   const amount = Number(value || 0)
-  return new Intl.NumberFormat('zh-CN', {
+
+  const resolvedLocale = locale || (currency === 'USD' ? 'en-US' : 'zh-CN')
+
+  return new Intl.NumberFormat(resolvedLocale, {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -59,4 +62,22 @@ export function formatCurrency(value, currency = 'CNY') {
 
 export function formatNumber(value) {
   return Number(value || 0).toLocaleString('zh-CN')
+}
+
+export function formatCompactNumber(value) {
+  const n = Number(value || 0)
+  const abs = Math.abs(n)
+
+  if (abs >= 1_000_000) {
+    const scaled = abs / 1_000_000
+    const text = scaled >= 10 ? scaled.toFixed(0) : scaled.toFixed(1)
+    return `${n < 0 ? '-' : ''}${text.replace(/\.0$/, '')}M`
+  }
+
+  if (abs >= 1_000) {
+    const scaled = abs / 1_000
+    return `${n < 0 ? '-' : ''}${scaled.toFixed(1)}k`
+  }
+
+  return `${n}`
 }
