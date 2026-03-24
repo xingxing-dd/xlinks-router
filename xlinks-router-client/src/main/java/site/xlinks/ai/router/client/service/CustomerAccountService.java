@@ -12,8 +12,6 @@ import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 
-import java.util.regex.Pattern;
-
 /**
  * 客户账户服务
  */
@@ -24,6 +22,7 @@ public class CustomerAccountService {
 
     private final CustomerAccountMapper customerAccountMapper;
     private final TokenService tokenService;
+    private final VerifyCodeService verifyCodeService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     // 账号类型常量
@@ -35,10 +34,6 @@ public class CustomerAccountService {
      * 注册新用户
      */
     public void register(AuthRegisterRequest request) {
-        // 验证验证码（TODO: 实际实现验证码校验）
-        if (request.getCode() == null || !request.getCode().equals("123456")) {
-            throw new BusinessException(ErrorCode.VERIFY_CODE_ERROR);
-        }
 
         String target = request.getTarget();
         String targetType = request.getTargetType();

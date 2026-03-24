@@ -13,6 +13,9 @@ import site.xlinks.ai.router.client.dto.auth.RsaPublicKeyResponse;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendRequest;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
 import site.xlinks.ai.router.client.service.CustomerAccountService;
+import site.xlinks.ai.router.client.service.VerifyCodeService;
+import site.xlinks.ai.router.client.service.verifycode.VerifyCodeSender;
+import site.xlinks.ai.router.client.service.verifycode.VerifyCodeSenderFactory;
 import site.xlinks.ai.router.common.result.Result;
 
 /**
@@ -24,6 +27,8 @@ import site.xlinks.ai.router.common.result.Result;
 public class AuthController {
 
     private final CustomerAccountService customerAccountService;
+    private final VerifyCodeService verifyCodeService;
+    private final VerifyCodeSenderFactory verifyCodeSenderFactory;
 
     @PostMapping("/rsa-public-key")
     public Result<RsaPublicKeyResponse> getRsaPublicKey() {
@@ -35,12 +40,15 @@ public class AuthController {
 
     @PostMapping("/verify-code")
     public Result<VerifyCodeSendResponse> sendVerifyCode(@Valid @RequestBody VerifyCodeSendRequest request) {
-        // TODO: 集成短信/邮箱服务发送验证码
-        VerifyCodeSendResponse response = new VerifyCodeSendResponse();
-        String message = "email".equalsIgnoreCase(request.getCodeType()) ? "邮箱验证码发送成功" : "短信验证码发送成功";
-        response.setMessage(message);
-        response.setMockCode("123456");
-        response.setExpireSeconds(300);
+        VerifyCodeService.VerifyCodeIssueResult issued = verifyCodeService.issueCode(
+                request.getScene(),
+                request.getCodeType(),
+                request.getTarget()
+        );
+
+        // 根据验证码类型获取对应的发送策略
+        VerifyCodeSender sender = verifyCodeSenderFactory.getSender(request.getCodeType());
+        VerifyCodeSendResponse response = sender.send(request.getTarget(), issued.token(), issued.expireSeconds());
         return Result.success(response);
     }
 

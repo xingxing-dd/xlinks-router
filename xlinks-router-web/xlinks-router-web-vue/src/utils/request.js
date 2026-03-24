@@ -12,6 +12,7 @@ function redirectToLogin() {
     : `/login?redirect=${encodeURIComponent(currentPath)}`
 
   localStorage.removeItem('xlinks-access-token')
+  sessionStorage.removeItem('xlinks-access-token')
   window.location.href = loginUrl
 }
 
@@ -28,7 +29,7 @@ function buildUrl(path) {
 }
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem('xlinks-access-token')
+  const token = localStorage.getItem('xlinks-access-token') || sessionStorage.getItem('xlinks-access-token')
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),

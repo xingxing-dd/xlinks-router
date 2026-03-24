@@ -152,14 +152,14 @@ onMounted(loadTokens)
           <p class="text-slate-500 text-sm mb-4">
             {{ searchQuery ? t('tokens.noTokensSearch') : t('tokens.noTokensEmpty') }}
           </p>
-          <button
+          <!-- <button
             v-if="!searchQuery"
             @click="isCreateModalOpen = true"
             class="inline-flex items-center gap-2 bg-gradient-button text-white px-6 py-3 rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
           >
             <Plus class="w-5 h-5" />
             <span>{{ t('tokens.create') }}</span>
-          </button>
+          </button> -->
         </div>
 
         <template v-else>

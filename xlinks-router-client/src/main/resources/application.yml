@@ -45,3 +45,16 @@ logging:
     org.springframework: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+xlinks:
+  sms:
+    guoyangyun:
+      host: https://gyytz.market.alicloudapi.com
+      path: /sms/smsSend
+      appcode: ${XLS_SMS_GYY_APP_CODE:5cf9ca38f0a94f019cb432071a715284}
+      smsSignId: ${XLS_SMS_GYY_SIGN_ID:2e65b1bb3d054466b82f0c9d125465e2}
+      templateId: ${XLS_SMS_GYY_TEMPLATE_ID:908e94ccf08b4476ba6c876d13f084ad}
+    verify-code:
+      expire-seconds: 300
+      daily-limit: 20
+      min-interval-seconds: 60

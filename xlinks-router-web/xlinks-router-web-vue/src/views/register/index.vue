@@ -1,6 +1,7 @@
 <script setup>
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Key, Mail, Lock, Gift, Shield, Sparkles } from 'lucide-vue-next'
+import { Key, Phone, Lock, Gift, Shield, Sparkles } from 'lucide-vue-next'
 import { useRegister } from '@/composables/useRegister'
 
 const { t } = useI18n()
@@ -8,10 +9,13 @@ const {
   formData,
   isSubmitting,
   isSendingCode,
+  countdown,
   feedback,
   handleSubmit,
   handleSendCode,
 } = useRegister()
+
+const agreed = ref(false)
 </script>
 
 <template>
@@ -86,15 +90,15 @@ const {
           <form @submit.prevent="handleSubmit" class="space-y-5">
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">
-                {{ t('register.email') }}
+                {{ t('register.phone') }}
               </label>
               <div class="relative">
-                <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Phone class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
-                  v-model="formData.email"
-                  type="email"
+                  v-model="formData.phone"
+                  type="tel"
                   class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none transition-all bg-white text-slate-900"
-                  :placeholder="t('register.emailPlaceholder')"
+                  :placeholder="t('register.phonePlaceholder')"
                   required
                 />
               </div>
@@ -118,10 +122,10 @@ const {
                 <button
                   type="button"
                   @click="handleSendCode"
-                  :disabled="isSendingCode"
-                  class="px-4 py-3 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors font-medium whitespace-nowrap text-sm"
+                  :disabled="isSendingCode || countdown > 0"
+                  class="px-4 py-3 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors font-medium whitespace-nowrap text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {{ isSendingCode ? t('common.loading') : t('register.sendCode') }}
+                  {{ isSendingCode ? t('common.loading') : (countdown > 0 ? t('register.sendCodeCountdown', { countdown }) : t('register.sendCode')) }}
                 </button>
               </div>
             </div>
@@ -162,6 +166,7 @@ const {
 
             <div class="flex items-start">
               <input
+                v-model="agreed"
                 type="checkbox"
                 class="w-4 h-4 mt-1 text-primary border-slate-300 rounded focus:ring-ring cursor-pointer"
                 required
@@ -180,8 +185,8 @@ const {
 
             <button
               type="submit"
-              :disabled="isSubmitting"
-              class="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white py-3.5 rounded-xl hover:shadow-lg hover:shadow-orange-500/50 transition-all duration-200 font-semibold text-base"
+              :disabled="isSubmitting || !agreed"
+              class="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white py-3.5 rounded-xl hover:shadow-lg hover:shadow-orange-500/50 transition-all duration-200 font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ isSubmitting ? t('common.loading') : t('register.submit') }}
             </button>

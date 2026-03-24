@@ -2,17 +2,21 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Key, Mail, Lock, Sparkles } from 'lucide-vue-next'
+import { Key, Phone, Lock, Sparkles } from 'lucide-vue-next'
 import { postAuth } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/utils/toast'
+
+const REMEMBER_ACCOUNT_KEY = 'xlinks-remember-account'
+const REMEMBER_PHONE_KEY = 'xlinks-remember-phone'
 
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const email = ref('')
+const phone = ref(localStorage.getItem(REMEMBER_PHONE_KEY) || '')
 const password = ref('')
+const rememberMe = ref(localStorage.getItem(REMEMBER_ACCOUNT_KEY) !== 'false')
 const isSubmitting = ref(false)
 const hintMessage = ref('')
 
@@ -30,11 +34,18 @@ const handleSubmit = async () => {
     hintMessage.value = rsaData?.algorithm ? `已获取公钥算法：${rsaData.algorithm}` : ''
 
     const loginData = await postAuth('/login', {
-      username: email.value,
+      username: phone.value,
       password: password.value,
     })
 
-    authStore.setAccessToken(loginData?.accessToken)
+    authStore.setAccessToken(loginData?.accessToken, { remember: rememberMe.value })
+    if (rememberMe.value) {
+      localStorage.setItem(REMEMBER_ACCOUNT_KEY, 'true')
+      localStorage.setItem(REMEMBER_PHONE_KEY, phone.value)
+    } else {
+      localStorage.setItem(REMEMBER_ACCOUNT_KEY, 'false')
+      localStorage.removeItem(REMEMBER_PHONE_KEY)
+    }
     toast.success(t('common.success'))
     router.push(getRedirectPath())
   } catch (error) {
@@ -117,15 +128,15 @@ const handleSubmit = async () => {
           <form @submit.prevent="handleSubmit" class="space-y-5">
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">
-                {{ t('login.email') }}
+                {{ t('login.phone') }}
               </label>
               <div class="relative">
-                <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Phone class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
-                  v-model="email"
-                  type="text"
+                  v-model="phone"
+                  type="tel"
                   class="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-ring focus:border-transparent outline-none transition-all bg-white text-slate-900"
-                  :placeholder="t('login.emailPlaceholder')"
+                  :placeholder="t('login.phonePlaceholder')"
                   required
                 />
               </div>
@@ -150,6 +161,7 @@ const handleSubmit = async () => {
             <div class="flex items-center justify-between text-sm">
               <label class="flex items-center cursor-pointer">
                 <input
+                  v-model="rememberMe"
                   type="checkbox"
                   class="w-4 h-4 text-primary border-slate-300 rounded focus:ring-ring"
                 />

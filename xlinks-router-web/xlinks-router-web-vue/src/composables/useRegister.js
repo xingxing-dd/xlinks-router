@@ -1,23 +1,52 @@
-import { reactive, ref } from 'vue'
+import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { postAuth } from '@/utils/request'
 import { toast } from '@/utils/toast'
+
+const DEFAULT_COUNTDOWN = 60
 
 export function useRegister() {
   const { t } = useI18n()
   const router = useRouter()
 
   const formData = reactive({
-    email: '',
+    phone: '',
     password: '',
     verificationCode: '',
+    verificationToken: '',
     inviteCode: '',
   })
 
   const isSubmitting = ref(false)
   const isSendingCode = ref(false)
+  const countdown = ref(0)
   const feedback = ref('')
+
+  let timer = null
+
+  const startCountdown = (seconds = DEFAULT_COUNTDOWN) => {
+    countdown.value = seconds
+    if (timer) {
+      clearInterval(timer)
+    }
+    timer = setInterval(() => {
+      if (countdown.value <= 1) {
+        countdown.value = 0
+        clearInterval(timer)
+        timer = null
+        return
+      }
+      countdown.value -= 1
+    }, 1000)
+  }
+
+  onUnmounted(() => {
+    if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
+  })
 
   const handleSubmit = async () => {
     feedback.value = ''
@@ -25,10 +54,11 @@ export function useRegister() {
 
     try {
       await postAuth('/register', {
-        target: formData.email,
-        targetType: 'email',
+        target: formData.phone,
+        targetType: 'phone',
         password: formData.password,
         code: formData.verificationCode,
+        token: formData.verificationToken,
         inviteCode: formData.inviteCode || undefined,
       })
 
@@ -42,8 +72,8 @@ export function useRegister() {
   }
 
   const handleSendCode = async () => {
-    if (!formData.email) {
-      toast.error(t('common.error'), `${t('register.email')} ${t('common.error')}`)
+    if (!formData.phone) {
+      toast.error(t('common.error'), `${t('register.phone')} ${t('common.error')}`)
       return
     }
 
@@ -52,13 +82,15 @@ export function useRegister() {
 
     try {
       const data = await postAuth('/verify-code', {
-        codeType: 'email',
-        target: formData.email,
+        codeType: 'sms',
+        target: formData.phone,
         scene: 'register',
       })
 
+      formData.verificationToken = data?.token || ''
       feedback.value = `${data?.message || t('common.success')}`
       toast.success(t('common.success'), feedback.value)
+      startCountdown()
     } catch (error) {
       toast.error(t('common.error'), error.message)
     } finally {
@@ -70,6 +102,7 @@ export function useRegister() {
     formData,
     isSubmitting,
     isSendingCode,
+    countdown,
     feedback,
     handleSubmit,
     handleSendCode,
