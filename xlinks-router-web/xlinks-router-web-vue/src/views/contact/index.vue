@@ -51,7 +51,13 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="min-h-[60vh] flex items-center justify-center px-4">
+    <div class="rounded-3xl border border-slate-200 bg-white/80 px-10 py-8 text-center shadow-sm backdrop-blur">
+      <p class="text-lg font-semibold text-slate-900">功能正在开发中</p>
+      <p class="mt-2 text-sm text-slate-500">敬请期待</p>
+    </div>
+  </div>
+  <div v-if="false" class="p-4 md:p-8 max-w-7xl mx-auto">
     <div v-if="errorMessage" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
       {{ errorMessage }}
     </div>

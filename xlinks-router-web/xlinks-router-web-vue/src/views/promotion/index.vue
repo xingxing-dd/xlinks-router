@@ -24,7 +24,13 @@ onMounted(loadPromotionData)
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="min-h-[60vh] flex items-center justify-center px-4">
+    <div class="rounded-3xl border border-slate-200 bg-white/80 px-10 py-8 text-center shadow-sm backdrop-blur">
+      <p class="text-lg font-semibold text-slate-900">功能正在开发中</p>
+      <p class="mt-2 text-sm text-slate-500">敬请期待</p>
+    </div>
+  </div>
+  <div v-if="false" class="p-4 md:p-8 max-w-7xl mx-auto">
 
     <!-- 推广统计 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
