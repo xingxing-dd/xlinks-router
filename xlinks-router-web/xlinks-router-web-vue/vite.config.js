@@ -12,6 +12,18 @@ export default defineConfig({
       }
     },
   },
+  build: {
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ['vue', 'vue-router', 'pinia', 'vue-i18n'],
+          ui: ['lucide-vue-next', 'radix-vue', 'class-variance-authority', 'clsx', 'tailwind-merge', 'tailwindcss-animate'],
+          charts: ['echarts', 'vue-echarts'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
