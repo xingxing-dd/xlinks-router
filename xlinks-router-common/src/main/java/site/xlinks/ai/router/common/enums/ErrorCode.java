@@ -28,6 +28,7 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(4017, "邮箱已被注册"),
     PASSWORD_ERROR(4018, "密码错误"),
     USER_DISABLED(4019, "用户已被禁用"),
+    INVITE_CODE_INVALID(4020, "邀请码无效"),
 
     // 服务端错误 5xxx
     SYSTEM_ERROR(5000, "系统异常"),

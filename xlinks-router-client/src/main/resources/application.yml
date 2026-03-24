@@ -47,6 +47,9 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
 xlinks:
+  # 邀请有礼链接
+  promotion:
+    referral-link-prefix: https://token-hub.com/register?ref=
   sms:
     guoyangyun:
       host: https://gyytz.market.alicloudapi.com

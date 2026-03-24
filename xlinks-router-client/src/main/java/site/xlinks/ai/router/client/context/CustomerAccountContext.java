@@ -1,5 +1,7 @@
 package site.xlinks.ai.router.client.context;
 
+import site.xlinks.ai.router.common.enums.ErrorCode;
+import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerAccount;
 
 /**
@@ -21,6 +23,17 @@ public class CustomerAccountContext {
      */
     public static CustomerAccount getAccount() {
         return ACCOUNT_THREAD_LOCAL.get();
+    }
+
+    /**
+     * 获取当前线程账户，不存在时抛出未授权异常。
+     */
+    public static CustomerAccount requireAccount() {
+        CustomerAccount account = getAccount();
+        if (account == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return account;
     }
 
     /**

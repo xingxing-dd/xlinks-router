@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS `customer_accounts` (
   `username` VARCHAR(50) NOT NULL COMMENT '用户名',
   `phone` VARCHAR(20) DEFAULT NULL COMMENT '手机号',
   `email` VARCHAR(100) DEFAULT NULL COMMENT '邮箱',
+  `invite_code` VARCHAR(32) DEFAULT NULL COMMENT '邀请码',
+  `invited_by` BIGINT DEFAULT NULL COMMENT '邀请人账户ID，关联 customer_accounts.id',
   `password` VARCHAR(128) NOT NULL COMMENT '密码（BCrypt 加密存储）',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
   `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
@@ -31,9 +33,61 @@ CREATE TABLE IF NOT EXISTS `customer_accounts` (
   UNIQUE KEY `uk_username` (`username`),
   UNIQUE KEY `uk_phone` (`phone`),
   UNIQUE KEY `uk_email` (`email`),
+  UNIQUE KEY `uk_invite_code` (`invite_code`),
   KEY `idx_status` (`status`),
-  KEY `idx_deleted` (`deleted`)
+  KEY `idx_deleted` (`deleted`),
+  KEY `idx_invited_by` (`invited_by`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户账户表';
+
+-- 推广记录表
+CREATE TABLE IF NOT EXISTS `promotion_records` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `inviter_user_id` BIGINT NOT NULL COMMENT '邀请人账户ID',
+  `invitee_user_id` BIGINT NOT NULL COMMENT '被邀请人账户ID',
+  `invite_code` VARCHAR(32) NOT NULL COMMENT '邀请码',
+  `reward_type` TINYINT NOT NULL COMMENT '奖励类型：1-邀请注册，2-首次充值，3-持续返佣',
+  `reward_amount` DECIMAL(12,2) NOT NULL DEFAULT 0 COMMENT '奖励金额',
+  `reward_rate` DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '奖励比例',
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待结算，1-已生效，2-已失效',
+  `source_order_no` VARCHAR(64) DEFAULT NULL COMMENT '来源订单号',
+  `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  KEY `idx_inviter_user_id` (`inviter_user_id`),
+  KEY `idx_invitee_user_id` (`invitee_user_id`),
+  KEY `idx_invite_code` (`invite_code`),
+  KEY `idx_reward_type` (`reward_type`),
+  KEY `idx_status` (`status`),
+  KEY `idx_source_order_no` (`source_order_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推广记录表';
+
+-- 推广规则配置表
+CREATE TABLE IF NOT EXISTS `promotion_rules` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码',
+  `rule_name` VARCHAR(100) NOT NULL COMMENT '规则名称',
+  `reward_type` TINYINT DEFAULT NULL COMMENT '奖励类型：1-邀请注册，2-首次充值，3-持续返佣，空表示非奖励类规则',
+  `reward_amount` DECIMAL(12,2) DEFAULT NULL COMMENT '固定奖励金额',
+  `reward_rate` DECIMAL(5,2) DEFAULT NULL COMMENT '奖励比例，按百分比存储',
+  `settlement_day` TINYINT DEFAULT NULL COMMENT '结算日',
+  `description` VARCHAR(255) DEFAULT NULL COMMENT '规则描述',
+  `icon_type` VARCHAR(32) DEFAULT NULL COMMENT '前端图标类型',
+  `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序值',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+  `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+  `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_rule_code` (`rule_code`),
+  KEY `idx_reward_type` (`reward_type`),
+  KEY `idx_sort_order` (`sort_order`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='推广规则配置表';
 
 -- 2. 提供商表
 CREATE TABLE IF NOT EXISTS `providers` (
@@ -219,6 +273,15 @@ INSERT INTO `provider_tokens`
   (`provider_id`, `token_name`, `token_value`, `token_status`, `quota_total`, `quota_used`, `remark`, `create_by`, `update_by`)
 VALUES
   (2, 'right-codex-default', 'sk-16dc1a6df0c04c7c851ec8c326f5f79b', 1, NULL, 0, '测试 Provider Token', 'system', 'system');
+
+-- 插入推广规则
+INSERT INTO `promotion_rules`
+  (`rule_code`, `rule_name`, `reward_type`, `reward_amount`, `reward_rate`, `settlement_day`, `description`, `icon_type`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+VALUES
+  ('invite_register', '邀请注册奖励', 1, 10.00, NULL, NULL, '好友通过您的链接注册，您将获得 ￥10.00 奖励', 'blue', 1, 1, '默认推广规则', 'system', 'system'),
+  ('first_recharge', '首次充值奖励', 2, NULL, 10.00, NULL, '好友首次充值，您将获得充值金额 10% 的奖励', 'green', 2, 1, '默认推广规则', 'system', 'system'),
+  ('consumption_rebate', '持续返佣', 3, NULL, 5.00, NULL, '好友每次消费，您将获得消费金额 5% 的返佣', 'purple', 3, 1, '默认推广规则', 'system', 'system'),
+  ('settlement_cycle', '结算周期', NULL, NULL, NULL, 1, '每月 1 日自动结算上月收益，直接转入账户余额', 'orange', 4, 1, '默认推广规则', 'system', 'system');
 
 -- 插入 Customer Token
 INSERT INTO `customer_tokens`

@@ -1,14 +1,11 @@
 package site.xlinks.ai.router.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-
-import java.time.LocalDateTime;
 
 /**
  * 客户账户实体
@@ -38,6 +35,16 @@ public class CustomerAccount extends BaseEntity {
      * 邮箱
      */
     private String email;
+
+    /**
+     * 邀请码
+     */
+    private String inviteCode;
+
+    /**
+     * 邀请人账户ID
+     */
+    private Long invitedBy;
 
     /**
      * 密码（加密存储）

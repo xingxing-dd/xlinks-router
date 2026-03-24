@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import site.xlinks.ai.router.client.dto.auth.AuthLoginResponse;
 import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -21,6 +22,7 @@ import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 public class CustomerAccountService {
 
     private final CustomerAccountMapper customerAccountMapper;
+    private final PromotionService promotionService;
     private final TokenService tokenService;
     private final VerifyCodeService verifyCodeService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -33,6 +35,7 @@ public class CustomerAccountService {
     /**
      * 注册新用户
      */
+    @Transactional(rollbackFor = Exception.class)
     public void register(AuthRegisterRequest request) {
 
         String target = request.getTarget();
@@ -64,7 +67,7 @@ public class CustomerAccountService {
 
         // 创建新用户
         CustomerAccount account = new CustomerAccount();
-        
+
         if (TARGET_TYPE_USERNAME.equalsIgnoreCase(targetType)) {
             account.setUsername(target);
         } else if (TARGET_TYPE_PHONE.equalsIgnoreCase(targetType)) {
@@ -72,11 +75,11 @@ public class CustomerAccountService {
         } else if (TARGET_TYPE_EMAIL.equalsIgnoreCase(targetType)) {
             account.setEmail(target);
         }
-        account.setUsername(target);
         account.setPassword(passwordEncoder.encode(request.getPassword()));
         account.setStatus(1); // 启用状态
 
         customerAccountMapper.insert(account);
+        promotionService.bindInviterAndInitReward(account, request.getInviteCode());
 
         log.info("New customer account registered: {}", account.getId());
     }
@@ -141,9 +144,25 @@ public class CustomerAccountService {
     }
 
     /**
+     * 获取当前账户的邀请码，没有则自动生成。
+     */
+    public String getOrCreateInviteCode(Long accountId) {
+        CustomerAccount account = getById(idOrThrow(accountId));
+        promotionService.ensureInviteCode(account);
+        return account.getInviteCode();
+    }
+
+    /**
      * 更新账户信息
      */
     public void updateAccount(CustomerAccount account) {
         customerAccountMapper.updateById(account);
+    }
+
+    private Long idOrThrow(Long accountId) {
+        if (accountId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return accountId;
     }
 }
