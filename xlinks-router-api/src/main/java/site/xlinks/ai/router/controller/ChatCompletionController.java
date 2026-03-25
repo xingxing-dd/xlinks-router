@@ -38,8 +38,10 @@ public class ChatCompletionController {
     public Object chatCompletions(
             HttpServletRequest servletRequest,
             @PathVariable(value = "endpoint") String endpoint,
-            @RequestBody ChatCompletionRequest request) {
-        log.info("Received chat completion request,{} model: {}", endpoint, request.getModel());
+            @RequestBody String requestBody) {
+
+        ChatCompletionRequest request = new ChatCompletionRequest();
+        log.info("Received chat completion request,{} model: {}", endpoint, requestBody);
 
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
