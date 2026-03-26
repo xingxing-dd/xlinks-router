@@ -8,6 +8,7 @@ import site.xlinks.ai.router.adapter.ChatProviderAdapterFactory;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
+import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
 import site.xlinks.ai.router.entity.CustomerToken;
@@ -180,7 +181,7 @@ public class ChatService {
         validateRequest(request);
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
 
-        site.xlinks.ai.router.context.UsageDecision usageDecision =
+        UsageDecision usageDecision =
                 usageEntitlementService.decide(customerToken, request.getModel());
         if (usageDecision == null || !usageDecision.isPackageEnabled()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "套餐不可用");
