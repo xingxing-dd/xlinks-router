@@ -1,5 +1,7 @@
 package site.xlinks.ai.router.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,7 +32,8 @@ import java.util.List;
 public class ChatCompletionController {
 
     private final ChatService chatService;
-    private final List<ChatCompletionResponseStrategy> responseStrategies;
+    private final List<ChatCompletionResponseStrategy<?>> responseStrategies;
+    private final ObjectMapper objectMapper;
 
     @PostMapping("/{endpoint}/chat/completions")
     @Operation(summary = "Chat Completions",
@@ -38,9 +41,10 @@ public class ChatCompletionController {
     public Object chatCompletions(
             HttpServletRequest servletRequest,
             @PathVariable(value = "endpoint") String endpoint,
-            @RequestBody ChatCompletionRequest request) {
+            @RequestBody String requestBody) throws JsonProcessingException {
+        ChatCompletionRequest request = objectMapper.readValue(requestBody, ChatCompletionRequest.class);
         log.info("Received chat completion request,{} model: {}", endpoint, request.getModel());
-
+        request.setRequestBody(requestBody);
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
         for (ChatCompletionResponseStrategy<?> strategy : responseStrategies) {
