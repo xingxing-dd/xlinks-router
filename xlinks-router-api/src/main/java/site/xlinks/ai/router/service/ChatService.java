@@ -90,8 +90,19 @@ public class ChatService {
         try {
             context = buildContext(token, endpoint, request, requestId);
             ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
-            // 直接传递 onEvent，适配器会处理 SSE 格式
-            adapter.chatCompletionStream(request, context, onEvent);
+            ProviderInvokeContext finalContext = context;
+            StringBuilder lastPayload = new StringBuilder();
+            adapter.chatCompletionStream(request, context, payload -> {
+                if (payload != null && !"[DONE]".equals(payload)) {
+                    lastPayload.setLength(0);
+                    lastPayload.append(payload);
+                }
+                onEvent.accept(payload);
+                if ("[DONE]".equals(payload) && !lastPayload.isEmpty()) {
+                    ChatCompletionResponse response = parseUsageResponse(lastPayload.toString());
+                    usageRecordService.recordAsync(finalContext, response, System.currentTimeMillis() - startAt, null, null);
+                }
+            });
         } catch (BusinessException e) {
             if (context != null) {
                 usageRecordService.recordError(context, e.getCode(), String.valueOf(e.getCode()), e.getMessage(), System.currentTimeMillis() - startAt);
@@ -105,6 +116,18 @@ public class ChatService {
             throw new BusinessException(
                     ErrorCode.INTERNAL_ERROR,
                     "请求处理失败: " + e.getMessage());
+        }
+    }
+
+    private ChatCompletionResponse parseUsageResponse(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return null;
+        }
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(payload, ChatCompletionResponse.class);
+        } catch (Exception e) {
+            log.debug("Failed to parse stream usage payload", e);
+            return null;
         }
     }
 
@@ -163,7 +186,7 @@ public class ChatService {
 
         site.xlinks.ai.router.context.UsageDecision usageDecision =
                 usageEntitlementService.decide(customerToken, request.getModel());
-        if (usageDecision == null || !usageDecision.isPackageEnabled()) {
+        if (usageDecision == null || Boolean.FALSE.equals(usageDecision.isPackageEnabled())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "套餐不可用");
         }
 

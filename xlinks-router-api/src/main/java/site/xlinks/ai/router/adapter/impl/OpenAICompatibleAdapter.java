@@ -1,36 +1,25 @@
 package site.xlinks.ai.router.adapter.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.*;
+import okio.BufferedSource;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.adapter.ChatProviderAdapter;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
-import site.xlinks.ai.router.dto.ChatCompletionResponse.Usage;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
  * OpenAI 兼容适配器
- * 使用 langchain4j 标准库进行非流式和流式调用
+ * 支持 DeepSeek、OpenAI、Local LLM 等兼容 OpenAI API 的服务
+ * 
+ * 扩展点：新增 OpenAI 兼容的 Provider 时，只需在数据库配置 provider_type = 'openai-compatible'
  */
 @Slf4j
 @Component
@@ -38,6 +27,9 @@ import java.util.function.Consumer;
 public class OpenAICompatibleAdapter implements ChatProviderAdapter {
 
     private static final String PROVIDER_TYPE = "openai-compatible";
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -48,142 +40,114 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
 
     @Override
     public ChatCompletionResponse chatCompletion(ChatCompletionRequest request, ProviderInvokeContext context) {
-        // 构建 langchain4j ChatRequest
-        ChatRequest chatRequest = buildChatRequest(request);
+        try {
+            // 构建请求 URL
+            String url = context.getBaseUrl() + "/chat/completions";
 
-        // 使用 langchain4j 进行非流式调用
-        OpenAiChatModel model = OpenAiChatModel.builder()
-                .baseUrl(context.getBaseUrl())
-                .apiKey(context.getProviderToken())
-                .modelName(context.getProviderModel())
-                .timeout(Duration.ofMinutes(30))
-                .build();
+            // 构建请求体（将模型名替换为底层模型名）
+            ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), false);
 
-        ChatResponse response = model.doChat(chatRequest);
-        return convertToChatCompletionResponse(response);
+            String requestJson = objectMapper.writeValueAsString(adaptedRequest);
+
+            // 构建 HTTP 请求
+            Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer " + context.getProviderToken())
+                    .addHeader("Content-Type", "application/json")
+                    .post(RequestBody.create(requestJson, JSON))
+                    .build();
+
+            // 执行请求
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful()) {
+                    log.error("Provider API call failed: {} - {}", response.code(), response.message());
+                    throw new RuntimeException("Provider API call failed: " + response.code());
+                }
+
+                ResponseBody body = response.body();
+                if (body == null) {
+                    throw new RuntimeException("Empty response from provider");
+                }
+
+                String responseJson = body.string();
+                log.info("========>{}", responseJson);
+                return objectMapper.readValue(responseJson, ChatCompletionResponse.class);
+            }
+        } catch (IOException e) {
+            log.error("Error calling provider API", e);
+            throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
+        }
     }
 
     @Override
     public void chatCompletionStream(ChatCompletionRequest request,
                                      ProviderInvokeContext context,
                                      Consumer<String> onEvent) {
-        // 构建 langchain4j ChatRequest
-        ChatRequest chatRequest = buildChatRequest(request);
-
-        // 使用 langchain4j 进行流式调用
-        StreamingChatLanguageModel model = OpenAiStreamingChatModel.builder()
-                .baseUrl(context.getBaseUrl())
-                .apiKey(context.getProviderToken())
-                .modelName(context.getProviderModel())
-                .timeout(Duration.ofMinutes(30))
-                .build();
-
-        model.chat(chatRequest, new StreamingChatResponseHandler() {
-            @Override
-            public void onPartialResponse(String partialResponse) {
-                // 流式响应，转换为 SSE 格式
-                String sseData = "data: " + partialResponse + "\n\n";
-                onEvent.accept(sseData);
-            }
-
-            @Override
-            public void onCompleteResponse(ChatResponse completeResponse) {
-                // 最后计算 total token，发送完成标记
-                log.debug("Stream completed: {}", completeResponse);
-                onEvent.accept("data: [DONE]\n\n");
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                log.error("Stream error", error);
-                onEvent.accept("data: [ERROR] " + error.getMessage() + "\n\n");
-            }
-        });
-    }
-
-    /**
-     * 将 ChatCompletionRequest 转换为 langchain4j ChatRequest
-     */
-    private ChatRequest buildChatRequest(ChatCompletionRequest request) {
-        OpenAiChatRequestParameters parameters = OpenAiChatRequestParameters.builder()
-                .temperature(request.getTemperature())
-                .modelName(request.getModel())
-                .maxCompletionTokens(request.getMaxTokens())
-                .topP(request.getTopP())
-                .frequencyPenalty(request.getFrequencyPenalty())
-                .presencePenalty(request.getPresencePenalty())
-                .build();
-        List<ChatMessage> messages = new ArrayList<>();
-        for (ChatCompletionRequest.ChatMessage msg : request.getMessages()) {
-            String role = msg.getRole();
-            String content = msg.contentAsText();
-            if ("user".equalsIgnoreCase(role)) {
-                messages.add(UserMessage.from(content));
-            }
-            if ("system".equalsIgnoreCase(role)) {
-                messages.add(SystemMessage.from(content));
-            }
-        }
-        return ChatRequest.builder()
-                .messages(messages.toArray(new ChatMessage[0]))
-                .parameters(parameters)
-                .build();
-    }
-
-    /**
-     * 将 langchain4j ChatResponse 转换为标准 ChatCompletionResponse
-     * 使用 objectMapper 解析响应内容
-     */
-    private ChatCompletionResponse convertToChatCompletionResponse(ChatResponse response) {
-        ChatCompletionResponse result = new ChatCompletionResponse();
-        result.setId("chatcmpl-" + System.currentTimeMillis());
-        result.setObject("chat.completion");
-        result.setCreated(System.currentTimeMillis() / 1000);
-        result.setModel(response.aiMessage() != null ? "assistant" : "gpt");
-
-        ChatCompletionResponse.Choice choice = new ChatCompletionResponse.Choice();
-        choice.setIndex(0);
-        choice.setMessage(new ChatCompletionResponse.Message());
-        choice.getMessage().setRole("assistant");
-        // 使用 objectMapper 解析 AI 消息内容
-        String content = extractContent(response.aiMessage());
-        choice.getMessage().setContent(content);
-        choice.setFinishReason("stop");
-        result.setChoices(List.of(choice));
-
-        // 设置 usage 信息
-        if (response.tokenUsage() != null) {
-            Usage usage = new Usage();
-            usage.setPromptTokens(response.tokenUsage().inputTokenCount());
-            usage.setCompletionTokens(response.tokenUsage().outputTokenCount());
-            usage.setTotalTokens(response.tokenUsage().totalTokenCount());
-            result.setUsage(usage);
-        }
-
-        return result;
-    }
-
-    /**
-     * 从 AI Message 中提取文本内容
-     */
-    @SuppressWarnings("unchecked")
-    private String extractContent(dev.langchain4j.data.message.AiMessage aiMessage) {
-        if (aiMessage == null) {
-            return "";
+        String url = context.getBaseUrl() + "/chat/completions";
+        ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), true);
+        if (adaptedRequest.getStreamOptions() == null) {
+            adaptedRequest.setStreamOptions(new java.util.HashMap<>(java.util.Map.of("include_usage", true)));
+        } else {
+            adaptedRequest.getStreamOptions().put("include_usage", true);
         }
         try {
-            // 将 AI 消息序列化为 JSON，然后反序列化为 Map 来提取内容
-            String json = objectMapper.writeValueAsString(aiMessage);
-            Map<String, Object> map = objectMapper.readValue(json, Map.class);
-            Object singleText = map.get("singleText");
-            if (singleText != null) {
-                return singleText.toString();
+            String requestJson = objectMapper.writeValueAsString(adaptedRequest);
+            Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer " + context.getProviderToken())
+                    .addHeader("Content-Type", "application/json")
+                    .post(RequestBody.create(requestJson, JSON))
+                    .build();
+
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful()) {
+                    log.error("Provider Stream API call failed: {} - {}", response.code(), response.message());
+                    throw new RuntimeException("Provider API call failed: " + response.code());
+                }
+                ResponseBody body = response.body();
+                if (body == null) {
+                    throw new RuntimeException("Empty response from provider");
+                }
+                BufferedSource source = body.source();
+                while (!source.exhausted()) {
+                    String line = source.readUtf8Line();
+                    if (line == null || line.isBlank()) {
+                        continue;
+                    }
+                    if (!line.startsWith("data:")) {
+                        continue;
+                    }
+                    String payload = line.substring(5).trim();
+                    onEvent.accept(payload);
+                    if ("[DONE]".equals(payload)) {
+                        break;
+                    }
+                }
             }
-            // 如果没有 singleText，尝试从 AI 消息的字符串表示中提取
-            return aiMessage.toString();
-        } catch (Exception e) {
-            log.warn("Failed to extract content from AI message, using toString", e);
-            return aiMessage.toString();
+        } catch (IOException e) {
+            log.error("Error calling provider API", e);
+            throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 适配请求参数
+     * 将客户请求的模型名替换为底层实际的模型名
+     */
+    private ChatCompletionRequest adaptRequest(ChatCompletionRequest request, String providerModel, boolean stream) {
+        // 创建副本并替换模型名
+        ChatCompletionRequest adapted = new ChatCompletionRequest();
+        adapted.setModel(providerModel);
+        adapted.setMessages(request.getMessages());
+        adapted.setTemperature(request.getTemperature());
+        adapted.setMaxTokens(request.getMaxTokens());
+        adapted.setTopP(request.getTopP());
+        adapted.setFrequencyPenalty(request.getFrequencyPenalty());
+        adapted.setPresencePenalty(request.getPresencePenalty());
+        adapted.setStop(request.getStop());
+        adapted.setStream(stream);
+        adapted.setStreamOptions(request.getStreamOptions());
+        adapted.setExtraParams(request.getExtraParams());
+        return adapted;
     }
 }
