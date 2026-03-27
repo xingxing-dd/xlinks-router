@@ -42,7 +42,7 @@ public class CustomerTokenService {
         token.setAccountId(accountId);
         token.setCustomerName(customerName);
         token.setTokenName(request.getTokenName());
-        token.setStatus(1);
+        token.setStatus(0);
         token.setTokenValue(generateTokenValue());
         token.setAllowedModels(toJson(request.getAllowedModels()));
         token.setExpireTime(resolveExpireTime(request.getExpireDays()));
