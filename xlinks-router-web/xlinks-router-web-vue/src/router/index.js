@@ -8,13 +8,19 @@ import Plans from '../views/plans/index.vue'
 import Promotion from '../views/promotion/index.vue'
 import Contact from '../views/contact/index.vue'
 import Docs from '../views/docs/index.vue'
+import Landing from '../views/landing/index.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
   {
     path: '/',
-    redirect: '/dashboard'
+    redirect: '/landing'
+  },
+  {
+    path: '/landing',
+    name: 'Landing',
+    component: Landing
   },
   {
     path: '/login',
@@ -76,7 +82,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
-  const publicPaths = ['/login', '/register']
+  const publicPaths = ['/landing', '/login', '/register']
 
   if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
     return {

@@ -44,17 +44,12 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
             // 构建请求 URL
             String url = context.getBaseUrl() + "/chat/completions";
 
-            // 构建请求体（将模型名替换为底层模型名）
-            ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), false);
-
-            String requestJson = objectMapper.writeValueAsString(adaptedRequest);
-
             // 构建 HTTP 请求
             Request httpRequest = new Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer " + context.getProviderToken())
                     .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(requestJson, JSON))
+                    .post(RequestBody.create(request.getRequestBody(), JSON))
                     .build();
 
             // 执行请求
@@ -84,19 +79,12 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
                                      ProviderInvokeContext context,
                                      Consumer<String> onEvent) {
         String url = context.getBaseUrl() + "/chat/completions";
-        ChatCompletionRequest adaptedRequest = adaptRequest(request, context.getProviderModel(), true);
-        if (adaptedRequest.getStreamOptions() == null) {
-            adaptedRequest.setStreamOptions(new java.util.HashMap<>(java.util.Map.of("include_usage", true)));
-        } else {
-            adaptedRequest.getStreamOptions().put("include_usage", true);
-        }
         try {
-            String requestJson = objectMapper.writeValueAsString(adaptedRequest);
             Request httpRequest = new Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer " + context.getProviderToken())
                     .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(requestJson, JSON))
+                    .post(RequestBody.create(request.getRequestBody(), JSON))
                     .build();
 
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -128,26 +116,5 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
             log.error("Error calling provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 适配请求参数
-     * 将客户请求的模型名替换为底层实际的模型名
-     */
-    private ChatCompletionRequest adaptRequest(ChatCompletionRequest request, String providerModel, boolean stream) {
-        // 创建副本并替换模型名
-        ChatCompletionRequest adapted = new ChatCompletionRequest();
-        adapted.setModel(providerModel);
-        adapted.setMessages(request.getMessages());
-        adapted.setTemperature(request.getTemperature());
-        adapted.setMaxTokens(request.getMaxTokens());
-        adapted.setTopP(request.getTopP());
-        adapted.setFrequencyPenalty(request.getFrequencyPenalty());
-        adapted.setPresencePenalty(request.getPresencePenalty());
-        adapted.setStop(request.getStop());
-        adapted.setStream(stream);
-        adapted.setStreamOptions(request.getStreamOptions());
-        adapted.setExtraParams(request.getExtraParams());
-        return adapted;
     }
 }

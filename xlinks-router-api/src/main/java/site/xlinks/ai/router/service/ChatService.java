@@ -8,6 +8,7 @@ import site.xlinks.ai.router.adapter.ChatProviderAdapterFactory;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
+import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.dto.ChatCompletionRequest;
 import site.xlinks.ai.router.dto.ChatCompletionResponse;
 import site.xlinks.ai.router.entity.CustomerToken;
@@ -19,6 +20,7 @@ import site.xlinks.ai.router.mapper.ModelMapper;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -91,14 +93,13 @@ public class ChatService {
             context = buildContext(token, endpoint, request, requestId);
             ChatProviderAdapter adapter = resolveAdapter(context.getProviderType());
             ProviderInvokeContext finalContext = context;
-            StringBuilder lastPayload = new StringBuilder();
+            AtomicReference<String> lastPayload = new AtomicReference<>();
             adapter.chatCompletionStream(request, context, payload -> {
                 if (payload != null && !"[DONE]".equals(payload)) {
-                    lastPayload.setLength(0);
-                    lastPayload.append(payload);
+                    lastPayload.set(payload);
+                    onEvent.accept(payload);
                 }
-                onEvent.accept(payload);
-                if ("[DONE]".equals(payload) && !lastPayload.isEmpty()) {
+                if ("[DONE]".equals(payload) && !lastPayload.get().isEmpty()) {
                     ChatCompletionResponse response = parseUsageResponse(lastPayload.toString());
                     usageRecordService.recordAsync(finalContext, response, System.currentTimeMillis() - startAt, null, null);
                 }
@@ -171,10 +172,6 @@ public class ChatService {
             throw new site.xlinks.ai.router.common.exception.BusinessException(
                     site.xlinks.ai.router.common.enums.ErrorCode.PARAM_ERROR, "模型名称不能为空");
         }
-        if (request.getMessages() == null || request.getMessages().isEmpty()) {
-            throw new site.xlinks.ai.router.common.exception.BusinessException(
-                    site.xlinks.ai.router.common.enums.ErrorCode.PARAM_ERROR, "消息列表不能为空");
-        }
     }
 
     private ProviderInvokeContext buildContext(String token,
@@ -184,9 +181,9 @@ public class ChatService {
         validateRequest(request);
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
 
-        site.xlinks.ai.router.context.UsageDecision usageDecision =
+        UsageDecision usageDecision =
                 usageEntitlementService.decide(customerToken, request.getModel());
-        if (usageDecision == null || Boolean.FALSE.equals(usageDecision.isPackageEnabled())) {
+        if (usageDecision == null || !usageDecision.isPackageEnabled()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "套餐不可用");
         }
 

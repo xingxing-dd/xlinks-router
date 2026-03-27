@@ -68,13 +68,12 @@ public class CustomerAccountService {
         // 创建新用户
         CustomerAccount account = new CustomerAccount();
 
-        if (TARGET_TYPE_USERNAME.equalsIgnoreCase(targetType)) {
-            account.setUsername(target);
-        } else if (TARGET_TYPE_PHONE.equalsIgnoreCase(targetType)) {
+        if (TARGET_TYPE_PHONE.equalsIgnoreCase(targetType)) {
             account.setPhone(target);
         } else if (TARGET_TYPE_EMAIL.equalsIgnoreCase(targetType)) {
             account.setEmail(target);
         }
+        account.setUsername(target);
         account.setPassword(passwordEncoder.encode(request.getPassword()));
         account.setStatus(1); // 启用状态
 

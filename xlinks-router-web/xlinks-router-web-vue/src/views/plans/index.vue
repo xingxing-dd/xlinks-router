@@ -244,7 +244,7 @@ onMounted(loadPlans)
           </div>
           <h3 class="text-xl font-bold text-white mb-2">{{ plan.name }}</h3>
           <div class="flex items-baseline text-white mb-1">
-            <span class="text-4xl font-bold">{{ formatCurrency(plan.price) }}</span>
+            <span class="text-4xl font-bold">{{ formatCurrency(plan.price, 'CNY') }}</span>
             <span class="ml-2 text-white text-opacity-80">{{ t('plans.perMonth') }}</span>
           </div>
         </div>

@@ -39,7 +39,7 @@ const handleCopy = async (text, section) => {
   }
 }
 
-const baseUrl = 'https://xlinks.site/v1/codex'
+const baseUrl = 'https://ai.xlinks.site/v1/codex'
 </script>
 
 <template>
@@ -138,7 +138,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="claude-sonnet-4-5",
+    model="gpt-5.2",
     messages=[
         {"role": "user", "content": "你好，请介绍一下你自己"}
     ]
@@ -171,7 +171,7 @@ const client = new OpenAI({
 
 async function main() {
   const response = await client.chat.completions.create({
-    model: 'claude-sonnet-4-5',
+    model: 'gpt-5.2',
     messages: [
       { role: 'user', content: '你好，请介绍一下你自己' }
     ]
@@ -202,7 +202,7 @@ main();</pre>
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "gpt-5.2",
     "messages": [
       {
         "role": "user",
@@ -252,9 +252,9 @@ main();</pre>
                 {{ t('docs.recommendedModelsDesc') }}
               </p>
               <ul class="text-sm text-slate-600 space-y-1 ml-4">
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-haiku-4-5</code> - {{ t('docs.haikuDesc') }}</li>
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-sonnet-4-5</code> - {{ t('docs.sonnetDesc') }}</li>
-                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">claude-opus-4</code> - {{ t('docs.opusDesc') }}</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">gpt-5.2</code> - {{ t('docs.haikuDesc') }}</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">gpt-5.3</code> - {{ t('docs.sonnetDesc') }}</li>
+                <li>• <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">gpt-5.4</code> - {{ t('docs.opusDesc') }}</li>
               </ul>
             </div>
           </div>

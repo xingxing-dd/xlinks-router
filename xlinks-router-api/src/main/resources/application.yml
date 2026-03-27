@@ -23,7 +23,8 @@ mybatis-plus:
   type-aliases-package: site.xlinks.ai.router.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 禁用 MyBatis 控制台 SQL 输出（避免 StdOutImpl 打印 SQL）
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       id-type: auto
@@ -39,10 +40,10 @@ app:
 # SpringDoc OpenAPI 配置
 springdoc:
   api-docs:
-    enabled: true
+    enabled: false
     path: /v3/api-docs
   swagger-ui:
-    enabled: true
+    enabled: false
     path: /swagger-ui.html
 
 # 日志配置
