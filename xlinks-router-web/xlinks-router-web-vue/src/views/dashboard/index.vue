@@ -318,7 +318,7 @@ onMounted(loadDashboard)
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost) }}</td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -345,7 +345,7 @@ onMounted(loadDashboard)
                 </div>
                 <div class="text-right">
                   <p class="text-xs text-slate-500">{{ t('dashboard.usageTable.cost') }}</p>
-                  <p class="font-bold text-slate-900">{{ formatCurrency(record.cost) }}</p>
+                  <p class="font-bold text-slate-900">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</p>
                 </div>
               </div>
 

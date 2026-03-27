@@ -47,16 +47,22 @@ export function formatRelativeTime(value) {
   return `${Math.floor(diff / day)} 天前`
 }
 
-export function formatCurrency(value, currency = 'USD', locale) {
+export function formatCurrency(
+  value,
+  currency = 'USD',
+  locale,
+  fractionDigits = 2,
+) {
   const amount = Number(value || 0)
 
   const resolvedLocale = locale || (currency === 'USD' ? 'en-US' : 'zh-CN')
+  const digits = Number.isFinite(Number(fractionDigits)) ? Number(fractionDigits) : 2
 
   return new Intl.NumberFormat(resolvedLocale, {
     style: 'currency',
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(amount)
 }
 

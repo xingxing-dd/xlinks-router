@@ -125,7 +125,7 @@ public class PlanController {
         response.setMonthlyQuota(toBigDecimal(plan.getTotalQuota()));
         response.setFeatures(List.of(
                 "仅可用 Codex",
-                "月度可用 $" + plan.getTotalQuota() + " 额度",
+                "总共可用 $" + plan.getTotalQuota() + " 额度",
                 "每日可用 $" + plan.getDailyQuota() + " + 昨日未用完额度",
                 "套餐多买只叠加额度，不叠加时间"
         ));
@@ -171,13 +171,12 @@ public class PlanController {
         response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
         response.setTotalQuota(toBigDecimal(plan.getTotalQuota()));
 
-        BigDecimal totalQuota = defaultDecimal(plan.getTotalQuota());
         BigDecimal totalUsed = plan.getTotalUsedQuota() == null ? defaultDecimal(plan.getUsedQuota()) : plan.getTotalUsedQuota();
         if (totalUsed.compareTo(BigDecimal.ZERO) < 0) {
             totalUsed = BigDecimal.ZERO;
         }
         response.setUsedQuota(totalUsed);
-        response.setUsedPercentage(calculateOpenedPercentage(plan, now));
+        response.setUsedPercentage(calculateOpenedPercentage(plan));
         response.setStatus(resolveHistoryStatus(plan, now));
         return response;
     }
@@ -207,21 +206,10 @@ public class PlanController {
         return ratio.intValue();
     }
 
-    private Integer calculateOpenedPercentage(CustomerPlan plan, LocalDateTime now) {
-        if (plan.getCreatedAt() == null || now == null) {
-            return 0;
-        }
-        LocalDateTime end = now;
-        if (plan.getPlanExpireTime() != null && plan.getPlanExpireTime().isBefore(now)) {
-            end = plan.getPlanExpireTime();
-        }
-        long daysOpened = ChronoUnit.DAYS.between(plan.getCreatedAt(), end);
-        if (daysOpened < 0) {
-            return 0;
-        }
-        BigDecimal ratio = BigDecimal.valueOf(daysOpened)
+    private Integer calculateOpenedPercentage(CustomerPlan plan) {
+        BigDecimal ratio = (plan.getTotalUsedQuota() == null ? BigDecimal.ZERO : plan.getTotalUsedQuota())
                 .multiply(new BigDecimal("100"))
-                .divide(new BigDecimal("30"), 0, RoundingMode.HALF_UP);
+                .divide(plan.getTotalQuota(), 0, RoundingMode.HALF_UP);
         if (ratio.compareTo(new BigDecimal("100")) > 0) {
             return 100;
         }

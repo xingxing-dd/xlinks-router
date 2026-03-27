@@ -245,7 +245,7 @@ onMounted(loadPlans)
           <h3 class="text-xl font-bold text-white mb-2">{{ plan.name }}</h3>
           <div class="flex items-baseline text-white mb-1">
             <span class="text-4xl font-bold">{{ formatCurrency(plan.price, 'CNY') }}</span>
-            <span class="ml-2 text-white text-opacity-80">{{ t('plans.perMonth') }}</span>
+            <span class="ml-2 text-white text-opacity-80">/{{ plan.dailyLimit }}{{ t('plans.dayUnit') }}</span>
           </div>
         </div>
 
@@ -433,7 +433,7 @@ onMounted(loadPlans)
             </div>
             <div class="flex items-center justify-between pt-2 border-t border-slate-200">
               <span class="text-slate-900 font-semibold">{{ t('plans.total') }}</span>
-              <span class="text-2xl font-bold text-slate-900">{{ formatCurrency(selectedPlanData.price) }}</span>
+              <span class="text-2xl font-bold text-slate-900">{{ formatCurrency(selectedPlanData.price, 'CNY') }}</span>
             </div>
           </template>
         </div>
