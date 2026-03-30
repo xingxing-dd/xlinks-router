@@ -141,7 +141,11 @@ public class PlanController {
         response.setPurchaseDate(formatDateTime(plan.getCreatedAt()));
         response.setExpiryDate(formatDateTime(plan.getPlanExpireTime()));
         response.setTotalQuota(toBigDecimal(plan.getDailyQuota()));
-        response.setDailyReset(false);
+        if (plan.getQuotaRefreshTime() != null && plan.getQuotaRefreshTime().getDayOfMonth() == LocalDateTime.now().getDayOfMonth()) {
+            response.setDailyReset(true);
+        } else {
+            response.setDailyReset(false);
+        }
 
         BigDecimal dailyQuota = defaultDecimal(plan.getDailyQuota());
         BigDecimal usedQuota = defaultDecimal(plan.getUsedQuota());
