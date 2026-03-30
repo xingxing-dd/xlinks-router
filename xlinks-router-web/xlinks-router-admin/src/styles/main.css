@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply text-slate-800 bg-slate-50;
+    font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-soft border border-slate-100;
+  }
+
+  .card-header {
+    @apply px-6 py-4 border-b border-slate-100 flex items-center justify-between;
+  }
+
+  .card-title {
+    @apply text-lg font-semibold text-slate-800;
+  }
+
+  .card-body {
+    @apply p-6;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-white bg-gradient-button shadow-md shadow-primary/25 hover:shadow-lg transition-all;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all;
+  }
+
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .table {
+    @apply w-full text-left text-sm;
+  }
+
+  .table th {
+    @apply px-4 py-3 text-slate-500 font-medium uppercase tracking-wide text-xs;
+  }
+
+  .table td {
+    @apply px-4 py-3 text-slate-700 border-t border-slate-100;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply bg-emerald-50 text-emerald-600;
+  }
+
+  .badge-warning {
+    @apply bg-amber-50 text-amber-600;
+  }
+
+  .badge-danger {
+    @apply bg-rose-50 text-rose-600;
+  }
+}
