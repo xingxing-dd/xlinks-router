@@ -26,7 +26,6 @@ import site.xlinks.ai.router.entity.CustomerToken;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/customer-tokens")
@@ -55,7 +54,7 @@ public class CustomerTokenController {
         CustomerToken token = customerTokenService.createToken(account.getId(), account.getEmail(), request, account.getUsername());
 
         CreateCustomerTokenResponse response = new CreateCustomerTokenResponse();
-        response.setId(token.getId());
+        response.setId(String.valueOf(token.getId()));
         response.setTokenName(token.getTokenName());
         response.setTokenValue(token.getTokenValue());
         response.setExpireTime(formatDateTime(token.getExpireTime()));
@@ -98,7 +97,7 @@ public class CustomerTokenController {
 
     private CustomerTokenItemResponse toItemResponse(CustomerToken token) {
         return new CustomerTokenItemResponse(
-                token.getId(),
+                String.valueOf(token.getId()),
                 token.getCustomerName(),
                 token.getTokenName(),
                 token.getTokenValue(),

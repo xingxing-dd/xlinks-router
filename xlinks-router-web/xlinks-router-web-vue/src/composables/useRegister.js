@@ -24,6 +24,19 @@ export function useRegister() {
   const feedback = ref('')
 
   let timer = null
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const phoneRegex = /^1\d{10}$/
+
+  const resolveTargetType = (value) => {
+    const input = (value || '').trim()
+    if (emailRegex.test(input)) {
+      return 'email'
+    }
+    if (phoneRegex.test(input)) {
+      return 'phone'
+    }
+    return ''
+  }
 
   const startCountdown = (seconds = DEFAULT_COUNTDOWN) => {
     countdown.value = seconds
@@ -52,10 +65,17 @@ export function useRegister() {
     feedback.value = ''
     isSubmitting.value = true
 
+    const targetType = resolveTargetType(formData.phone)
+    if (!targetType) {
+      toast.error(t('common.error'), t('register.phone'))
+      isSubmitting.value = false
+      return
+    }
+
     try {
       await postAuth('/register', {
         target: formData.phone,
-        targetType: 'phone',
+        targetType,
         password: formData.password,
         code: formData.verificationCode,
         token: formData.verificationToken,
@@ -77,12 +97,18 @@ export function useRegister() {
       return
     }
 
+    const targetType = resolveTargetType(formData.phone)
+    if (!targetType) {
+      toast.error(t('common.error'), t('register.phone'))
+      return
+    }
+
     feedback.value = ''
     isSendingCode.value = true
 
     try {
       const data = await postAuth('/verify-code', {
-        codeType: 'sms',
+        codeType: targetType,
         target: formData.phone,
         scene: 'register',
       })

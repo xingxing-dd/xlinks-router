@@ -20,7 +20,7 @@ public interface VerifyCodeSender {
 
     /**
      * 获取支持的验证码类型
-     * 例如: "sms", "email"
+     * 例如: "phone", "email"
      *
      * @return 支持的类型
      */

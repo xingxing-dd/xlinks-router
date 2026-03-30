@@ -10,7 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CustomerTokenItemResponse {
-    private Long id;
+    private String id;
     private String customerName;
     private String tokenName;
     private String tokenValue;

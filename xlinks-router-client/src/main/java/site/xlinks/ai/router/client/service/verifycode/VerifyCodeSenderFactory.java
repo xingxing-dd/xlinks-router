@@ -35,14 +35,14 @@ public class VerifyCodeSenderFactory {
         log.info("Registered verify code senders: {}", senderMap.keySet());
     }
 
-    /**
-     * 根据验证码类型获取对应的发送策略
-     *
-     * @param codeType 验证码类型 (如 "sms", "email")
-     * @return 验证码发送策略
-     * @throws BusinessException 如果没有找到对应的策略
-     */
-    public VerifyCodeSender getSender(String codeType) {
+     /**
+      * 根据验证码类型获取对应的发送策略
+      *
+      * @param codeType 验证码类型 (如 "phone", "email")
+      * @return 验证码发送策略
+      * @throws BusinessException 如果没有找到对应的策略
+      */
+public VerifyCodeSender getSender(String codeType) {
         if (codeType == null || codeType.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码类型不能为空");
         }

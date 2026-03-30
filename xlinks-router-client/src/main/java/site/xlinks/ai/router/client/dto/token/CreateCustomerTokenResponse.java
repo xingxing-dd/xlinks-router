@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class CreateCustomerTokenResponse {
-    private Long id;
+    private String id;
     private String tokenName;
     private String tokenValue;
     private String expireTime;

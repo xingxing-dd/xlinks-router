@@ -7,13 +7,13 @@ import site.xlinks.ai.router.client.service.GuoyangyunSmsClient;
 import site.xlinks.ai.router.client.service.VerifyCodeService;
 
 /**
- * 短信验证码发送策略
+ * 手机验证码发送策略
  */
 @Component
 @RequiredArgsConstructor
 public class SmsVerifyCodeSender implements VerifyCodeSender {
 
-    private static final String CODE_TYPE = "sms";
+    private static final String CODE_TYPE = "phone";
 
     private final GuoyangyunSmsClient smsClient;
     private final VerifyCodeService verifyCodeService;
@@ -31,7 +31,7 @@ public class SmsVerifyCodeSender implements VerifyCodeSender {
 
         // 构建响应
         VerifyCodeSendResponse response = new VerifyCodeSendResponse();
-        response.setMessage("短信验证码发送成功");
+        response.setMessage("手机验证码发送成功");
         response.setToken(token);
         response.setExpireSeconds(expireSeconds);
         return response;

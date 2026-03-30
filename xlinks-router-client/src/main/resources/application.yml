@@ -62,3 +62,11 @@ xlinks:
       expire-seconds: 300
       daily-limit: 20
       min-interval-seconds: 60
+  email:
+    brevo:
+      access-token: ${XLS_EMAIL_BREVO_ACCESS_TOKEN:}
+      sender-email: ${XLS_EMAIL_BREVO_SENDER_EMAIL:xingxingdd132311@gmail.com}
+      sender-name: ${XLS_EMAIL_BREVO_SENDER_NAME:xlinks-tech}
+      api-url: ${XLS_EMAIL_BREVO_API_URL:https://api.brevo.com/v3/smtp/email}
+      enabled: true
+
