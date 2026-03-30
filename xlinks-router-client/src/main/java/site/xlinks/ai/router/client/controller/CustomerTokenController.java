@@ -1,5 +1,6 @@
 package site.xlinks.ai.router.client.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,6 +23,8 @@ import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.entity.UsageRecord;
+import site.xlinks.ai.router.mapper.UsageRecordMapper;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -35,6 +38,7 @@ public class CustomerTokenController {
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final CustomerTokenService customerTokenService;
+    private final UsageRecordMapper usageRecordMapper;
 
     @GetMapping
     public Result<PageResult<CustomerTokenItemResponse>> getTokens(@RequestParam(name = "page", defaultValue = "1") Integer page,
@@ -43,7 +47,7 @@ public class CustomerTokenController {
         var tokenPage = customerTokenService.pageTokens(account.getId(), page, pageSize);
 
         List<CustomerTokenItemResponse> records = tokenPage.getRecords().stream()
-                .map(this::toItemResponse)
+                .map(token -> toItemResponse(token, account.getId()))
                 .toList();
         return Result.success(PageResult.of(records, tokenPage.getTotal(), page, pageSize));
     }
@@ -95,7 +99,8 @@ public class CustomerTokenController {
         return Result.success(response);
     }
 
-    private CustomerTokenItemResponse toItemResponse(CustomerToken token) {
+    private CustomerTokenItemResponse toItemResponse(CustomerToken token, Long accountId) {
+        Integer totalRequests = queryTotalRequests(accountId, token.getTokenValue());
         return new CustomerTokenItemResponse(
                 String.valueOf(token.getId()),
                 token.getCustomerName(),
@@ -104,10 +109,22 @@ public class CustomerTokenController {
                 token.getStatus(),
                 formatDateTime(token.getExpireTime()),
                 parseAllowedModels(token.getAllowedModels()),
-                0,
+                totalRequests,
                 null,
                 formatDateTime(token.getCreatedAt())
         );
+    }
+
+    private Integer queryTotalRequests(Long accountId, String tokenValue) {
+        if (accountId == null || tokenValue == null || tokenValue.isBlank()) {
+            return 0;
+        }
+        Long count = usageRecordMapper.selectCount(
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, accountId)
+                        .eq(UsageRecord::getCustomerToken, tokenValue)
+        );
+        return count == null ? 0 : count.intValue();
     }
 
     private String formatDateTime(java.time.LocalDateTime time) {
