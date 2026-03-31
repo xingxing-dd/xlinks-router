@@ -393,3 +393,25 @@ Provider、Model Endpoint、Model 三类核心模型统一采用逻辑删除，�
 | 4001 | 参数错误 | 400 |
 | 5000 | 系统异常 | 500 |
 | 5001 | 外部服务调用失败 | 502 |
+
+## Provider protocol & priority fields
+
+| Field | Type | Required | Description |
+|------|------|----------|-------------|
+| supportedProtocols | string | No | Comma-separated supported protocols, e.g. `chat/completions,responses`; empty means all protocols |
+| priority | int | No | Route priority, higher value means higher priority |
+
+Create example:
+
+```json
+{
+  "providerCode": "deepseek",
+  "providerName": "DeepSeek",
+  "providerType": "openai-compatible",
+  "supportedProtocols": "chat/completions,responses",
+  "priority": 100,
+  "baseUrl": "https://api.deepseek.com/v1",
+  "status": 1
+}
+```
+

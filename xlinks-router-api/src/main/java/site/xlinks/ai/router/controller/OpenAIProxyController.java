@@ -122,22 +122,29 @@ public class OpenAIProxyController {
     private void sendEvent(SseEmitter emitter, OpenAIStreamEvent event) {
         try {
             SseEmitter.SseEventBuilder builder = SseEmitter.event();
-            if (event.getEvent() != null && !event.getEvent().isBlank()) {
-                builder.name(event.getEvent());
+            String eventName = event.getEvent();
+            if (eventName != null && !eventName.isBlank()) {
+                builder.name(eventName);
             }
-            if (event.getId() != null) {
-                builder.id(event.getId());
+            String id = event.getId();
+            if (id != null && !id.isBlank()) {
+                builder.id(id);
             }
             if (event.getRetry() != null) {
                 builder.reconnectTime(event.getRetry());
             }
             if (event.getComments() != null) {
                 for (String comment : event.getComments()) {
-                    builder.comment(comment);
+                    if (comment != null) {
+                        builder.comment(comment);
+                    }
                 }
             }
             if (event.hasData()) {
-                builder.data(event.joinedData());
+                String data = event.joinedData();
+                if (data != null) {
+                    builder.data(data);
+                }
             }
             emitter.send(builder);
         } catch (Exception e) {

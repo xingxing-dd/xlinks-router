@@ -4,24 +4,30 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * Provider 更新 DTO
+ * Provider update request.
  */
 @Data
-@Schema(description = "Provider 更新请求")
+@Schema(description = "Provider update request")
 public class ProviderUpdateDTO {
 
-    @Schema(description = "提供商名称")
+    @Schema(description = "Provider name")
     private String providerName;
 
-    @Schema(description = "基础请求 URL")
+    @Schema(description = "Base URL")
     private String baseUrl;
 
-    @Schema(description = "服务商 Logo URL")
+    @Schema(description = "Supported request protocols, comma-separated, e.g. chat/completions,responses")
+    private String supportedProtocols;
+
+    @Schema(description = "Route priority, higher value means higher priority")
+    private Integer priority;
+
+    @Schema(description = "Provider logo URL")
     private String providerLogo;
 
-    @Schema(description = "服务商官网 URL")
+    @Schema(description = "Provider website URL")
     private String providerWebsite;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

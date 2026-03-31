@@ -292,3 +292,26 @@ Client
 | 4008 | 模型端点与请求接口不匹配 | 400 |
 | 5000 | 系统异常 | 500 |
 | 5001 | 外部服务调用失败 | 502 |
+
+## Provider protocol-based routing update
+
+Routing now uses these provider fields:
+
+- `provider_type`: adapter selection
+- `supported_protocols`: protocol filtering
+- `priority`: candidate ordering, higher value first
+
+Selection flow:
+
+1. resolve endpoint and model code
+2. load all active model records for the endpoint + model code
+3. filter providers that support the current request protocol
+4. sort by provider `priority` descending
+5. select the first available provider and then select a provider token
+
+Recommended model uniqueness:
+
+```sql
+UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`, `provider_id`)
+```
+

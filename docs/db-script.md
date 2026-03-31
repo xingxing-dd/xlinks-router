@@ -64,6 +64,8 @@ CREATE TABLE `providers` (
   `provider_code` VARCHAR(50) NOT NULL COMMENT '提供商编码，唯一标识，如 openai、deepseek',
   `provider_name` VARCHAR(100) NOT NULL COMMENT '提供商名称',
   `provider_type` VARCHAR(20) NOT NULL DEFAULT 'openai-compatible' COMMENT '协议类型：openai-compatible、anthropic、azure 等',
+  `supported_protocols` VARCHAR(255) DEFAULT NULL COMMENT 'Supported request protocols, comma-separated; empty means all protocols, e.g. chat/completions,responses',
+  `priority` INT NOT NULL DEFAULT 0 COMMENT 'Route priority, higher value means higher priority',
   `base_url` VARCHAR(255) NOT NULL COMMENT '基础请求 URL',
   `provider_logo` VARCHAR(255) DEFAULT NULL COMMENT '服务商 Logo URL',
   `provider_website` VARCHAR(255) DEFAULT NULL COMMENT '服务商官网 URL',
@@ -129,7 +131,7 @@ CREATE TABLE `model_endpoints` (
 同一个模型端点下，模型编码唯一：
 
 ```sql
-UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`)
+UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`, `provider_id`)
 ```
 
 说明：业务查询需要额外保证只在 `deleted = 0` 的数据集中校验唯一性和可见性。
@@ -154,7 +156,7 @@ CREATE TABLE `models` (
   `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
   `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`),
+  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`, `provider_id`),
   KEY `idx_provider_id` (`provider_id`),
   KEY `idx_endpoint_id` (`endpoint_id`),
   KEY `idx_status` (`status`),
@@ -428,3 +430,16 @@ CREATE TABLE `activation_code_stocks` (
 - 建表脚本建议统一沉淀到模块内的 `resources/db/` 目录
 - 后续如引入 Flyway / Liquibase，可将本文件内容进一步拆分为版本化迁移脚本
 
+
+
+## Provider routing migration
+
+```sql
+ALTER TABLE `providers`
+  ADD COLUMN `supported_protocols` VARCHAR(255) DEFAULT NULL COMMENT 'Supported request protocols, comma-separated; empty means all protocols, e.g. chat/completions,responses' AFTER `provider_type`,
+  ADD COLUMN `priority` INT NOT NULL DEFAULT 0 COMMENT 'Route priority, higher value means higher priority' AFTER `supported_protocols`;
+
+ALTER TABLE `models`
+  DROP INDEX `uk_endpoint_model_code`,
+  ADD UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`, `provider_id`);
+```

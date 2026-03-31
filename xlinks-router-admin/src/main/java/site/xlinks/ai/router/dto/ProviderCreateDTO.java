@@ -5,37 +5,43 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * Provider 创建 DTO
+ * Provider create request.
  */
 @Data
-@Schema(description = "Provider 创建请求")
+@Schema(description = "Provider create request")
 public class ProviderCreateDTO {
 
-    @Schema(description = "提供商编码", required = true)
-    @NotBlank(message = "提供商编码不能为空")
+    @Schema(description = "Provider code", required = true)
+    @NotBlank(message = "Provider code must not be blank")
     private String providerCode;
 
-    @Schema(description = "提供商名称", required = true)
-    @NotBlank(message = "提供商名称不能为空")
+    @Schema(description = "Provider name", required = true)
+    @NotBlank(message = "Provider name must not be blank")
     private String providerName;
 
-    @Schema(description = "协议类型", required = true)
-    @NotBlank(message = "协议类型不能为空")
+    @Schema(description = "Adapter type", required = true)
+    @NotBlank(message = "Provider type must not be blank")
     private String providerType;
 
-    @Schema(description = "基础请求 URL", required = true)
-    @NotBlank(message = "基础请求 URL 不能为空")
+    @Schema(description = "Supported request protocols, comma-separated, e.g. chat/completions,responses")
+    private String supportedProtocols;
+
+    @Schema(description = "Route priority, higher value means higher priority")
+    private Integer priority = 0;
+
+    @Schema(description = "Base URL", required = true)
+    @NotBlank(message = "Base URL must not be blank")
     private String baseUrl;
 
-    @Schema(description = "服务商 Logo URL")
+    @Schema(description = "Provider logo URL")
     private String providerLogo;
 
-    @Schema(description = "服务商官网 URL")
+    @Schema(description = "Provider website URL")
     private String providerWebsite;
 
-    @Schema(description = "状态：1-启用，0-禁用")
+    @Schema(description = "Status: 1-enabled, 0-disabled")
     private Integer status = 1;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

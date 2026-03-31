@@ -37,6 +37,16 @@ public class Provider extends BaseEntity {
     private String providerType;
 
     /**
+     * Supported request protocols, comma-separated. Empty means all protocols.
+     */
+    private String supportedProtocols;
+
+    /**
+     * Route priority. Higher value means higher priority.
+     */
+    private Integer priority;
+
+    /**
      * 基础请求 URL
      */
     private String baseUrl;

@@ -151,3 +151,12 @@ xlinks-router/
    - 网关/OpenAPI 开发看 `docs/openapi.md`
    - 前端联调看 `docs/client-api.md`
 4. 涉及数据库初始化和结构落表时，再阅读 `docs/db-script.md`
+
+## Provider protocol & priority routing update
+
+- Provider now includes `supported_protocols` and `priority`.
+- `supported_protocols` is a comma-separated protocol list such as `chat/completions,responses`; empty means all protocols.
+- `priority` is an integer; higher value means higher priority during routing.
+- The same `model_code` can be configured on multiple providers under the same endpoint. Recommended uniqueness rule: `UNIQUE KEY (endpoint_id, model_code, provider_id)`.
+- API routing should filter providers by request protocol first, then sort by provider priority.
+

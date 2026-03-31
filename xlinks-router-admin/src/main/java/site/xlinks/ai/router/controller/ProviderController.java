@@ -3,7 +3,15 @@ package site.xlinks.ai.router.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.dto.ProviderCreateDTO;
@@ -12,59 +20,61 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.service.ProviderService;
 
 /**
- * Provider 管理接口
+ * Provider management API.
  */
 @RestController
 @RequestMapping("/admin/providers")
 @RequiredArgsConstructor
-@Tag(name = "Provider 管理", description = "Provider 管理相关接口")
+@Tag(name = "Provider Management", description = "Provider management APIs")
 public class ProviderController {
 
     private final ProviderService providerService;
 
     @PostMapping
-    @Operation(summary = "新增 Provider")
+    @Operation(summary = "Create provider")
     public Result<Provider> create(@RequestBody ProviderCreateDTO dto) {
         Provider provider = new Provider();
         provider.setProviderCode(dto.getProviderCode());
         provider.setProviderName(dto.getProviderName());
         provider.setProviderType(dto.getProviderType());
+        provider.setSupportedProtocols(dto.getSupportedProtocols());
+        provider.setPriority(dto.getPriority());
         provider.setBaseUrl(dto.getBaseUrl());
         provider.setProviderLogo(dto.getProviderLogo());
         provider.setProviderWebsite(dto.getProviderWebsite());
         provider.setStatus(dto.getStatus());
         provider.setRemark(dto.getRemark());
-        
+
         providerService.save(provider);
         return Result.success(provider);
     }
 
     @GetMapping
-    @Operation(summary = "Provider 列表")
+    @Operation(summary = "Provider list")
     public Result<PageResult<Provider>> list(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String providerCode,
             @RequestParam(required = false) String providerName,
             @RequestParam(required = false) Integer status) {
-        
+
         var pageResult = providerService.pageQuery(page, pageSize, providerCode, providerName, status);
         return Result.success(PageResult.of(
-                pageResult.getRecords(), 
-                pageResult.getTotal(), 
-                (int) pageResult.getCurrent(), 
+                pageResult.getRecords(),
+                pageResult.getTotal(),
+                (int) pageResult.getCurrent(),
                 (int) pageResult.getSize()
         ));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Provider 详情")
+    @Operation(summary = "Provider detail")
     public Result<Provider> get(@PathVariable Long id) {
         return Result.success(providerService.getById(id));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新 Provider")
+    @Operation(summary = "Update provider")
     public Result<Void> update(@PathVariable Long id, @RequestBody ProviderUpdateDTO dto) {
         Provider provider = new Provider();
         provider.setId(id);
@@ -73,6 +83,12 @@ public class ProviderController {
         }
         if (dto.getBaseUrl() != null) {
             provider.setBaseUrl(dto.getBaseUrl());
+        }
+        if (dto.getSupportedProtocols() != null) {
+            provider.setSupportedProtocols(dto.getSupportedProtocols());
+        }
+        if (dto.getPriority() != null) {
+            provider.setPriority(dto.getPriority());
         }
         if (dto.getProviderLogo() != null) {
             provider.setProviderLogo(dto.getProviderLogo());
@@ -83,13 +99,13 @@ public class ProviderController {
         if (dto.getRemark() != null) {
             provider.setRemark(dto.getRemark());
         }
-        
+
         providerService.update(provider);
         return Result.success();
     }
 
     @PatchMapping("/{id}/status")
-    @Operation(summary = "启用/禁用 Provider")
+    @Operation(summary = "Enable or disable provider")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
         providerService.updateStatus(id, status);
         return Result.success();

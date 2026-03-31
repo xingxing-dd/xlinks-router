@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS `providers` (
   `provider_code` VARCHAR(50) NOT NULL COMMENT '提供商编码，唯一标识，如 openai、deepseek',
   `provider_name` VARCHAR(100) NOT NULL COMMENT '提供商名称',
   `provider_type` VARCHAR(20) NOT NULL DEFAULT 'openai-compatible' COMMENT '协议类型：openai-compatible、anthropic、azure 等',
+  `supported_protocols` VARCHAR(255) DEFAULT NULL COMMENT 'Supported request protocols, comma-separated; empty means all protocols, e.g. chat/completions,responses',
+  `priority` INT NOT NULL DEFAULT 0 COMMENT 'Route priority, higher value means higher priority',
   `base_url` VARCHAR(255) NOT NULL COMMENT '基础请求 URL',
   `provider_logo` VARCHAR(255) DEFAULT NULL COMMENT '服务商 Logo URL',
   `provider_website` VARCHAR(255) DEFAULT NULL COMMENT '服务商官网 URL',
@@ -150,7 +152,7 @@ CREATE TABLE IF NOT EXISTS `models` (
   `create_by` VARCHAR(50) DEFAULT NULL COMMENT '创建人',
   `update_by` VARCHAR(50) DEFAULT NULL COMMENT '更新人',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`),
+  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`, `provider_id`),
   KEY `idx_provider_id` (`provider_id`),
   KEY `idx_endpoint_id` (`endpoint_id`),
   KEY `idx_status` (`status`),
@@ -253,10 +255,10 @@ VALUES
 
 -- 插入 Provider
 INSERT INTO `providers`
-  (`provider_code`, `provider_name`, `provider_type`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
+  (`provider_code`, `provider_name`, `provider_type`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  ('deepseek', 'DeepSeek', 'openai-compatible', 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, '默认初始化 Provider', 'system', 'system'),
-  ('right-codex', 'Right Codex', 'openai-compatible', 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, '测试 Provider', 'system', 'system');
+  ('deepseek', 'DeepSeek', 'openai-compatible', 'chat/completions,responses', 100, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 'default provider', 'system', 'system'),
+  ('right-codex', 'Right Codex', 'openai-compatible', 'chat/completions', 50, 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
 
 -- 插入 Model
 INSERT INTO `models`

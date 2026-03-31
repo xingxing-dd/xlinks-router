@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.ModelEndpoint;
 import site.xlinks.ai.router.entity.Provider;
@@ -16,12 +17,14 @@ import site.xlinks.ai.router.mapper.ProviderMapper;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
- * 路由数据缓存服务（启动加载 + 定时自动刷新）
+ * Route cache service.
  */
 @Slf4j
 @Service
@@ -34,7 +37,7 @@ public class RouteCacheService {
     private final ProviderTokenMapper providerTokenMapper;
 
     private final Map<String, ModelEndpoint> endpointCache = new ConcurrentHashMap<>();
-    private final Map<Long, Map<String, Model>> modelCache = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, List<Model>>> modelCache = new ConcurrentHashMap<>();
     private final Map<Long, Provider> providerCache = new ConcurrentHashMap<>();
     private final Map<Long, List<ProviderToken>> providerTokenCache = new ConcurrentHashMap<>();
 
@@ -78,7 +81,8 @@ public class RouteCacheService {
             }
             modelCache
                     .computeIfAbsent(model.getEndpointId(), id -> new ConcurrentHashMap<>())
-                    .put(model.getModelCode(), model);
+                    .computeIfAbsent(model.getModelCode(), key -> new ArrayList<>())
+                    .add(model);
         }
         log.debug("Model cache loaded, endpointCount={}", modelCache.size());
     }
@@ -126,26 +130,55 @@ public class RouteCacheService {
         return endpoint;
     }
 
-    public Model getModel(Long endpointId, String modelCode) {
-        Map<String, Model> endpointModels = modelCache.get(endpointId);
+    public Provider selectProvider(Long endpointId, String modelCode, OpenAIProtocol protocol) {
+        return this.providerCache.values().stream()
+                .filter(provider -> supportsProtocol(provider, protocol)).min(Comparator
+                        .comparingInt(this::resolvePriority)
+                        .reversed()
+                        .thenComparing(provider -> provider.getId() == null ? Long.MAX_VALUE : provider.getId()))
+                .orElse(null);
+    }
+
+    public Model selectModel(Long endpointId, String modelCode, OpenAIProtocol protocol) {
+        Provider provider = selectProvider(endpointId, modelCode, protocol);
+        if (provider == null) {
+            return null;
+        }
+        return getModel(endpointId, modelCode, provider.getId());
+    }
+
+    public Model getModel(Long endpointId, String modelCode, Long providerId) {
+        List<Model> candidates = getModels(endpointId, modelCode);
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        return candidates.stream()
+                .min(Comparator.comparing(model -> model.getId() == null ? Long.MAX_VALUE : model.getId()))
+                .orElse(null);
+    }
+
+    public List<Model> getModels(Long endpointId, String modelCode) {
+        Map<String, List<Model>> endpointModels = modelCache.get(endpointId);
         if (endpointModels != null) {
-            Model cached = endpointModels.get(modelCode);
-            if (cached != null) {
+            List<Model> cached = endpointModels.get(modelCode);
+            if (cached != null && !cached.isEmpty()) {
                 return cached;
             }
         }
-        Model model = modelMapper.selectOne(
+        List<Model> models = modelMapper.selectList(
                 new LambdaQueryWrapper<Model>()
                         .eq(Model::getModelCode, modelCode)
                         .eq(Model::getEndpointId, endpointId)
                         .eq(Model::getStatus, 1)
         );
-        if (model != null && model.getEndpointId() != null && model.getModelCode() != null) {
+        if (models != null && !models.isEmpty()) {
+            List<Model> cachedModels = new ArrayList<>(models);
             modelCache
-                    .computeIfAbsent(model.getEndpointId(), id -> new ConcurrentHashMap<>())
-                    .put(model.getModelCode(), model);
+                    .computeIfAbsent(endpointId, id -> new ConcurrentHashMap<>())
+                    .put(modelCode, cachedModels);
+            return cachedModels;
         }
-        return model;
+        return models;
     }
 
     public Provider getProvider(Long providerId) {
@@ -158,6 +191,20 @@ public class RouteCacheService {
             providerCache.put(providerId, provider);
         }
         return provider;
+    }
+
+    public List<Provider> getProvidersByModel(Long endpointId, String modelCode) {
+        List<Model> candidates = getModels(endpointId, modelCode);
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        return candidates.stream()
+                .map(Model::getProviderId)
+                .filter(providerId -> providerId != null)
+                .distinct()
+                .map(this::getProvider)
+                .filter(provider -> provider != null)
+                .collect(Collectors.toList());
     }
 
     public List<ProviderToken> getProviderTokens(Long providerId) {
@@ -174,5 +221,30 @@ public class RouteCacheService {
             providerTokenCache.put(providerId, tokens);
         }
         return tokens;
+    }
+
+    private boolean supportsProtocol(Provider provider, OpenAIProtocol protocol) {
+        if (provider == null) {
+            return false;
+        }
+        String supportedProtocols = provider.getSupportedProtocols();
+        if (supportedProtocols == null || supportedProtocols.isBlank()) {
+            return true;
+        }
+        String[] items = supportedProtocols.split("[,;?]");
+        for (String item : items) {
+            if (item == null || item.isBlank()) {
+                continue;
+            }
+            String value = item.trim();
+            if ("*".equals(value) || protocol.matches(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int resolvePriority(Provider provider) {
+        return provider == null || provider.getPriority() == null ? 0 : provider.getPriority();
     }
 }

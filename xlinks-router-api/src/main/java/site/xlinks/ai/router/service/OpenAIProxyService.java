@@ -22,6 +22,7 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ModelMapper;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +31,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Orchestrates routing, provider invocation, and usage recording for OpenAI-compatible requests.
+ * Orchestrates routing, provider invocation, and usage recording.
  */
 @Slf4j
 @Service
@@ -97,11 +98,17 @@ public class OpenAIProxyService {
 
         List<Model> models = modelMapper.selectList(new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1));
         List<Object> modelList = models.stream()
+                .filter(model -> model.getModelCode() != null && !model.getModelCode().isBlank())
+                .collect(Collectors.groupingBy(Model::getModelCode))
+                .values()
+                .stream()
+                .map(this::selectPreferredModel)
+                .filter(model -> model != null)
                 .map(model -> Map.of(
                         "id", model.getModelCode(),
                         "object", "model",
                         "created", System.currentTimeMillis() / 1000,
-                        "owned_by", "xlinks-router"
+                        "owned_by", resolveOwnedBy(model)
                 ))
                 .collect(Collectors.toList());
 
@@ -113,13 +120,13 @@ public class OpenAIProxyService {
 
     private void validateRequest(OpenAIProxyRequest request) {
         if (request == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "请求不能为空");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Request must not be null");
         }
         if (request.getModel() == null || request.getModel().isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "模型名称不能为空");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Model must not be blank");
         }
         if (request.getProtocol() == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的 OpenAI 协议");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Unsupported OpenAI protocol");
         }
     }
 
@@ -132,22 +139,24 @@ public class OpenAIProxyService {
 
         UsageDecision usageDecision = usageEntitlementService.decide(customerToken, request.getModel());
         if (usageDecision == null || !usageDecision.isPackageEnabled()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "套餐不可用");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Customer plan is unavailable");
         }
 
         ModelEndpoint modelEndpoint = routeCacheService.getEndpoint(endpoint);
         if (modelEndpoint == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的 endpoint: " + endpoint);
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Invalid endpoint: " + endpoint);
         }
 
-        Model model = routeCacheService.getModel(modelEndpoint.getId(), request.getModel());
-        if (model == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "模型不存在或不可用: " + request.getModel());
-        }
-
-        Provider provider = routeCacheService.getProvider(model.getProviderId());
+        Provider provider = routeCacheService.selectProvider(modelEndpoint.getId(), request.getModel(), request.getProtocol());
         if (provider == null || provider.getStatus() == null || provider.getStatus() != 1) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Provider 不可用");
+            throw new BusinessException(ErrorCode.ROUTE_ERROR,
+                    "No available provider for model and protocol: " + request.getModel());
+        }
+
+        Model model = routeCacheService.getModel(modelEndpoint.getId(), request.getModel(), provider.getId());
+        if (model == null) {
+            throw new BusinessException(ErrorCode.ROUTE_ERROR,
+                    "No available model mapping for selected provider: " + request.getModel());
         }
 
         ProviderToken providerToken = providerTokenSelectService.selectToken(provider.getId());
@@ -178,7 +187,7 @@ public class OpenAIProxyService {
     private OpenAIProviderAdapter resolveAdapter(String providerType) {
         OpenAIProviderAdapter adapter = adapterFactory.getAdapter(providerType);
         if (adapter == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "不支持的 Provider 类型: " + providerType);
+            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported provider type: " + providerType);
         }
         return adapter;
     }
@@ -197,7 +206,7 @@ public class OpenAIProxyService {
                                                     long startAt) {
         log.error(logMessage, e);
         recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), startAt);
-        return new BusinessException(ErrorCode.INTERNAL_ERROR, "请求处理失败: " + e.getMessage());
+        return new BusinessException(ErrorCode.INTERNAL_ERROR, "Request processing failed: " + e.getMessage());
     }
 
     private void recordError(ProviderInvokeContext context,
@@ -228,5 +237,30 @@ public class OpenAIProxyService {
             return 500;
         }
         return 400;
+    }
+
+    private Model selectPreferredModel(List<Model> models) {
+        if (models == null || models.isEmpty()) {
+            return null;
+        }
+        return models.stream()
+                .sorted(Comparator
+                        .comparingInt((Model model) -> resolvePriority(routeCacheService.getProvider(model.getProviderId())))
+                        .reversed()
+                        .thenComparing(model -> model.getId() == null ? Long.MAX_VALUE : model.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String resolveOwnedBy(Model model) {
+        Provider provider = routeCacheService.getProvider(model.getProviderId());
+        if (provider == null || provider.getProviderCode() == null || provider.getProviderCode().isBlank()) {
+            return "xlinks-router";
+        }
+        return provider.getProviderCode();
+    }
+
+    private int resolvePriority(Provider provider) {
+        return provider == null || provider.getPriority() == null ? 0 : provider.getPriority();
     }
 }
