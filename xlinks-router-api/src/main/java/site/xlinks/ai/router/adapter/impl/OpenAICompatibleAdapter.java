@@ -1,30 +1,34 @@
 package site.xlinks.ai.router.adapter.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.*;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import okio.BufferedSource;
 import org.springframework.stereotype.Component;
-import site.xlinks.ai.router.adapter.ChatProviderAdapter;
+import site.xlinks.ai.router.adapter.OpenAIProviderAdapter;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
-import site.xlinks.ai.router.dto.ChatCompletionRequest;
-import site.xlinks.ai.router.dto.ChatCompletionResponse;
+import site.xlinks.ai.router.dto.OpenAIProxyRequest;
+import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * OpenAI 兼容适配器
- * 支持 DeepSeek、OpenAI、Local LLM 等兼容 OpenAI API 的服务
- * 
- * 扩展点：新增 OpenAI 兼容的 Provider 时，只需在数据库配置 provider_type = 'openai-compatible'
+ * Adapter for providers exposing OpenAI-compatible HTTP APIs.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OpenAICompatibleAdapter implements ChatProviderAdapter {
+public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
 
     private static final String PROVIDER_TYPE = "openai-compatible";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -34,29 +38,17 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
 
     @Override
     public boolean supports(String providerType) {
-        return PROVIDER_TYPE.equalsIgnoreCase(providerType) || 
-               "openai".equalsIgnoreCase(providerType);
+        return PROVIDER_TYPE.equalsIgnoreCase(providerType)
+                || "openai".equalsIgnoreCase(providerType);
     }
 
     @Override
-    public ChatCompletionResponse chatCompletion(ChatCompletionRequest request, ProviderInvokeContext context) {
+    public JsonNode forward(OpenAIProxyRequest request, ProviderInvokeContext context) {
         try {
-            // 构建请求 URL
-            String url = context.getBaseUrl() + "/chat/completions";
-
-            // 构建 HTTP 请求
-            Request httpRequest = new Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer " + context.getProviderToken())
-                    .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(request.getRequestBody(), JSON))
-                    .build();
-
-            // 执行请求
+            Request httpRequest = buildRequest(request, context);
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    log.error("Provider API call failed: {} - {}", response.code(), response.message());
-                    throw new RuntimeException("Provider API call failed: " + response.code());
+                    throw buildProviderFailure(response);
                 }
 
                 ResponseBody body = response.body();
@@ -65,8 +57,8 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
                 }
 
                 String responseJson = body.string();
-                log.info("========>{}", responseJson);
-                return objectMapper.readValue(responseJson, ChatCompletionResponse.class);
+                log.debug("Upstream {} response: {}", request.getProtocol(), responseJson);
+                return objectMapper.readTree(responseJson);
             }
         } catch (IOException e) {
             log.error("Error calling provider API", e);
@@ -75,46 +67,134 @@ public class OpenAICompatibleAdapter implements ChatProviderAdapter {
     }
 
     @Override
-    public void chatCompletionStream(ChatCompletionRequest request,
-                                     ProviderInvokeContext context,
-                                     Consumer<String> onEvent) {
-        String url = context.getBaseUrl() + "/chat/completions";
+    public void forwardStream(OpenAIProxyRequest request,
+                              ProviderInvokeContext context,
+                              Consumer<OpenAIStreamEvent> onEvent) {
         try {
-            Request httpRequest = new Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer " + context.getProviderToken())
-                    .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(request.getRequestBody(), JSON))
-                    .build();
-
+            Request httpRequest = buildRequest(request, context);
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    log.error("Provider Stream API call failed: {} - {}", response.code(), response.message());
-                    throw new RuntimeException("Provider API call failed: " + response.code());
+                    throw buildProviderFailure(response);
                 }
+
                 ResponseBody body = response.body();
                 if (body == null) {
                     throw new RuntimeException("Empty response from provider");
                 }
+
                 BufferedSource source = body.source();
+                List<String> frameLines = new ArrayList<>();
                 while (!source.exhausted()) {
                     String line = source.readUtf8Line();
-                    if (line == null || line.isBlank()) {
-                        continue;
-                    }
-                    if (!line.startsWith("data:")) {
-                        continue;
-                    }
-                    String payload = line.substring(5).trim();
-                    onEvent.accept(payload);
-                    if ("[DONE]".equals(payload)) {
+                    if (line == null) {
                         break;
                     }
+                    if (line.isEmpty()) {
+                        emitEvent(frameLines, onEvent);
+                        if (isDoneFrame(frameLines)) {
+                            break;
+                        }
+                        frameLines.clear();
+                        continue;
+                    }
+                    frameLines.add(line);
+                }
+
+                if (!frameLines.isEmpty()) {
+                    emitEvent(frameLines, onEvent);
                 }
             }
         } catch (IOException e) {
             log.error("Error calling provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
         }
+    }
+
+    private Request buildRequest(OpenAIProxyRequest request, ProviderInvokeContext context) {
+        String url = context.getBaseUrl() + request.getProtocol().getProviderPath();
+        return new Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer " + context.getProviderToken())
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(request.getRequestBody(), JSON))
+                .build();
+    }
+
+    private RuntimeException buildProviderFailure(Response response) throws IOException {
+        String responseBody = response.body() == null ? "" : response.body().string();
+        log.error("Provider API call failed: {} - {}, body={}", response.code(), response.message(), responseBody);
+        return new RuntimeException("Provider API call failed: " + response.code());
+    }
+
+    private void emitEvent(List<String> frameLines, Consumer<OpenAIStreamEvent> onEvent) {
+        OpenAIStreamEvent event = parseEvent(frameLines);
+        if (event != null) {
+            onEvent.accept(event);
+        }
+    }
+
+    private boolean isDoneFrame(List<String> frameLines) {
+        OpenAIStreamEvent event = parseEvent(frameLines);
+        return event != null && event.isDoneSignal();
+    }
+
+    private OpenAIStreamEvent parseEvent(List<String> frameLines) {
+        if (frameLines == null || frameLines.isEmpty()) {
+            return null;
+        }
+
+        OpenAIStreamEvent.OpenAIStreamEventBuilder builder = OpenAIStreamEvent.builder();
+        boolean hasAnyField = false;
+        for (String line : frameLines) {
+            if (line == null) {
+                continue;
+            }
+            if (line.startsWith(":")) {
+                builder.comment(line.substring(1));
+                hasAnyField = true;
+                continue;
+            }
+
+            int separatorIndex = line.indexOf(':');
+            String fieldName;
+            String fieldValue;
+            if (separatorIndex < 0) {
+                fieldName = line;
+                fieldValue = "";
+            } else {
+                fieldName = line.substring(0, separatorIndex);
+                fieldValue = line.substring(separatorIndex + 1);
+                if (fieldValue.startsWith(" ")) {
+                    fieldValue = fieldValue.substring(1);
+                }
+            }
+
+            switch (fieldName) {
+                case "event" -> {
+                    builder.event(fieldValue);
+                    hasAnyField = true;
+                }
+                case "data" -> {
+                    builder.dataLine(fieldValue);
+                    hasAnyField = true;
+                }
+                case "id" -> {
+                    builder.id(fieldValue);
+                    hasAnyField = true;
+                }
+                case "retry" -> {
+                    try {
+                        builder.retry(Long.parseLong(fieldValue));
+                        hasAnyField = true;
+                    } catch (NumberFormatException e) {
+                        log.debug("Ignoring invalid SSE retry value: {}", fieldValue);
+                    }
+                }
+                default -> {
+                    // Ignore unsupported SSE fields.
+                }
+            }
+        }
+        return hasAnyField ? builder.build() : null;
     }
 }

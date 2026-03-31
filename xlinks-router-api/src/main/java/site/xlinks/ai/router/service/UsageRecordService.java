@@ -5,15 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
-import site.xlinks.ai.router.dto.ChatCompletionResponse;
+import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.UsageRecord;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 使用记录服务
- * 记录每次 API 调用的详细信息，用于计费和统计分析
+ * Usage record service.
  */
 @Slf4j
 @Service
@@ -23,24 +22,15 @@ public class UsageRecordService {
     private final site.xlinks.ai.router.mapper.UsageRecordMapper usageRecordMapper;
     private final CustomerPlanService customerPlanService;
 
-    /**
-     * 同步记录使用情况
-     *
-     * @param context      调用上下文
-     * @param response     响应对象
-     * @param latencyMs    延迟（毫秒）
-     * @param errorCode    错误码（如果有）
-     * @param errorMessage 错误信息（如果有）
-     */
     public void record(ProviderInvokeContext context,
-                       ChatCompletionResponse response,
+                       UsageMetrics usageMetrics,
                        long latencyMs,
                        String errorCode,
                        String errorMessage) {
         if (context == null) {
             return;
         }
-        UsageRecord record = buildRecord(context, response);
+        UsageRecord record = buildRecord(context, usageMetrics);
         record.setResponseStatus(errorCode == null ? 200 : 500);
         record.setLatencyMs((int) latencyMs);
         record.setErrorCode(errorCode);
@@ -54,22 +44,15 @@ public class UsageRecordService {
         }
     }
 
-    /**
-     * 异步记录使用情况
-     * 调用完成后异步记录，不阻塞响应
-     */
     @Async
     public void recordAsync(ProviderInvokeContext context,
-                            ChatCompletionResponse response,
+                            UsageMetrics usageMetrics,
                             long latencyMs,
                             String errorCode,
                             String errorMessage) {
-        record(context, response, latencyMs, errorCode, errorMessage);
+        record(context, usageMetrics, latencyMs, errorCode, errorMessage);
     }
 
-    /**
-     * 记录错误情况
-     */
     public void recordError(ProviderInvokeContext context,
                             int responseStatus,
                             String errorCode,
@@ -91,7 +74,7 @@ public class UsageRecordService {
         }
     }
 
-    private UsageRecord buildRecord(ProviderInvokeContext context, ChatCompletionResponse response) {
+    private UsageRecord buildRecord(ProviderInvokeContext context, UsageMetrics usageMetrics) {
         UsageRecord record = new UsageRecord();
         record.setRequestId(context.getRequestId());
         record.setAccountId(context.getAccountId());
@@ -106,11 +89,10 @@ public class UsageRecordService {
         record.setModelId(context.getModelId());
         record.setModelCode(context.getModelCode());
         record.setModelName(context.getModelName());
-        if (response != null && response.getUsage() != null) {
-            ChatCompletionResponse.Usage usage = response.getUsage();
-            record.setPromptTokens(defaultInt(usage.getPromptTokens()));
-            record.setCompletionTokens(defaultInt(usage.getCompletionTokens()));
-            record.setTotalTokens(defaultInt(usage.getTotalTokens()));
+        if (usageMetrics != null) {
+            record.setPromptTokens(defaultInt(usageMetrics.getInputTokens()));
+            record.setCompletionTokens(defaultInt(usageMetrics.getOutputTokens()));
+            record.setTotalTokens(defaultInt(usageMetrics.getTotalTokens()));
         } else {
             record.setPromptTokens(0);
             record.setCompletionTokens(0);
