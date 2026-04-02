@@ -1,5 +1,5 @@
 import { onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { postAuth } from '@/utils/request'
 import { resolveAccountTargetType } from '@/utils/auth'
@@ -9,6 +9,7 @@ const DEFAULT_COUNTDOWN = 60
 
 export function useRegister() {
   const { t } = useI18n()
+  const route = useRoute()
   const router = useRouter()
 
   const formData = reactive({
@@ -16,7 +17,7 @@ export function useRegister() {
     password: '',
     verificationCode: '',
     verificationToken: '',
-    inviteCode: '',
+    inviteCode: String(route.query.ref || '').trim().toUpperCase(),
   })
 
   const isSubmitting = ref(false)

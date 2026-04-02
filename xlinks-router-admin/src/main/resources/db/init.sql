@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `promotion_records` (
   `reward_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
   `reward_rate` decimal(5,2) NOT NULL DEFAULT '0.00',
   `status` tinyint(4) NOT NULL DEFAULT '0',
+  `settle_at` datetime DEFAULT NULL,
   `source_order_no` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `remark` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -316,7 +317,29 @@ CREATE TABLE IF NOT EXISTS `activation_code_stocks` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 14. Third-party pay links
+-- 14. Payment methods
+CREATE TABLE IF NOT EXISTS `payment_methods` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `method_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `method_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `method_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `icon_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort` int(11) NOT NULL DEFAULT '0',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `config_json` longtext COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_method_code` (`method_code`),
+  KEY `idx_method_type` (`method_type`),
+  KEY `idx_status` (`status`),
+  KEY `idx_sort` (`sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 15. Third-party pay links
 CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `target_id` bigint(20) NOT NULL,
@@ -333,7 +356,7 @@ CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. Usage records
+-- 16. Usage records
 CREATE TABLE IF NOT EXISTS `usage_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `request_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -415,24 +438,31 @@ VALUES
 INSERT IGNORE INTO `promotion_rules`
   (`rule_code`, `rule_name`, `reward_type`, `reward_amount`, `reward_rate`, `settlement_day`, `description`, `icon_type`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  ('invite_register', '邀请注册奖励', 1, 10.00, NULL, NULL, '好友通过您的链接注册，您将获得 10 元奖励', 'blue', 1, 1, '默认推广规则', 'system', 'system'),
-  ('first_recharge', '首次充值奖励', 2, NULL, 10.00, NULL, '好友首次充值，您将获得充值金额 10% 的奖励', 'green', 2, 1, '默认推广规则', 'system', 'system'),
-  ('consumption_rebate', '持续返佣', 3, NULL, 5.00, NULL, '好友每次消费，您将获得消费金额 5% 的返佣', 'purple', 3, 1, '默认推广规则', 'system', 'system'),
-  ('settlement_cycle', '结算周期', NULL, NULL, NULL, 1, '每月 1 日自动结算上月收益，直接转入账户余额', 'orange', 4, 1, '默认推广规则', 'system', 'system');
+  ('invite_register', '??????', 1, 10.00, NULL, NULL, '????????????????? 10 ???', 'blue', 1, 1, '??????', 'system', 'system'),
+  ('first_recharge', '??????', 2, NULL, 10.00, NULL, '???????????????? 10% ???', 'green', 2, 1, '??????', 'system', 'system'),
+  ('consumption_rebate', '????', 3, NULL, 5.00, NULL, '???????????????? 5% ???', 'purple', 3, 1, '??????', 'system', 'system'),
+  ('settlement_cycle', '????', NULL, NULL, NULL, 1, '?? 1 ??????????????????', 'orange', 4, 1, '??????', 'system', 'system');
 
 INSERT IGNORE INTO `plans`
   (`id`, `plan_name`, `price`, `duration_days`, `daily_quota`, `total_quota`, `allowed_models`, `status`, `visible`, `remark`, `create_by`, `update_by`)
 VALUES
-  (10001, '体验套餐', 19.90, 30, 10.00, 300.00, JSON_ARRAY('gpt-5.2', 'deepseek-chat'), 1, 1, '适合轻量体验', 'system', 'system'),
-  (10002, '标准套餐', 59.90, 30, 30.00, 900.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'deepseek-chat'), 1, 1, '适合日常开发与测试', 'system', 'system'),
-  (10003, '旗舰套餐', 129.90, 30, 80.00, 2400.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'deepseek-v3'), 1, 1, '适合高频使用场景', 'system', 'system');
+  (10001, '????', 19.90, 30, 10.00, 300.00, JSON_ARRAY('gpt-5.2', 'deepseek-chat'), 1, 1, '??????', 'system', 'system'),
+  (10002, '????', 59.90, 30, 30.00, 900.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'deepseek-chat'), 1, 1, '?????????', 'system', 'system'),
+  (10003, '????', 129.90, 30, 80.00, 2400.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'deepseek-v3'), 1, 1, '????????', 'system', 'system');
+
+INSERT IGNORE INTO `payment_methods`
+  (`method_code`, `method_name`, `method_type`, `icon_url`, `sort`, `status`, `config_json`, `remark`, `create_by`, `update_by`)
+VALUES
+  ('alipay_official', '???????', 'alipay', NULL, 10, 1, '{"appId":"demo-alipay-app","merchantId":"2088100000000000","notifyUrl":"https://example.com/pay/notify/alipay"}', '???????', 'system', 'system'),
+  ('wechat_native', '????', 'wechat', NULL, 20, 1, '{"appId":"wx-demo-app","merchantId":"1900000109","apiV3Key":"demo-key","notifyUrl":"https://example.com/pay/notify/wechat"}', '????????', 'system', 'system'),
+  ('local_gateway', '??????', 'local', NULL, 30, 0, '{"gatewayUrl":"https://pay.example.local/submit","merchantNo":"LOCAL10001","signKey":"demo-sign-key"}', '??????????', 'system', 'system');
 
 INSERT IGNORE INTO `third_party_pay_links`
   (`target_id`, `target_type`, `pay_url`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (10001, 'plan', 'https://dwz.cn/KT1tozGu', 1, '体验套餐支付链接', 'system', 'system'),
-  (10002, 'plan', 'https://dwz.cn/0Nj6pooi', 1, '标准套餐支付链接', 'system', 'system'),
-  (10003, 'plan', 'https://dwz.cn/qCXw5k5E', 1, '旗舰套餐支付链接', 'system', 'system');
+  (10001, 'plan', 'https://dwz.cn/KT1tozGu', 1, '????????', 'system', 'system'),
+  (10002, 'plan', 'https://dwz.cn/0Nj6pooi', 1, '????????', 'system', 'system'),
+  (10003, 'plan', 'https://dwz.cn/qCXw5k5E', 1, '????????', 'system', 'system');
 
 INSERT IGNORE INTO `customer_tokens`
   (`account_id`, `customer_name`, `token_name`, `token_value`, `status`, `allowed_models`, `remark`, `create_by`, `update_by`)
