@@ -6,27 +6,30 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * Model 更新 DTO
+ * Standard model update request.
  */
 @Data
-@Schema(description = "Model 更新请求")
+@Schema(description = "Standard model update request")
 public class ModelUpdateDTO {
 
-    @Schema(description = "模型名称")
+    @Schema(description = "Model name")
     private String modelName;
 
-    @Schema(description = "模型描述")
+    @Schema(description = "Endpoint ID")
+    private Long endpointId;
+
+    @Schema(description = "Model description")
     private String modelDesc;
 
-    @Schema(description = "输入价格，单位：每百万 token")
+    @Schema(description = "Platform input price")
     private BigDecimal inputPrice;
 
-    @Schema(description = "输出价格，单位：每百万 token")
+    @Schema(description = "Platform output price")
     private BigDecimal outputPrice;
 
-    @Schema(description = "上下文大小，单位：K")
+    @Schema(description = "Context window")
     private Integer contextSize;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

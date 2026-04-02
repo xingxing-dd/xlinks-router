@@ -7,29 +7,29 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * Customer Token 创建 DTO
+ * Customer token create request.
  */
 @Data
-@Schema(description = "Customer Token 创建请求")
+@Schema(description = "Customer token create request")
 public class CustomerTokenCreateDTO {
 
-    @Schema(description = "客户名称", required = true)
-    @NotBlank(message = "客户名称不能为空")
+    @NotBlank(message = "Customer identifier must not be blank")
+    @Schema(description = "Customer account identifier: username, phone, or email", required = true)
     private String customerName;
 
-    @Schema(description = "Token 名称", required = true)
-    @NotBlank(message = "Token 名称不能为空")
+    @NotBlank(message = "Token name must not be blank")
+    @Schema(description = "Token name", required = true)
     private String tokenName;
 
-    @Schema(description = "状态：1-启用，0-禁用")
+    @Schema(description = "Status: 1-enabled, 0-disabled")
     private Integer status = 1;
 
-    @Schema(description = "过期时间")
+    @Schema(description = "Expire time")
     private LocalDateTime expireTime;
 
-    @Schema(description = "允许访问的模型列表（JSON 数组）")
+    @Schema(description = "Allowed model codes in JSON array string")
     private String allowedModels;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

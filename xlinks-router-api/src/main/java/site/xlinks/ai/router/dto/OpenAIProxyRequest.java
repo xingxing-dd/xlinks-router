@@ -14,7 +14,15 @@ public class OpenAIProxyRequest {
 
     private String model;
 
-    private boolean stream;
+    private Boolean stream;
 
     private String requestBody;
+
+    public boolean isStream() {
+        return Boolean.TRUE.equals(stream);
+    }
+
+    public boolean hasExplicitStreamFlag() {
+        return stream != null;
+    }
 }

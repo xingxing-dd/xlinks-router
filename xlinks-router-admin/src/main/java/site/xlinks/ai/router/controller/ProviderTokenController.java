@@ -2,6 +2,7 @@ package site.xlinks.ai.router.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import site.xlinks.ai.router.common.result.PageResult;
@@ -12,64 +13,62 @@ import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.service.ProviderTokenService;
 
 /**
- * Provider Token 管理接口
+ * Provider token management API.
  */
 @RestController
 @RequestMapping("/admin/provider-tokens")
 @RequiredArgsConstructor
-@Tag(name = "Provider Token 管理", description = "Provider Token 管理相关接口")
+@Tag(name = "Provider Token Management", description = "Provider token management APIs")
 public class ProviderTokenController {
 
     private final ProviderTokenService providerTokenService;
 
     @PostMapping
-    @Operation(summary = "新增 Provider Token")
-    public Result<ProviderToken> create(@RequestBody ProviderTokenCreateDTO dto) {
+    @Operation(summary = "Create provider token")
+    public Result<ProviderToken> create(@Valid @RequestBody ProviderTokenCreateDTO dto) {
         ProviderToken token = new ProviderToken();
         token.setProviderId(dto.getProviderId());
         token.setTokenName(dto.getTokenName());
-        token.setTokenValue(dto.getTokenValue()); // 注意：生产环境应加密存储
+        token.setTokenValue(dto.getTokenValue());
         token.setTokenStatus(dto.getTokenStatus());
         token.setQuotaTotal(dto.getQuotaTotal());
         token.setExpireTime(dto.getExpireTime());
         token.setRemark(dto.getRemark());
-        
+
         providerTokenService.save(token);
-        // 不返回 tokenValue
         token.setTokenValue(null);
         return Result.success(token);
     }
 
     @GetMapping
-    @Operation(summary = "Provider Token 列表")
+    @Operation(summary = "Provider token list")
     public Result<PageResult<ProviderToken>> list(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Long providerId,
             @RequestParam(required = false) Integer tokenStatus) {
-        
+
         var pageResult = providerTokenService.pageQuery(page, pageSize, providerId, tokenStatus);
-        // 不返回 tokenValue
         pageResult.getRecords().forEach(t -> t.setTokenValue(null));
         return Result.success(PageResult.of(
-                pageResult.getRecords(), 
-                pageResult.getTotal(), 
-                (int) pageResult.getCurrent(), 
+                pageResult.getRecords(),
+                pageResult.getTotal(),
+                (int) pageResult.getCurrent(),
                 (int) pageResult.getSize()
         ));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Provider Token 详情")
+    @Operation(summary = "Provider token detail")
     public Result<ProviderToken> get(@PathVariable Long id) {
         ProviderToken token = providerTokenService.getById(id);
-        token.setTokenValue(null); // 不返回 tokenValue
+        token.setTokenValue(null);
         return Result.success(token);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新 Provider Token")
-    public Result<Void> update(@PathVariable Long id, @RequestBody ProviderTokenUpdateDTO dto) {
+    @Operation(summary = "Update provider token")
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ProviderTokenUpdateDTO dto) {
         ProviderToken token = new ProviderToken();
         token.setId(id);
         if (dto.getTokenName() != null) {
@@ -87,15 +86,22 @@ public class ProviderTokenController {
         if (dto.getRemark() != null) {
             token.setRemark(dto.getRemark());
         }
-        
+
         providerTokenService.update(token);
         return Result.success();
     }
 
     @PatchMapping("/{id}/status")
-    @Operation(summary = "启用/禁用 Provider Token")
+    @Operation(summary = "Enable or disable provider token")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
         providerTokenService.updateStatus(id, status);
+        return Result.success();
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete provider token")
+    public Result<Void> delete(@PathVariable Long id) {
+        providerTokenService.deleteById(id);
         return Result.success();
     }
 }

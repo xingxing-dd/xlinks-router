@@ -8,36 +8,40 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.common.enums.ErrorCode;
+import site.xlinks.ai.router.common.exception.BusinessException;
+import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 /**
- * Customer Token Service
+ * Customer token service.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, CustomerToken> {
 
+    private final CustomerAccountMapper customerAccountMapper;
+
     public IPage<CustomerToken> pageQuery(Integer page, Integer pageSize, String customerName, Integer status) {
         LambdaQueryWrapper<CustomerToken> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(customerName), CustomerToken::getCustomerName, customerName)
-               .eq(status != null, CustomerToken::getStatus, status)
-               .orderByDesc(CustomerToken::getCreatedAt);
-        
+                .eq(status != null, CustomerToken::getStatus, status)
+                .orderByDesc(CustomerToken::getCreatedAt);
         return this.page(new Page<>(page, pageSize), wrapper);
     }
 
     public CustomerToken getById(Long id) {
         CustomerToken token = super.getById(id);
         if (token == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Customer Token 不存在");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Customer token not found");
         }
         return token;
     }
@@ -49,25 +53,28 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
         return this.getOne(wrapper);
     }
 
-    /**
-     * 创建 Token（生成并返回）
-     */
     public CustomerToken create(CustomerToken token) {
-        // 生成 Token
+        CustomerAccount account = resolveAccount(token.getCustomerName());
+        token.setAccountId(account.getId());
+        token.setCustomerName(resolveDisplayName(account));
+
         String rawToken = "xlr_ct_" + UUID.randomUUID().toString().replace("-", "");
-        String hashedToken = hashToken(rawToken);
-        
-        token.setTokenValue(hashedToken);
+        token.setTokenValue(hashToken(rawToken));
         super.save(token);
-        
-        // 返回原始 Token（只返回一次）
+
         token.setTokenValue(rawToken);
         return token;
     }
 
     public boolean update(CustomerToken token) {
-        getById(token.getId());
-        // 不更新 tokenValue
+        CustomerToken existing = getById(token.getId());
+        if (StringUtils.hasText(token.getCustomerName())) {
+            CustomerAccount account = resolveAccount(token.getCustomerName());
+            token.setAccountId(account.getId());
+            token.setCustomerName(resolveDisplayName(account));
+        } else {
+            token.setAccountId(existing.getAccountId());
+        }
         token.setTokenValue(null);
         return super.updateById(token);
     }
@@ -80,17 +87,51 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
         return super.updateById(token);
     }
 
-    /**
-     * SHA256 哈希 Token
-     */
+    public boolean deleteById(Long id) {
+        getById(id);
+        return super.removeById(id);
+    }
+
+    private CustomerAccount resolveAccount(String identifier) {
+        if (!StringUtils.hasText(identifier)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Customer identifier must not be blank");
+        }
+        LambdaQueryWrapper<CustomerAccount> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CustomerAccount::getUsername, identifier)
+                .or()
+                .eq(CustomerAccount::getPhone, identifier)
+                .or()
+                .eq(CustomerAccount::getEmail, identifier);
+        CustomerAccount account = customerAccountMapper.selectOne(wrapper);
+        if (account == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Customer account not found");
+        }
+        return account;
+    }
+
+    private String resolveDisplayName(CustomerAccount account) {
+        if (StringUtils.hasText(account.getUsername())) {
+            return account.getUsername();
+        }
+        if (StringUtils.hasText(account.getEmail())) {
+            return account.getEmail();
+        }
+        if (StringUtils.hasText(account.getPhone())) {
+            return account.getPhone();
+        }
+        return String.valueOf(account.getId());
+    }
+
     private String hashToken(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(rawToken.getBytes());
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
                 hexString.append(hex);
             }
             return hexString.toString();

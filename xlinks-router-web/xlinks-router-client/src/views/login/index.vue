@@ -167,9 +167,9 @@ const handleSubmit = async () => {
                 />
                 <span class="ml-2 text-slate-600">{{ t('login.rememberMe') }}</span>
               </label>
-              <a href="#" class="text-primary hover:text-primary font-medium">
+              <router-link to="/forgot-password" class="text-primary hover:text-primary font-medium">
                 {{ t('login.forgotPassword') }}
-              </a>
+              </router-link>
             </div>
 
             <button
@@ -185,7 +185,7 @@ const handleSubmit = async () => {
                 <div class="w-full border-t border-slate-200" />
               </div>
               <div class="relative flex justify-center text-sm">
-                <span class="px-4 bg-white text-slate-500">{{ t('login.divider') }}</span>
+                <span class="px-4 bg-white text-slate-500"></span>
               </div>
             </div>
 
@@ -197,10 +197,6 @@ const handleSubmit = async () => {
               >
                 {{ t('login.register') }}
               </router-link>
-              <span class="mx-2 text-slate-300">|</span>
-              <a href="#" class="text-primary hover:text-primary font-medium">
-                {{ t('login.forgotPasswordSecondary') }}
-              </a>
             </div>
           </form>
         </div>

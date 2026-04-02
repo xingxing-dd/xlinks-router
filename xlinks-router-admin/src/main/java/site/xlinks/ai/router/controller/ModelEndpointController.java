@@ -2,10 +2,13 @@ package site.xlinks.ai.router.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.dto.ModelEndpointCreateDTO;
+import site.xlinks.ai.router.dto.ModelEndpointUpdateDTO;
 import site.xlinks.ai.router.entity.ModelEndpoint;
 import site.xlinks.ai.router.service.ModelEndpointService;
 
@@ -22,7 +25,13 @@ public class ModelEndpointController {
 
     @PostMapping
     @Operation(summary = "新增 Model Endpoint")
-    public Result<ModelEndpoint> create(@RequestBody ModelEndpoint modelEndpoint) {
+    public Result<ModelEndpoint> create(@Valid @RequestBody ModelEndpointCreateDTO dto) {
+        ModelEndpoint modelEndpoint = new ModelEndpoint();
+        modelEndpoint.setEndpointCode(dto.getEndpointCode());
+        modelEndpoint.setEndpointName(dto.getEndpointName());
+        modelEndpoint.setEndpointUrl(dto.getEndpointUrl());
+        modelEndpoint.setStatus(dto.getStatus());
+        modelEndpoint.setRemark(dto.getRemark());
         modelEndpointService.save(modelEndpoint);
         return Result.success(modelEndpoint);
     }
@@ -52,8 +61,21 @@ public class ModelEndpointController {
 
     @PutMapping("/{id}")
     @Operation(summary = "更新 Model Endpoint")
-    public Result<Void> update(@PathVariable Long id, @RequestBody ModelEndpoint modelEndpoint) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ModelEndpointUpdateDTO dto) {
+        ModelEndpoint modelEndpoint = new ModelEndpoint();
         modelEndpoint.setId(id);
+        if (dto.getEndpointCode() != null) {
+            modelEndpoint.setEndpointCode(dto.getEndpointCode());
+        }
+        if (dto.getEndpointName() != null) {
+            modelEndpoint.setEndpointName(dto.getEndpointName());
+        }
+        if (dto.getEndpointUrl() != null) {
+            modelEndpoint.setEndpointUrl(dto.getEndpointUrl());
+        }
+        if (dto.getRemark() != null) {
+            modelEndpoint.setRemark(dto.getRemark());
+        }
         modelEndpointService.update(modelEndpoint);
         return Result.success();
     }

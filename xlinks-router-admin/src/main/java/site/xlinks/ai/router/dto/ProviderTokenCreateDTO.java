@@ -8,33 +8,33 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * Provider Token 创建 DTO
+ * Provider token create request.
  */
 @Data
-@Schema(description = "Provider Token 创建请求")
+@Schema(description = "Provider token create request")
 public class ProviderTokenCreateDTO {
 
+    @NotNull(message = "Provider ID must not be null")
     @Schema(description = "Provider ID", required = true)
-    @NotNull(message = "Provider ID 不能为空")
     private Long providerId;
 
-    @Schema(description = "Token 名称", required = true)
-    @NotBlank(message = "Token 名称不能为空")
+    @NotBlank(message = "Token name must not be blank")
+    @Schema(description = "Token name", required = true)
     private String tokenName;
 
-    @Schema(description = "Token 值", required = true)
-    @NotBlank(message = "Token 值不能为空")
+    @NotBlank(message = "Token value must not be blank")
+    @Schema(description = "Token value", required = true)
     private String tokenValue;
 
-    @Schema(description = "Token 状态：1-正常，0-禁用")
+    @Schema(description = "Status: 1-enabled, 0-disabled")
     private Integer tokenStatus = 1;
 
-    @Schema(description = "配额总量")
+    @Schema(description = "Quota total")
     private Long quotaTotal;
 
-    @Schema(description = "过期时间")
+    @Schema(description = "Expire time")
     private LocalDateTime expireTime;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

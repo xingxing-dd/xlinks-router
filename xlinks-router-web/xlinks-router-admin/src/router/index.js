@@ -1,29 +1,38 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/login/index.vue'
 import Dashboard from '../views/dashboard/index.vue'
-import Merchants from '../views/merchants/index.vue'
 import Providers from '../views/providers/index.vue'
-import Tokens from '../views/tokens/index.vue'
+import ProviderTokens from '../views/provider-tokens/index.vue'
+import CustomerTokens from '../views/customer-tokens/index.vue'
 import Models from '../views/models/index.vue'
 import Plans from '../views/plans/index.vue'
-import Trades from '../views/trades/index.vue'
+import Subscriptions from '../views/subscriptions/index.vue'
+import ActivationCodes from '../views/activation-codes/index.vue'
+import ActivationUsage from '../views/activation-usage/index.vue'
+import PayLinks from '../views/pay-links/index.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
-  { path: '/', redirect: '/login' },
+  { path: '/', redirect: '/dashboard' },
   { path: '/login', name: 'Login', component: Login },
   {
     path: '/',
     component: DefaultLayout,
     children: [
       { path: 'dashboard', name: 'Dashboard', component: Dashboard },
-      { path: 'merchants', name: 'Merchants', component: Merchants },
       { path: 'providers', name: 'Providers', component: Providers },
-      { path: 'tokens', name: 'Tokens', component: Tokens },
+      { path: 'provider-tokens', name: 'ProviderTokens', component: ProviderTokens },
+      { path: 'customer-tokens', name: 'CustomerTokens', component: CustomerTokens },
       { path: 'models', name: 'Models', component: Models },
       { path: 'plans', name: 'Plans', component: Plans },
-      { path: 'trades', name: 'Trades', component: Trades },
+      { path: 'subscriptions', name: 'Subscriptions', component: Subscriptions },
+      { path: 'activation-codes', name: 'ActivationCodes', component: ActivationCodes },
+      { path: 'activation-usage', name: 'ActivationUsage', component: ActivationUsage },
+      { path: 'pay-links', name: 'PayLinks', component: PayLinks },
+      { path: 'tokens', redirect: '/customer-tokens' },
+      { path: 'merchants', redirect: '/providers' },
+      { path: 'trades', redirect: '/dashboard' },
     ],
   },
 ]

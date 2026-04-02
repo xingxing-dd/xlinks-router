@@ -29,6 +29,8 @@ public class ModelEndpoint extends BaseEntity {
 
     private Integer status;
 
+    private String remark;
+
     @TableLogic
     private Integer deleted;
 }

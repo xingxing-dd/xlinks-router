@@ -6,24 +6,24 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * Customer Token 更新 DTO
+ * Customer token update request.
  */
 @Data
-@Schema(description = "Customer Token 更新请求")
+@Schema(description = "Customer token update request")
 public class CustomerTokenUpdateDTO {
 
-    @Schema(description = "客户名称")
+    @Schema(description = "Customer account identifier: username, phone, or email")
     private String customerName;
 
-    @Schema(description = "Token 名称")
+    @Schema(description = "Token name")
     private String tokenName;
 
-    @Schema(description = "过期时间")
+    @Schema(description = "Expire time")
     private LocalDateTime expireTime;
 
-    @Schema(description = "允许访问的模型列表")
+    @Schema(description = "Allowed model codes in JSON array string")
     private String allowedModels;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

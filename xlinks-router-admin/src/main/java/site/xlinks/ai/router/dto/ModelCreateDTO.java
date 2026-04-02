@@ -8,43 +8,39 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * Model 创建 DTO
+ * Standard model create request.
  */
 @Data
-@Schema(description = "Model 创建请求")
+@Schema(description = "Standard model create request")
 public class ModelCreateDTO {
 
-    @Schema(description = "模型名称", required = true)
-    @NotBlank(message = "模型名称不能为空")
+    @Schema(description = "Model name", required = true)
+    @NotBlank(message = "Model name must not be blank")
     private String modelName;
 
-    @Schema(description = "模型编码", required = true)
-    @NotBlank(message = "模型编码不能为空")
+    @Schema(description = "Model code", required = true)
+    @NotBlank(message = "Model code must not be blank")
     private String modelCode;
 
-    @Schema(description = "模型端点 ID", required = true)
-    @NotNull(message = "模型端点 ID 不能为空")
+    @Schema(description = "Endpoint ID", required = true)
+    @NotNull(message = "Endpoint ID must not be null")
     private Long endpointId;
 
-    @Schema(description = "提供商 ID", required = true)
-    @NotNull(message = "提供商 ID 不能为空")
-    private Long providerId;
-
-    @Schema(description = "模型描述")
+    @Schema(description = "Model description")
     private String modelDesc;
 
-    @Schema(description = "输入价格，单位：每百万 token")
+    @Schema(description = "Platform input price")
     private BigDecimal inputPrice;
 
-    @Schema(description = "输出价格，单位：每百万 token")
+    @Schema(description = "Platform output price")
     private BigDecimal outputPrice;
 
-    @Schema(description = "上下文大小，单位：K")
+    @Schema(description = "Context window")
     private Integer contextSize;
 
-    @Schema(description = "状态：1-启用，0-禁用")
+    @Schema(description = "Status: 1-enabled, 0-disabled")
     private Integer status = 1;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

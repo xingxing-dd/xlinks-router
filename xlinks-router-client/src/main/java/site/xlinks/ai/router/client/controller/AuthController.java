@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.client.dto.auth.AuthLoginRequest;
 import site.xlinks.ai.router.client.dto.auth.AuthLoginResponse;
 import site.xlinks.ai.router.client.dto.auth.AuthRegisterRequest;
+import site.xlinks.ai.router.client.dto.auth.AuthResetPasswordRequest;
 import site.xlinks.ai.router.client.dto.auth.RsaPublicKeyResponse;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendRequest;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
@@ -40,13 +41,14 @@ public class AuthController {
 
     @PostMapping("/verify-code")
     public Result<VerifyCodeSendResponse> sendVerifyCode(@Valid @RequestBody VerifyCodeSendRequest request) {
+        customerAccountService.validateVerifyCodeTarget(request.getScene(), request.getCodeType(), request.getTarget());
+
         VerifyCodeService.VerifyCodeIssueResult issued = verifyCodeService.issueCode(
                 request.getScene(),
                 request.getCodeType(),
                 request.getTarget()
         );
 
-        // 根据验证码类型获取对应的发送策略
         VerifyCodeSender sender = verifyCodeSenderFactory.getSender(request.getCodeType());
         VerifyCodeSendResponse response = sender.send(request.getTarget(), issued.token(), issued.expireSeconds());
         return Result.success(response);
@@ -56,6 +58,12 @@ public class AuthController {
     public Result<String> register(@Valid @RequestBody AuthRegisterRequest request) {
         customerAccountService.register(request);
         return Result.success("注册成功", null);
+    }
+
+    @PostMapping("/reset-password")
+    public Result<String> resetPassword(@Valid @RequestBody AuthResetPasswordRequest request) {
+        customerAccountService.resetPassword(request);
+        return Result.success("密码重置成功", null);
     }
 
     @PostMapping("/login")

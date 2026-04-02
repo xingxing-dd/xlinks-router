@@ -1,162 +1,140 @@
-# xlinks-router 技术设计总览
+# xlinks-router Technical Design
 
-## 1. 项目说明
+## 1. Product Positioning
 
-xlinks-router 是一个统一的大模型网关平台，目标是对外提供兼容 OpenAI 风格的标准调用入口，对内提供 Provider、模型、路由、Token 与客户接入能力的统一管理。
+xlinks-router is a multi-provider, multi-model aggregation router.
 
-当前仓库主要包含三个后端模块：
+It exposes a unified OpenAI-style API externally and manages these routing resources internally:
 
-- `xlinks-router-admin`：管理后台 API，负责 Provider、Model Endpoint、Model、Token 等管理能力
-- `xlinks-router-api`：对外 OpenAPI 网关，负责客户鉴权、模型路由、Provider 调用与 usage 记录
-- `xlinks-router-common`：公共实体、枚举、统一返回结构与共享基础组件
+- Providers
+- Model endpoints
+- Standard models
+- Provider model mappings
+- Provider tokens and customer tokens
 
-## 2. 技术栈
+The platform goal is not to expose one provider directly. It is to expose **standard models** and route them to the best available upstream provider.
 
-### 2.1 后端技术栈
+## 2. Main Modules
 
-| 类别 | 技术选型 | 版本 | 说明 |
-|------|----------|------|------|
-| 编程语言 | Java | 11 (LTS) | 稳定、生态成熟 |
-| 开发框架 | Spring Boot | 3.2.x | 主应用框架 |
-| Web 框架 | Spring Web | - | REST API 开发 |
-| ORM | MyBatis-Plus | 3.5.x | 数据访问与 CRUD |
-| 构建工具 | Maven | 3.9.x | 多模块构建 |
-| 接口文档 | SpringDoc OpenAPI | 2.x | OpenAPI 文档生成 |
-| 参数校验 | Hibernate Validator | - | Bean Validation |
-| HTTP 客户端 | OkHttp | 4.x | 下游 Provider 调用 |
-| JSON | Jackson | - | JSON 序列化/反序列化 |
-| 日志 | SLF4J + Logback | - | 应用日志 |
+- `xlinks-router-admin`: admin APIs
+- `xlinks-router-api`: public OpenAPI gateway
+- `xlinks-router-client`: console / client APIs
+- `xlinks-router-common`: shared entities, mappers, base components
 
-### 2.2 基础设施
+## 3. Problems in the Old Model Design
 
-| 组件 | 版本 | 说明 |
-|------|------|------|
-| MySQL | 8.0+ | 主数据库 |
-| Redis | 7.0+ | 缓存、限流、会话等扩展能力 |
+If `models` is directly bound to `providers`, the design has several issues:
 
-## 3. 系统定位
+1. A standard model can only belong to one provider.
+2. The router cannot express multi-provider failover or priority routing.
+3. Standard model codes and upstream model codes are mixed together.
+4. Protocol support belongs to providers, not to standard models.
 
-### 3.1 对外能力
+## 4. Revised Core Model Design
 
-- 提供统一标准 API
-- 使用 Customer Token 完成平台级授权
-- 屏蔽底层 Provider 差异
-- 提供模型路由与标准化响应
+### 4.1 Relationships
 
-### 3.2 对内能力
+```text
+providers
+   |
+   +-- provider_tokens
+   |
+   +-- provider_models ---- models ---- model_endpoints
+```
 
-- 管理 Provider
-- 管理 Model Endpoint
-- 管理 Model
-- 管理 Provider Token / Customer Token
-- 支撑路由、鉴权、记录与运营分析
+### 4.2 Resource Responsibilities
 
-## 4. 核心模型设计
+#### providers
+Upstream platform definition.
 
-当前核心模型统一调整为三级结构：
+Key fields:
+- `provider_code`
+- `provider_type`
+- `supported_protocols`
+- `priority`
+- `base_url`
 
-- `providers`：服务商
-- `model_endpoints`：模型端点/能力分组
-- `models`：统一模型表
+Notes:
+- `supported_protocols`: comma-separated protocol list; empty means all protocols
+- `priority`: larger value means higher routing priority
 
-设计原则：
+#### model_endpoints
+Standard protocol capability definition.
 
-- 不再区分 `customer_model`、`provider_model`
-- 不再保留 `model_mapping`
-- OpenAPI 请求中的 `model` 字段直接对应 `models.model_code`
-- 一个 Model 必须归属于一个 Provider 和一个 Model Endpoint
-- 同一个 `endpointId` 下，`modelCode` 唯一
+Key fields:
+- `endpoint_code` such as `chat/completions` and `responses`
+- `endpoint_name`
+- `endpoint_url`
 
-## 5. 逻辑删除规范
+#### models
+Platform-facing standard model definition.
 
-Provider、Model Endpoint、Model 三类核心模型统一采用逻辑删除机制。
+Design rules:
+- `models` is related only to `model_endpoints`
+- `models` is **not** directly related to `providers`
+- request field `model` maps to `models.model_code`
 
-### 5.1 字段规范
+Current platform-level fields kept on `models`:
+- `input_price`
+- `output_price`
+- `context_size`
 
-- 逻辑删除字段统一命名为：`deleted`
-- 字段类型：`TINYINT`
-- 默认值：`0`
-- 字段语义：
-  - `0`：未删除
-  - `1`：已删除
+These fields currently mean platform-level configuration. If provider-specific price or context overrides are needed later, those differences can be moved or extended on `provider_models`.
 
-### 5.2 适用范围
+#### provider_models
+Mapping table from a standard model to an upstream provider model.
 
-以下表必须包含逻辑删除字段：
+This table answers:
+- which provider can serve a standard model
+- what upstream model code should be sent
+- which providers are candidates for the same standard model
+
+## 5. Routing Flow
+
+For a `POST /v1/chat/completions` request:
+
+1. Derive `endpoint_code = chat/completions` from the request protocol
+2. Resolve the standard model by `endpoint_id + model_code`
+3. Load candidate `provider_models` by `model_id`
+4. Filter out disabled mappings, disabled providers, and providers that do not support the current protocol
+5. Sort by `providers.priority DESC`
+6. Pick the highest-priority provider
+7. Rewrite the outbound `model` field to `provider_model_code`
+8. Select an available provider token
+9. Invoke the adapter based on `provider_type`
+
+## 6. Key Constraints
+
+Recommended uniqueness rules:
+
+- `providers.provider_code` unique
+- `model_endpoints.endpoint_code` unique
+- `model_endpoints.endpoint_url` unique
+- `models(endpoint_id, model_code)` unique
+- `provider_models(provider_id, model_id)` unique
+- `provider_models(provider_id, provider_model_code)` unique
+
+Core routing tables using logical delete:
 
 - `providers`
 - `model_endpoints`
 - `models`
+- `provider_models`
 
-### 5.3 查询规范
+## 7. Public API Convention
 
-- 列表查询默认追加 `deleted = 0`
-- 详情查询默认仅允许读取 `deleted = 0`
-- 下拉选项、联表查询、路由解析默认仅使用 `deleted = 0`
-- OpenAPI 模型解析必须同时满足：
-  - `deleted = 0`
-  - `status = 1`
+The gateway exposes standard paths directly:
 
-### 5.4 删除规范
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+- `GET /v1/models`
 
-- 管理后台删除操作统一执行逻辑删除，不做物理删除
-- 删除接口语义为将 `deleted` 更新为 `1`
-- 已逻辑删除数据默认对前端不可见、对路由不可用
+Routing no longer depends on an extra path segment. The endpoint is inferred from the request protocol itself.
 
-### 5.5 唯一性与约束规范
+## 8. Document Index
 
-- 唯一键冲突校验默认基于 `deleted = 0` 的可见数据集
-- 模型唯一性规则保持为：同一个 `endpointId` 下，`modelCode` 唯一
-- 业务层新增、编辑、恢复时，都要考虑逻辑删除记录带来的唯一性冲突问题
-
-## 6. 工程结构
-
-```text
-xlinks-router/
-├── pom.xml
-├── docs/
-│   ├── tech-design.md
-│   ├── admin-api.md
-│   ├── openapi.md
-│   ├── model.md
-│   ├── db-script.md
-│   └── client-api.md
-├── xlinks-router-admin/
-├── xlinks-router-api/
-├── xlinks-router-client/
-├── xlinks-router-common/
-└── xlinks-router-web/
-```
-
-## 7. 文档索引
-
-### 7.1 总览与设计
-- `docs/tech-design.md`：项目说明、技术栈、系统定位、核心模型设计与逻辑删除规范
-
-### 7.2 接口文档
-- `docs/admin-api.md`：管理后台 API 定义
-- `docs/openapi.md`：对外 OpenAPI / 网关 API 定义
-- `docs/client-api.md`：前端 client 侧接口定义
-
-### 7.3 数据模型与脚本
-- `docs/model.md`：核心数据模型、字段定义、关系说明
-- `docs/db-script.md`：数据库初始化脚本、推荐 DDL 与相关脚本说明
-
-## 8. 建议阅读顺序
-
-1. 先阅读 `docs/tech-design.md` 了解项目边界、模型设计与逻辑删除规范
-2. 阅读 `docs/model.md` 理解核心实体与字段定义
-3. 按角色选择：
-   - 管理后台开发看 `docs/admin-api.md`
-   - 网关/OpenAPI 开发看 `docs/openapi.md`
-   - 前端联调看 `docs/client-api.md`
-4. 涉及数据库初始化和结构落表时，再阅读 `docs/db-script.md`
-
-## Provider protocol & priority routing update
-
-- Provider now includes `supported_protocols` and `priority`.
-- `supported_protocols` is a comma-separated protocol list such as `chat/completions,responses`; empty means all protocols.
-- `priority` is an integer; higher value means higher priority during routing.
-- The same `model_code` can be configured on multiple providers under the same endpoint. Recommended uniqueness rule: `UNIQUE KEY (endpoint_id, model_code, provider_id)`.
-- API routing should filter providers by request protocol first, then sort by provider priority.
-
+- `docs/tech-design.md`: overall architecture and model design
+- `docs/admin-api.md`: admin APIs for routing resources
+- `docs/openapi.md`: public OpenAPI gateway behavior
+- `docs/db-script.md`: core schema notes
+- `xlinks-router-admin/src/main/resources/db/init.sql`: bootstrap SQL

@@ -1,7 +1,5 @@
 export default {
   common: {
-    chinese: '中文',
-    english: '英文',
     logout: '退出登录',
     search: '搜索',
     reset: '重置',
@@ -12,45 +10,28 @@ export default {
     action: '操作',
     confirm: '确认',
     cancel: '取消',
+    loading: '加载中...',
+    noData: '暂无数据',
+    save: '保存',
   },
   login: {
     title: 'Xlinks Router 管理后台',
-    subtitle: '请输入管理员账号与密码',
+    subtitle: '使用管理员账号登录运营后台',
     account: '账号',
     password: '密码',
-    remember: '记住我',
+    remember: '记住登录状态',
     signIn: '登录',
   },
   nav: {
-    dashboard: '概览',
-    merchants: '商户管理',
+    dashboard: '运营总览',
     providers: '服务商管理',
-    tokens: 'Token 管理',
-    models: '模型管理',
+    providerTokens: '服务商 Token',
+    customerTokens: '客户 Token',
+    models: '模型资源中心',
     plans: '套餐管理',
-    trades: '交易管理',
-    settings: '系统设置',
-  },
-  dashboard: {
-    title: '运营概览',
-    summary: '关键指标',
-  },
-  merchants: {
-    title: '商户管理',
-  },
-  providers: {
-    title: '服务商管理',
-  },
-  tokens: {
-    title: 'Token 管理',
-  },
-  models: {
-    title: '模型管理',
-  },
-  plans: {
-    title: '套餐管理',
-  },
-  trades: {
-    title: '交易管理',
+    subscriptions: '订阅记录',
+    activationCodes: '激活码管理',
+    activationUsage: '激活使用记录',
+    payLinks: '支付链接管理',
   },
 }

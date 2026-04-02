@@ -2,7 +2,9 @@ package site.xlinks.ai.router.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,7 +34,7 @@ public class ProviderController {
 
     @PostMapping
     @Operation(summary = "Create provider")
-    public Result<Provider> create(@RequestBody ProviderCreateDTO dto) {
+    public Result<Provider> create(@Valid @RequestBody ProviderCreateDTO dto) {
         Provider provider = new Provider();
         provider.setProviderCode(dto.getProviderCode());
         provider.setProviderName(dto.getProviderName());
@@ -75,7 +77,7 @@ public class ProviderController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update provider")
-    public Result<Void> update(@PathVariable Long id, @RequestBody ProviderUpdateDTO dto) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ProviderUpdateDTO dto) {
         Provider provider = new Provider();
         provider.setId(id);
         if (dto.getProviderName() != null) {
@@ -108,6 +110,13 @@ public class ProviderController {
     @Operation(summary = "Enable or disable provider")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
         providerService.updateStatus(id, status);
+        return Result.success();
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete provider")
+    public Result<Void> delete(@PathVariable Long id) {
+        providerService.deleteById(id);
         return Result.success();
     }
 }

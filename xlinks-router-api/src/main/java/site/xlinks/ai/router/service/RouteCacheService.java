@@ -10,10 +10,12 @@ import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.ModelEndpoint;
 import site.xlinks.ai.router.entity.Provider;
+import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ModelEndpointMapper;
 import site.xlinks.ai.router.mapper.ModelMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
+import site.xlinks.ai.router.mapper.ProviderModelMapper;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 
 import java.util.ArrayList;
@@ -21,7 +23,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Route cache service.
@@ -34,11 +35,13 @@ public class RouteCacheService {
     private final ModelEndpointMapper modelEndpointMapper;
     private final ModelMapper modelMapper;
     private final ProviderMapper providerMapper;
+    private final ProviderModelMapper providerModelMapper;
     private final ProviderTokenMapper providerTokenMapper;
 
     private final Map<String, ModelEndpoint> endpointCache = new ConcurrentHashMap<>();
-    private final Map<Long, Map<String, List<Model>>> modelCache = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, Model>> modelCache = new ConcurrentHashMap<>();
     private final Map<Long, Provider> providerCache = new ConcurrentHashMap<>();
+    private final Map<Long, List<ProviderModel>> providerModelCache = new ConcurrentHashMap<>();
     private final Map<Long, List<ProviderToken>> providerTokenCache = new ConcurrentHashMap<>();
 
     @PostConstruct
@@ -55,6 +58,7 @@ public class RouteCacheService {
         refreshProviders();
         refreshEndpoints();
         refreshModels();
+        refreshProviderModels();
         refreshProviderTokens();
         log.info("Route cache refreshed");
     }
@@ -81,8 +85,7 @@ public class RouteCacheService {
             }
             modelCache
                     .computeIfAbsent(model.getEndpointId(), id -> new ConcurrentHashMap<>())
-                    .computeIfAbsent(model.getModelCode(), key -> new ArrayList<>())
-                    .add(model);
+                    .put(model.getModelCode(), model);
         }
         log.debug("Model cache loaded, endpointCount={}", modelCache.size());
     }
@@ -96,6 +99,22 @@ public class RouteCacheService {
             providerCache.put(provider.getId(), provider);
         }
         log.debug("Provider cache loaded, size={}", providerCache.size());
+    }
+
+    public void refreshProviderModels() {
+        List<ProviderModel> providerModels = providerModelMapper.selectList(
+                new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
+        );
+        providerModelCache.clear();
+        for (ProviderModel providerModel : providerModels) {
+            if (providerModel.getModelId() == null) {
+                continue;
+            }
+            providerModelCache
+                    .computeIfAbsent(providerModel.getModelId(), id -> new ArrayList<>())
+                    .add(providerModel);
+        }
+        log.debug("Provider model cache loaded, modelCount={}", providerModelCache.size());
     }
 
     public void refreshProviderTokens() {
@@ -130,55 +149,61 @@ public class RouteCacheService {
         return endpoint;
     }
 
-    public Provider selectProvider(Long endpointId, String modelCode, OpenAIProtocol protocol) {
-        return this.providerCache.values().stream()
-                .filter(provider -> supportsProtocol(provider, protocol)).min(Comparator
-                        .comparingInt(this::resolvePriority)
-                        .reversed()
-                        .thenComparing(provider -> provider.getId() == null ? Long.MAX_VALUE : provider.getId()))
-                .orElse(null);
-    }
-
-    public Model selectModel(Long endpointId, String modelCode, OpenAIProtocol protocol) {
-        Provider provider = selectProvider(endpointId, modelCode, protocol);
-        if (provider == null) {
-            return null;
-        }
-        return getModel(endpointId, modelCode, provider.getId());
-    }
-
-    public Model getModel(Long endpointId, String modelCode, Long providerId) {
-        List<Model> candidates = getModels(endpointId, modelCode);
-        if (candidates == null || candidates.isEmpty()) {
-            return null;
-        }
-        return candidates.stream()
-                .min(Comparator.comparing(model -> model.getId() == null ? Long.MAX_VALUE : model.getId()))
-                .orElse(null);
-    }
-
-    public List<Model> getModels(Long endpointId, String modelCode) {
-        Map<String, List<Model>> endpointModels = modelCache.get(endpointId);
+    public Model getModel(Long endpointId, String modelCode) {
+        Map<String, Model> endpointModels = modelCache.get(endpointId);
         if (endpointModels != null) {
-            List<Model> cached = endpointModels.get(modelCode);
-            if (cached != null && !cached.isEmpty()) {
+            Model cached = endpointModels.get(modelCode);
+            if (cached != null) {
                 return cached;
             }
         }
-        List<Model> models = modelMapper.selectList(
+        Model model = modelMapper.selectOne(
                 new LambdaQueryWrapper<Model>()
                         .eq(Model::getModelCode, modelCode)
                         .eq(Model::getEndpointId, endpointId)
                         .eq(Model::getStatus, 1)
         );
-        if (models != null && !models.isEmpty()) {
-            List<Model> cachedModels = new ArrayList<>(models);
+        if (model != null && model.getEndpointId() != null && model.getModelCode() != null) {
             modelCache
-                    .computeIfAbsent(endpointId, id -> new ConcurrentHashMap<>())
-                    .put(modelCode, cachedModels);
-            return cachedModels;
+                    .computeIfAbsent(model.getEndpointId(), id -> new ConcurrentHashMap<>())
+                    .put(model.getModelCode(), model);
         }
-        return models;
+        return model;
+    }
+
+    public ProviderModel selectProviderModel(Long modelId, OpenAIProtocol protocol) {
+        List<ProviderModel> candidates = getProviderModels(modelId);
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        return candidates.stream()
+                .filter(mapping -> mapping.getProviderId() != null)
+                .filter(mapping -> {
+                    Provider provider = getProvider(mapping.getProviderId());
+                    return provider != null && supportsProtocol(provider, protocol);
+                })
+                .sorted(Comparator
+                        .comparingInt((ProviderModel mapping) -> resolvePriority(getProvider(mapping.getProviderId())))
+                        .reversed()
+                        .thenComparing(mapping -> mapping.getId() == null ? Long.MAX_VALUE : mapping.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public List<ProviderModel> getProviderModels(Long modelId) {
+        List<ProviderModel> cached = providerModelCache.get(modelId);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+        List<ProviderModel> providerModels = providerModelMapper.selectList(
+                new LambdaQueryWrapper<ProviderModel>()
+                        .eq(ProviderModel::getModelId, modelId)
+                        .eq(ProviderModel::getStatus, 1)
+        );
+        if (providerModels != null && !providerModels.isEmpty()) {
+            providerModelCache.put(modelId, new ArrayList<>(providerModels));
+        }
+        return providerModels;
     }
 
     public Provider getProvider(Long providerId) {
@@ -191,20 +216,6 @@ public class RouteCacheService {
             providerCache.put(providerId, provider);
         }
         return provider;
-    }
-
-    public List<Provider> getProvidersByModel(Long endpointId, String modelCode) {
-        List<Model> candidates = getModels(endpointId, modelCode);
-        if (candidates == null || candidates.isEmpty()) {
-            return List.of();
-        }
-        return candidates.stream()
-                .map(Model::getProviderId)
-                .filter(providerId -> providerId != null)
-                .distinct()
-                .map(this::getProvider)
-                .filter(provider -> provider != null)
-                .collect(Collectors.toList());
     }
 
     public List<ProviderToken> getProviderTokens(Long providerId) {
@@ -231,7 +242,7 @@ public class RouteCacheService {
         if (supportedProtocols == null || supportedProtocols.isBlank()) {
             return true;
         }
-        String[] items = supportedProtocols.split("[,;?]");
+        String[] items = supportedProtocols.split("[,;\uFF0C]");
         for (String item : items) {
             if (item == null || item.isBlank()) {
                 continue;

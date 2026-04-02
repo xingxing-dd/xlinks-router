@@ -2,6 +2,7 @@ import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { postAuth } from '@/utils/request'
+import { resolveAccountTargetType } from '@/utils/auth'
 import { toast } from '@/utils/toast'
 
 const DEFAULT_COUNTDOWN = 60
@@ -24,20 +25,6 @@ export function useRegister() {
   const feedback = ref('')
 
   let timer = null
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const phoneRegex = /^1\d{10}$/
-
-  const resolveTargetType = (value) => {
-    const input = (value || '').trim()
-    if (emailRegex.test(input)) {
-      return 'email'
-    }
-    if (phoneRegex.test(input)) {
-      return 'phone'
-    }
-    return ''
-  }
-
   const startCountdown = (seconds = DEFAULT_COUNTDOWN) => {
     countdown.value = seconds
     if (timer) {
@@ -65,7 +52,7 @@ export function useRegister() {
     feedback.value = ''
     isSubmitting.value = true
 
-    const targetType = resolveTargetType(formData.phone)
+    const targetType = resolveAccountTargetType(formData.phone)
     if (!targetType) {
       toast.error(t('common.error'), t('register.phone'))
       isSubmitting.value = false
@@ -97,7 +84,7 @@ export function useRegister() {
       return
     }
 
-    const targetType = resolveTargetType(formData.phone)
+    const targetType = resolveAccountTargetType(formData.phone)
     if (!targetType) {
       toast.error(t('common.error'), t('register.phone'))
       return

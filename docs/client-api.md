@@ -91,27 +91,27 @@
 
 ---
 
-### 2.2 发送验证码
+### 2.2 ?????
 
-**请求地址**: `POST /auth/verify-code`
+**????**: `POST /auth/verify-code`
 
-**请求参数**:
+**????**:
 
-| 字段 | 类型 | 必填 | 说明 |
+| ?? | ?? | ?? | ?? |
 |------|------|------|------|
-| codeType | String | 是 | 验证码类型：`email`(邮箱)、`sms`(短信) |
-| target | String | 是 | 验证码接收目标；`codeType=email` 时传邮箱地址，`codeType=sms` 时传手机号 |
-| scene | String | 是 | 场景：`register`(注册)、`resetpwd`(重置密码) |
+| codeType | String | ? | ??????`email`(??)?`phone`(???) |
+| target | String | ? | ????????`codeType=email` ???????`codeType=phone` ????? |
+| scene | String | ? | ???`register`(??)?`resetpwd`(????) |
 
-**响应参数**:
+**????**:
 
-| 字段 | 类型 | 说明 |
+| ?? | ?? | ?? |
 |------|------|------|
-| message | String | 提示信息，按验证码类型返回“邮箱验证码发送成功”或“短信验证码发送成功” |
-| mockCode | String | 模拟模式下的验证码（开发环境） |
-| expireSeconds | Integer | 验证码有效期（秒） |
+| message | String | ??????????????????? |
+| token | String | ????????????? |
+| expireSeconds | Integer | ????????? |
 
-**邮箱验证码请求示例**:
+**?????????**:
 ```json
 {
   "codeType": "email",
@@ -120,23 +120,23 @@
 }
 ```
 
-**短信验证码请求示例**:
+**??????????**:
 ```json
 {
-  "codeType": "sms",
+  "codeType": "phone",
   "target": "13800138000",
-  "scene": "register"
+  "scene": "resetpwd"
 }
 ```
 
-**响应示例**:
+**????**:
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "message": "邮箱验证码发送成功",
-    "mockCode": "123456",
+    "message": "?????????",
+    "token": "xlinks:resetpwd:email:user@example.com",
     "expireSeconds": 300
   }
 }
@@ -144,27 +144,27 @@
 
 ---
 
-### 2.3 用户注册
+### 2.3 ????
 
-**请求地址**: `POST /auth/register`
+**????**: `POST /auth/register`
 
-**请求参数**:
+**????**:
 
-| 字段 | 类型 | 必填 | 说明 |
+| ?? | ?? | ?? | ?? |
 |------|------|------|------|
-| target | String | 是 | 注册账号；`targetType=email` 时传邮箱地址，`targetType=sms` 时传手机号 |
-| targetType | String | 是 | 账号类型：`email`(邮箱)、`sms`(手机号) |
-| password | String | 是 | 密码（RSA 加密） |
-| code | String | 是 | 验证码 |
-| inviteCode | String | 否 | 邀请码 |
+| target | String | ? | ?????`targetType=email` ???????`targetType=phone` ????? |
+| targetType | String | ? | ?????`email`(??)?`phone`(???) |
+| password | String | ? | ???RSA ??? |
+| code | String | ? | ??? |
+| inviteCode | String | ? | ??? |
 
-**响应参数**:
+**????**:
 
-| 字段 | 类型 | 说明 |
+| ?? | ?? | ?? |
 |------|------|------|
-| message | String | 注册结果信息 |
+| message | String | ?????? |
 
-**邮箱注册请求示例**:
+**????????**:
 ```json
 {
   "target": "user@example.com",
@@ -175,50 +175,100 @@
 }
 ```
 
-**手机号注册请求示例**:
+**?????????**:
 ```json
 {
   "target": "13800138000",
-  "targetType": "sms",
+  "targetType": "phone",
   "password": "encrypted-password",
   "code": "123456"
 }
 ```
 
-**响应示例**:
+**????**:
 ```json
 {
   "code": 0,
-  "message": "注册成功",
+  "message": "????",
   "data": null
 }
 ```
 
 ---
 
-### 2.4 用户登录
+### 2.4 ????
 
-**请求地址**: `POST /auth/login`
+**????**: `POST /auth/reset-password`
 
-**请求参数**:
+**????**:
 
-| 字段 | 类型 | 必填 | 说明 |
+| ?? | ?? | ?? | ?? |
 |------|------|------|------|
-| username | String | 是 | 用户名 |
-| password | String | 是 | 密码（RSA 加密） |
+| target | String | ? | ?????????? |
+| targetType | String | ? | ???????`email`(??)?`phone`(???) |
+| password | String | ? | ????RSA ??? |
+| code | String | ? | ??? |
 
-**响应参数**:
+**????**:
 
-| 字段 | 类型 | 说明 |
+| ?? | ?? | ?? |
 |------|------|------|
-| accessToken | String | 访问令牌 |
-| expiresIn | Long | 过期秒数 |
-| user | Object | 用户信息 |
-| user.id | Long | 用户 ID |
-| user.email | String | 邮箱 |
-| user.status | Integer | 状态：1-启用 |
+| message | String | ?????? |
 
-**请求示例**:
+**??????????**:
+```json
+{
+  "target": "user@example.com",
+  "targetType": "email",
+  "password": "encrypted-new-password",
+  "code": "123456"
+}
+```
+
+**???????????**:
+```json
+{
+  "target": "13800138000",
+  "targetType": "phone",
+  "password": "encrypted-new-password",
+  "code": "123456"
+}
+```
+
+**????**:
+```json
+{
+  "code": 0,
+  "message": "??????",
+  "data": null
+}
+```
+
+---
+
+### 2.5 ????
+
+**????**: `POST /auth/login`
+
+**????**:
+
+| ?? | ?? | ?? | ?? |
+|------|------|------|------|
+| username | String | ? | ??? |
+| password | String | ? | ???RSA ??? |
+
+**????**:
+
+| ?? | ?? | ?? |
+|------|------|------|
+| accessToken | String | ???? |
+| expiresIn | Long | ???? |
+| user | Object | ???? |
+| user.id | Long | ?? ID |
+| user.email | String | ?? |
+| user.status | Integer | ???1-?? |
+
+**????**:
 ```json
 {
   "username": "user@example.com",
@@ -226,7 +276,7 @@
 }
 ```
 
-**响应示例**:
+**????**:
 ```json
 {
   "code": 0,
@@ -245,7 +295,7 @@
 
 ---
 
-### 2.5 获取当前用户信息
+### 2.6 获取当前用户信息
 
 **请求地址**: `GET /api/v1/user/info`
 

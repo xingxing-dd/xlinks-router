@@ -84,4 +84,9 @@ public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
         provider.setStatus(status);
         return super.updateById(provider);
     }
+
+    public boolean deleteById(Long id) {
+        getById(id);
+        return super.removeById(id);
+    }
 }

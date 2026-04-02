@@ -3,25 +3,27 @@ package site.xlinks.ai.router.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
- * Provider Token 更新 DTO
+ * Provider token update request.
  */
 @Data
-@Schema(description = "Provider Token 更新请求")
+@Schema(description = "Provider token update request")
 public class ProviderTokenUpdateDTO {
 
-    @Schema(description = "Token 名称")
+    @Schema(description = "Token name")
     private String tokenName;
 
-    @Schema(description = "Token 值")
+    @Schema(description = "Token value")
     private String tokenValue;
 
-    @Schema(description = "配额总量")
+    @Schema(description = "Quota total")
     private Long quotaTotal;
 
-    @Schema(description = "过期时间")
-    private java.time.LocalDateTime expireTime;
+    @Schema(description = "Expire time")
+    private LocalDateTime expireTime;
 
-    @Schema(description = "备注")
+    @Schema(description = "Remark")
     private String remark;
 }

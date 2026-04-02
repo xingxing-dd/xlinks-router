@@ -46,7 +46,7 @@ public class CustomerTokenAuthService {
         }
 
         // 检查状态
-        if (customerToken.getStatus() == null || customerToken.getStatus() != 0) {
+        if (customerToken.getStatus() == null || customerToken.getStatus() != 1) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 已禁用");
         }
 

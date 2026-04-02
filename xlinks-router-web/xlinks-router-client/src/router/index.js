@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/login/index.vue'
+import ForgotPassword from '../views/forgot-password/index.vue'
 import Register from '../views/register/index.vue'
 import Dashboard from '../views/dashboard/index.vue'
 import Tokens from '../views/tokens/index.vue'
@@ -26,6 +27,11 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: Login
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: ForgotPassword
   },
   {
     path: '/register',
@@ -82,7 +88,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
-  const publicPaths = ['/landing', '/login', '/register']
+  const publicPaths = ['/landing', '/login', '/register', '/forgot-password']
 
   if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
     return {
