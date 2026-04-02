@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS `promotion_records` (
   `reward_amount` DECIMAL(12,2) NOT NULL DEFAULT 0 COMMENT '奖励金额',
   `reward_rate` DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '奖励比例',
   `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待结算，1-已生效，2-已失效',
+  `settle_at` DATETIME DEFAULT NULL COMMENT '结算时间',
   `source_order_no` VARCHAR(64) DEFAULT NULL COMMENT '来源订单号',
   `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

@@ -50,7 +50,7 @@ logging:
 xlinks:
   # 邀请有礼链接
   promotion:
-    referral-link-prefix: https://token-hub.com/register?ref=
+    referral-link-prefix: https://ai.xlinks.site/register?ref=
   sms:
     guoyangyun:
       host: https://gyytz.market.alicloudapi.com

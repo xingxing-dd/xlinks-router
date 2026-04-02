@@ -59,7 +59,8 @@ const routes = [
       {
         path: 'promotion',
         name: 'Promotion',
-        component: Promotion
+        component: Promotion,
+        props: (route) => ({ ref: route.query.ref || '' })
       },
       {
         path: 'contact',
@@ -82,7 +83,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
-  const publicPaths = ['/landing', '/login', '/register']
+  // Allow promotion landing to be visited without login.
+  const publicPaths = ['/landing', '/login', '/register', '/promotion']
 
   if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
     return {
@@ -93,7 +95,7 @@ router.beforeEach((to) => {
     }
   }
 
-  if (publicPaths.includes(to.path) && authStore.isAuthenticated) {
+  if (publicPaths.includes(to.path) && authStore.isAuthenticated && to.path !== '/promotion') {
     return '/tokens'
   }
 
