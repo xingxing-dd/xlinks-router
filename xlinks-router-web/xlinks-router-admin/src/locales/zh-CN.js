@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: {
     logout: '退出登录',
     search: '搜索',
@@ -16,7 +16,7 @@ export default {
   },
   login: {
     title: 'Xlinks Router 管理后台',
-    subtitle: '使用管理员账号登录运营后台',
+    subtitle: '使用管理员账户登录运营后台',
     account: '账号',
     password: '密码',
     remember: '记住登录状态',
@@ -24,14 +24,16 @@ export default {
   },
   nav: {
     dashboard: '运营总览',
+    merchants: '商户管理',
     providers: '服务商管理',
     providerTokens: '服务商 Token',
     customerTokens: '客户 Token',
-    models: '模型资源中心',
+    models: '模型管理',
     plans: '套餐管理',
     subscriptions: '订阅记录',
     activationCodes: '激活码管理',
-    activationUsage: '激活使用记录',
+    activationUsage: '激活码使用记录',
+    paymentMethods: '支付方式管理',
     payLinks: '支付链接管理',
   },
 }

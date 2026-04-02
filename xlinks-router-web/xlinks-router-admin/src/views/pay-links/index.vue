@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   createPayLink,
@@ -151,7 +151,7 @@ const handleToggleStatus = async (record) => {
 }
 
 const handleDelete = async (record) => {
-  if (!window.confirm(`确认删除支付链接「${record.planName}」吗？`)) {
+  if (!window.confirm(`确认删除支付链接“${record.planName || record.targetId}”吗？`)) {
     return
   }
   try {
@@ -194,7 +194,7 @@ onMounted(async () => {
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">支付链接管理</h1>
-        <p class="text-slate-500">集中维护套餐第三方支付链接、状态与运营备注。</p>
+        <p class="text-slate-500">集中维护套餐专属的第三方支付跳转链接，便于渠道投放和活动运营。</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -263,9 +263,9 @@ onMounted(async () => {
               <tr v-for="record in records" :key="record.id">
                 <td>
                   <div class="font-medium text-slate-800">{{ record.planName || '-' }}</div>
-                  <div class="text-xs text-slate-400 mt-1">套餐 ID: {{ record.targetId }}</div>
+                  <div class="text-xs text-slate-400 mt-1">套餐 ID：{{ record.targetId }}</div>
                 </td>
-                <td class="font-mono text-xs text-slate-600 break-all max-w-[300px]">{{ record.payUrl }}</td>
+                <td class="font-mono text-xs text-slate-600 break-all max-w-[320px]">{{ record.payUrl }}</td>
                 <td>
                   <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
                     {{ formatStatus(record.status) }}
@@ -313,7 +313,7 @@ onMounted(async () => {
         <div class="flex items-center justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">{{ dialogMode === 'create' ? '新增支付链接' : '编辑支付链接' }}</h3>
-            <p class="text-sm text-slate-400 mt-1">绑定套餐专属跳转链接，便于运营直接投放购买入口。</p>
+            <p class="text-sm text-slate-400 mt-1">绑定套餐专属跳转链接，方便用户从活动页直接进入购买流程。</p>
           </div>
           <button class="btn-text" @click="dialogVisible = false">关闭</button>
         </div>
@@ -339,7 +339,7 @@ onMounted(async () => {
           </div>
           <div class="md:col-span-2">
             <label class="text-sm text-slate-500">备注</label>
-            <textarea v-model.trim="form.remark" class="input mt-2 min-h-24" placeholder="可填写渠道说明、活动备注等"></textarea>
+            <textarea v-model.trim="form.remark" class="input mt-2 min-h-24" placeholder="填写投放渠道、活动说明或补充信息"></textarea>
           </div>
         </div>
 

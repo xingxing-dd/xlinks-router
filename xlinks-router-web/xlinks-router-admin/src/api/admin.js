@@ -1,10 +1,15 @@
-import { request } from '@/utils/http'
+﻿import { request } from '@/utils/http'
 
 export const loginAdmin = (body) => request('/admin/auth/login', { method: 'POST', body })
 export const getAdminProfile = () => request('/admin/auth/me')
 export const logoutAdmin = () => request('/admin/auth/logout', { method: 'POST' })
 
 export const getDashboardOverview = () => request('/admin/dashboard/overview')
+
+export const listMerchants = (params) => request('/admin/merchants', { query: params })
+export const getMerchantDetail = (id) => request(`/admin/merchants/${id}`)
+export const updateMerchant = (id, body) => request(`/admin/merchants/${id}`, { method: 'PUT', body })
+export const updateMerchantStatus = (id, status) => request(`/admin/merchants/${id}/status`, { method: 'PATCH', query: { status } })
 
 export const listProviders = (params) => request('/admin/providers', { query: params })
 export const createProvider = (body) => request('/admin/providers', { method: 'POST', body })
@@ -57,6 +62,13 @@ export const generateActivationCodes = (body) => request('/admin/activation-code
 export const updateActivationCode = (id, body) => request(`/admin/activation-codes/${id}`, { method: 'PUT', body })
 export const updateActivationCodeStatus = (id, status) => request(`/admin/activation-codes/${id}/status`, { method: 'PATCH', query: { status } })
 export const deleteActivationCode = (id) => request(`/admin/activation-codes/${id}`, { method: 'DELETE' })
+
+export const listPaymentMethods = (params) => request('/admin/payment-methods', { query: params })
+export const createPaymentMethod = (body) => request('/admin/payment-methods', { method: 'POST', body })
+export const getPaymentMethodDetail = (id) => request(`/admin/payment-methods/${id}`)
+export const updatePaymentMethod = (id, body) => request(`/admin/payment-methods/${id}`, { method: 'PUT', body })
+export const updatePaymentMethodStatus = (id, status) => request(`/admin/payment-methods/${id}/status`, { method: 'PATCH', query: { status } })
+export const deletePaymentMethod = (id) => request(`/admin/payment-methods/${id}`, { method: 'DELETE' })
 
 export const listPayLinks = (params) => request('/admin/pay-links', { query: params })
 export const createPayLink = (body) => request('/admin/pay-links', { method: 'POST', body })

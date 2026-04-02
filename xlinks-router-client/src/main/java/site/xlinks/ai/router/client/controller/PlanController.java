@@ -123,6 +123,7 @@ public class PlanController {
         response.setPrice(plan.getPrice());
         response.setDailyLimit(toBigDecimal(plan.getDailyQuota()));
         response.setMonthlyQuota(toBigDecimal(plan.getTotalQuota()));
+        response.setDurationDays(plan.getDurationDays());
         response.setFeatures(List.of(
                 "仅可用 Codex",
                 "总共可用 $" + plan.getTotalQuota() + " 额度",

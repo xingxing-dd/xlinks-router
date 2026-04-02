@@ -14,6 +14,7 @@ public class PlanItemResponse {
     private BigDecimal monthlyQuota;
     private List<String> features;
     private Boolean isRecommended;
+    private Integer durationDays;
 
     public void setRecommended(Boolean recommended) {
         isRecommended = recommended;

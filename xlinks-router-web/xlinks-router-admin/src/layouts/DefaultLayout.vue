@@ -1,5 +1,5 @@
-<script setup>
-import { computed, ref } from 'vue'
+﻿<script setup>
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -20,6 +20,8 @@ import {
   ReceiptText,
   History,
   Link2,
+  Layers3,
+  FolderKanban,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -31,23 +33,68 @@ const isMobileMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const loggingOut = ref(false)
 
-const navItems = computed(() => [
-  { path: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
-  { path: '/providers', label: t('nav.providers'), icon: Cloud },
-  { path: '/provider-tokens', label: t('nav.providerTokens'), icon: KeySquare },
-  { path: '/customer-tokens', label: t('nav.customerTokens'), icon: KeyRound },
-  { path: '/models', label: t('nav.models'), icon: Boxes },
-  { path: '/plans', label: t('nav.plans'), icon: Package },
-  { path: '/subscriptions', label: t('nav.subscriptions'), icon: ReceiptText },
-  { path: '/activation-codes', label: t('nav.activationCodes'), icon: Ticket },
-  { path: '/activation-usage', label: t('nav.activationUsage'), icon: History },
-  { path: '/pay-links', label: t('nav.payLinks'), icon: Link2 },
+const groupOpenState = reactive({
+  overview: true,
+  resources: true,
+  operations: true,
+  payments: true,
+})
+
+const navGroups = computed(() => [
+  {
+    key: 'overview',
+    label: '总览',
+    icon: Layers3,
+    children: [
+      { path: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+      { path: '/merchants', label: t('nav.merchants'), icon: Shield },
+    ],
+  },
+  {
+    key: 'resources',
+    label: '资源管理',
+    icon: Cloud,
+    children: [
+      { path: '/providers', label: t('nav.providers'), icon: Cloud },
+      { path: '/provider-tokens', label: t('nav.providerTokens'), icon: KeySquare },
+      { path: '/customer-tokens', label: t('nav.customerTokens'), icon: KeyRound },
+      { path: '/models', label: t('nav.models'), icon: Boxes },
+    ],
+  },
+  {
+    key: 'operations',
+    label: '套餐运营',
+    icon: FolderKanban,
+    children: [
+      { path: '/plans', label: t('nav.plans'), icon: Package },
+      { path: '/subscriptions', label: t('nav.subscriptions'), icon: ReceiptText },
+      { path: '/activation-codes', label: t('nav.activationCodes'), icon: Ticket },
+      { path: '/activation-usage', label: t('nav.activationUsage'), icon: History },
+    ],
+  },
+  {
+    key: 'payments',
+    label: '支付管理',
+    icon: Link2,
+    children: [
+      { path: '/payment-methods', label: t('nav.paymentMethods'), icon: ReceiptText },
+      { path: '/pay-links', label: t('nav.payLinks'), icon: Link2 },
+    ],
+  },
 ])
 
+const flatNavItems = computed(() => navGroups.value.flatMap((group) => group.children))
+
 const isActive = (path) => route.path.startsWith(path)
+const isGroupActive = (group) => group.children.some((item) => isActive(item.path))
+const isGroupExpanded = (group) => groupOpenState[group.key] || isGroupActive(group)
+
+const toggleGroup = (groupKey) => {
+  groupOpenState[groupKey] = !groupOpenState[groupKey]
+}
 
 const currentLabel = computed(() => {
-  const item = navItems.value.find((navItem) => isActive(navItem.path))
+  const item = flatNavItems.value.find((navItem) => isActive(navItem.path))
   return item ? item.label : t('nav.dashboard')
 })
 
@@ -91,25 +138,55 @@ const handleLogout = async () => {
         </div>
       </div>
 
-      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
-        <router-link
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group"
-          :class="[
-            isActive(item.path)
-              ? 'bg-gradient-button text-white shadow-lg shadow-primary/25'
-              : 'text-slate-600 hover:bg-primary/5 hover:text-slate-900'
-          ]"
+      <nav class="flex-1 p-4 space-y-3 overflow-y-auto">
+        <section
+          v-for="group in navGroups"
+          :key="group.key"
+          class="rounded-2xl border border-slate-200/80 bg-slate-50/70 overflow-hidden"
         >
-          <component
-            :is="item.icon"
-            class="w-5 h-5 transition-transform duration-300"
-            :class="[isActive(item.path) ? '' : 'group-hover:scale-110']"
-          />
-          <span class="font-medium">{{ item.label }}</span>
-        </router-link>
+          <button
+            class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-white/80 transition-colors"
+            @click="toggleGroup(group.key)"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="w-9 h-9 rounded-xl flex items-center justify-center"
+                :class="isGroupActive(group) ? 'bg-primary text-white shadow-md shadow-primary/20' : 'bg-white text-slate-500 border border-slate-200'"
+              >
+                <component :is="group.icon" class="w-4 h-4" />
+              </div>
+              <div>
+                <div class="text-sm font-semibold text-slate-800">{{ group.label }}</div>
+                <div class="text-xs text-slate-400 mt-0.5">{{ group.children.length }} 个功能</div>
+              </div>
+            </div>
+            <ChevronDown
+              class="w-4 h-4 text-slate-400 transition-transform duration-200"
+              :class="{ 'rotate-180': isGroupExpanded(group) }"
+            />
+          </button>
+
+          <div v-if="isGroupExpanded(group)" class="px-3 pb-3 space-y-1.5">
+            <router-link
+              v-for="item in group.children"
+              :key="item.path"
+              :to="item.path"
+              class="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group"
+              :class="[
+                isActive(item.path)
+                  ? 'bg-gradient-button text-white shadow-lg shadow-primary/25'
+                  : 'text-slate-600 hover:bg-white hover:text-slate-900'
+              ]"
+            >
+              <component
+                :is="item.icon"
+                class="w-4 h-4 transition-transform duration-300"
+                :class="[isActive(item.path) ? '' : 'group-hover:scale-110']"
+              />
+              <span class="font-medium text-sm">{{ item.label }}</span>
+            </router-link>
+          </div>
+        </section>
       </nav>
     </aside>
 
@@ -158,25 +235,48 @@ const handleLogout = async () => {
           </button>
         </div>
 
-        <div v-if="isMobileMenuOpen" class="border-t border-slate-200 p-4 space-y-1.5 bg-white animate-in fade-in slide-in-from-top-4 duration-300">
-          <router-link
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            @click="isMobileMenuOpen = false"
-            class="flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all"
-            :class="[
-              isActive(item.path)
-                ? 'bg-gradient-button text-white shadow-md shadow-primary/25'
-                : 'text-slate-600 hover:bg-slate-50'
-            ]"
+        <div v-if="isMobileMenuOpen" class="border-t border-slate-200 p-4 space-y-3 bg-white animate-in fade-in slide-in-from-top-4 duration-300">
+          <section
+            v-for="group in navGroups"
+            :key="group.key"
+            class="rounded-2xl border border-slate-200 bg-slate-50/80 overflow-hidden"
           >
-            <component :is="item.icon" class="w-5 h-5" />
-            <span class="font-medium">{{ item.label }}</span>
-          </router-link>
+            <button
+              class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+              @click="toggleGroup(group.key)"
+            >
+              <div class="flex items-center gap-3">
+                <component :is="group.icon" class="w-4 h-4 text-slate-500" />
+                <span class="font-semibold text-sm text-slate-800">{{ group.label }}</span>
+              </div>
+              <ChevronDown
+                class="w-4 h-4 text-slate-400 transition-transform duration-200"
+                :class="{ 'rotate-180': isGroupExpanded(group) }"
+              />
+            </button>
+
+            <div v-if="isGroupExpanded(group)" class="px-3 pb-3 space-y-1.5">
+              <router-link
+                v-for="item in group.children"
+                :key="item.path"
+                :to="item.path"
+                @click="isMobileMenuOpen = false"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+                :class="[
+                  isActive(item.path)
+                    ? 'bg-gradient-button text-white shadow-md shadow-primary/25'
+                    : 'text-slate-600 hover:bg-white'
+                ]"
+              >
+                <component :is="item.icon" class="w-4 h-4" />
+                <span class="font-medium text-sm">{{ item.label }}</span>
+              </router-link>
+            </div>
+          </section>
+
           <button
             @click="handleLogout"
-            class="flex items-center gap-3 px-4 py-3.5 w-full text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all mt-4 border-t border-slate-100 pt-6"
+            class="flex items-center gap-3 px-4 py-3.5 w-full text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all mt-2 border border-slate-200"
           >
             <LogOut class="w-5 h-5" />
             <span class="font-medium text-sm">{{ loggingOut ? '退出中...' : t('common.logout') }}</span>

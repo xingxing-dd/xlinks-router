@@ -10,6 +10,12 @@ import lombok.Data;
 @Schema(description = "Dashboard overview")
 public class DashboardOverviewVO {
 
+    @Schema(description = "Merchant count")
+    private long merchantCount;
+
+    @Schema(description = "Active merchant count")
+    private long activeMerchantCount;
+
     @Schema(description = "Provider count")
     private long providerCount;
 

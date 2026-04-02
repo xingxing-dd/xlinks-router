@@ -1,12 +1,14 @@
-<script setup>
+﻿<script setup>
 import { onMounted, ref } from 'vue'
-import { Boxes, Cloud, KeyRound, KeySquare, Link2, AlarmClock } from 'lucide-vue-next'
+import { Boxes, Cloud, KeyRound, KeySquare, Link2, AlarmClock, Shield } from 'lucide-vue-next'
 import { getDashboardOverview } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 
 const toastStore = useToastStore()
 const loading = ref(false)
 const overview = ref({
+  merchantCount: 0,
+  activeMerchantCount: 0,
   providerCount: 0,
   activeProviderCount: 0,
   endpointCount: 0,
@@ -18,13 +20,15 @@ const overview = ref({
 })
 
 const cards = [
+  { key: 'merchantCount', label: '商户总数', icon: Shield },
+  { key: 'activeMerchantCount', label: '启用商户', icon: Shield },
   { key: 'providerCount', label: '服务商总数', icon: Cloud },
+  { key: 'activeProviderCount', label: '启用服务商', icon: Cloud },
   { key: 'endpointCount', label: '标准端点', icon: Link2 },
   { key: 'modelCount', label: '标准模型', icon: Boxes },
-  { key: 'providerModelCount', label: '模型映射', icon: Link2 },
   { key: 'providerTokenCount', label: '服务商 Token', icon: KeySquare },
   { key: 'customerTokenCount', label: '客户 Token', icon: KeyRound },
-  { key: 'activeProviderCount', label: '启用服务商', icon: Cloud },
+  { key: 'providerModelCount', label: '模型映射', icon: Link2 },
   { key: 'expiringTokenCount', label: '7 天内到期 Token', icon: AlarmClock },
 ]
 
@@ -33,7 +37,7 @@ const loadOverview = async () => {
   try {
     overview.value = await getDashboardOverview()
   } catch (error) {
-    toastStore.push(error.message || '加载运营概览失败', 'error')
+    toastStore.push(error.message || '加载运营总览失败', 'error')
   } finally {
     loading.value = false
   }
@@ -47,14 +51,14 @@ onMounted(loadOverview)
     <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">运营总览</h1>
-        <p class="text-slate-500">聚焦路由平台配置资产与 Token 风险的关键指标。</p>
+        <p class="text-slate-500">聚合商户、资源、订阅与 Token 风险数据，帮助运营人员快速判断平台状态。</p>
       </div>
       <button class="btn-outline" :disabled="loading" @click="loadOverview">
         {{ loading ? '刷新中...' : '刷新数据' }}
       </button>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
       <div v-for="card in cards" :key="card.key" class="card p-5 flex items-center justify-between gap-4">
         <div>
           <p class="text-sm text-slate-500">{{ card.label }}</p>
@@ -74,8 +78,8 @@ onMounted(loadOverview)
         <div class="card-body space-y-4 text-sm text-slate-600">
           <div class="flex items-start justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-4">
             <div>
-              <p class="font-medium text-slate-800">优先核查即将到期 Token</p>
-              <p class="mt-1">当前有 {{ overview.expiringTokenCount }} 个 Token 在 7 天内到期，建议提前替换或续期。</p>
+              <p class="font-medium text-slate-800">优先核查即将到期的 Token</p>
+              <p class="mt-1">当前有 {{ overview.expiringTokenCount }} 个 Token 会在 7 天内到期，建议提前续期或切换备用凭证。</p>
             </div>
             <span class="badge" :class="overview.expiringTokenCount > 0 ? 'badge-warning' : 'badge-success'">
               {{ overview.expiringTokenCount > 0 ? '需关注' : '正常' }}
@@ -83,8 +87,15 @@ onMounted(loadOverview)
           </div>
           <div class="flex items-start justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-4">
             <div>
-              <p class="font-medium text-slate-800">核对标准模型与映射覆盖度</p>
-              <p class="mt-1">已维护 {{ overview.modelCount }} 个标准模型，对应 {{ overview.providerModelCount }} 条服务商映射。</p>
+              <p class="font-medium text-slate-800">持续关注商户活跃与资源供给</p>
+              <p class="mt-1">当前启用商户 {{ overview.activeMerchantCount }} 个，启用服务商 {{ overview.activeProviderCount }} 个，可用于评估资源供需是否匹配。</p>
+            </div>
+            <span class="badge badge-success">稳定</span>
+          </div>
+          <div class="flex items-start justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-4">
+            <div>
+              <p class="font-medium text-slate-800">检查模型标准化覆盖度</p>
+              <p class="mt-1">已维护 {{ overview.modelCount }} 个标准模型，并完成 {{ overview.providerModelCount }} 条服务商映射，建议保持模型与映射同步更新。</p>
             </div>
             <span class="badge badge-success">可用</span>
           </div>
@@ -96,10 +107,10 @@ onMounted(loadOverview)
           <h2 class="card-title">核心范围</h2>
         </div>
         <div class="card-body space-y-3 text-sm text-slate-600">
-          <p>1. 服务商管理：维护上游平台基础信息与路由优先级。</p>
-          <p>2. 服务商 Token：维护上游凭证与到期时间。</p>
-          <p>3. 模型资源中心：维护端点、标准模型和服务商映射。</p>
-          <p>4. 客户 Token：管理客户可调用模型与使用资格。</p>
+          <p>1. 商户管理：维护商户账户状态与运营备注。</p>
+          <p>2. 资源管理：维护服务商、Token、模型与模型映射。</p>
+          <p>3. 套餐运营：维护套餐、订阅记录和激活码资产。</p>
+          <p>4. 支付管理：维护支付方式配置与支付链接投放入口。</p>
         </div>
       </div>
     </div>
