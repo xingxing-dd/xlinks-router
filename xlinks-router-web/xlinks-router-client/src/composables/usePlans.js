@@ -3,59 +3,103 @@ import { useI18n } from 'vue-i18n'
 import { getApi, postApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
 
+const DEFAULT_PLANS = [
+  {
+    id: 'small',
+    name: 'Codex小包套餐',
+    price: 45,
+    dailyLimit: 30,
+    monthlyQuota: 900,
+    durationDays: 30,
+    allowedModels: ['Codex'],
+    carryOverDailyQuota: true,
+    stackQuotaOnly: true,
+  },
+  {
+    id: 'medium',
+    name: 'Codex中包套餐',
+    price: 60,
+    dailyLimit: 60,
+    monthlyQuota: 1800,
+    durationDays: 30,
+    allowedModels: ['Codex'],
+    carryOverDailyQuota: true,
+    stackQuotaOnly: true,
+  },
+  {
+    id: 'large',
+    name: 'Codex大包套餐',
+    price: 75,
+    dailyLimit: 90,
+    monthlyQuota: 2700,
+    durationDays: 30,
+    allowedModels: ['Codex'],
+    carryOverDailyQuota: true,
+    stackQuotaOnly: true,
+  },
+]
+
 export function usePlans() {
   const { t } = useI18n()
 
-  const codexPlans = ref([
-    {
-      id: "small",
-      name: "Codex小包套餐",
-      price: 45,
-      dailyLimit: 30,
-      monthlyQuota: 900,
-      concurrency: 8,
-      features: [
-        "有效期 30 天",
-        "仅可用 Codex",
-        "月度可用 $900 额度",
-        "每日可用 $30 + 昨日未用完额度",
-        "单套餐并发量为 8",
-        "套餐多买只叠加额度，不叠加时间",
-      ],
-    },
-    {
-      id: "medium",
-      name: "Codex中包套餐",
-      price: 60,
-      dailyLimit: 60,
-      monthlyQuota: 1800,
-      concurrency: 12,
-      features: [
-        "有效期 30 天",
-        "仅可用 Codex",
-        "月度可用 $1800 额度",
-        "每日可用 $60 + 昨日未用完额度",
-        "单套餐并发量为 12",
-        "套餐多买只叠加额度，不叠加时间",
-      ],
-    },
-    {
-      id: "large",
-      name: "Codex大包套餐",
-      price: 75,
-      dailyLimit: 90,
-      monthlyQuota: 2700,
-      concurrency: 16,
-      features: [
-        "有效期 30 天",
-        "仅可用 Codex",
-        "月度可用 $2700 额度",
-        "每日可用 $90 + 昨日未用完额度",
-        "单套餐并发量为 16",
-        "套餐多买只叠加额度，不叠加时间",
-      ],
-    },
-  ])
+  const formatAllowedModels = (models) => {
+    if (!Array.isArray(models) || models.length === 0) {
+      return t('plans.features.defaultModel')
+    }
+    return models.join(', ')
+  }
+
+  const buildPlanFeatures = (plan) => {
+    const features = []
+
+    features.push(
+      t('plans.features.allowedModels', {
+        models: formatAllowedModels(plan.allowedModels),
+      }),
+    )
+
+    features.push(
+      t('plans.features.totalQuota', {
+        quota: plan.monthlyQuota ?? 0,
+      }),
+    )
+
+    if (plan.carryOverDailyQuota !== false) {
+      features.push(
+        t('plans.features.dailyQuotaCarryOver', {
+          quota: plan.dailyLimit ?? 0,
+        }),
+      )
+    } else {
+      features.push(
+        t('plans.features.dailyQuota', {
+          quota: plan.dailyLimit ?? 0,
+        }),
+      )
+    }
+
+    if (plan.stackQuotaOnly !== false) {
+      features.push(t('plans.features.stackQuotaOnly'))
+    }
+
+    return features
+  }
+
+  const normalizePlan = (plan) => ({
+    ...plan,
+    id: String(plan.id),
+    allowedModels: Array.isArray(plan.allowedModels) ? plan.allowedModels : [],
+  })
+
+  const enrichPlan = (plan) => {
+    const normalized = normalizePlan(plan)
+    return {
+      ...normalized,
+      features: buildPlanFeatures(normalized),
+    }
+  }
+
+  const codexPlans = ref(DEFAULT_PLANS.map(enrichPlan))
 
   const activeSubscriptions = ref([])
 
@@ -98,8 +142,8 @@ export function usePlans() {
         getApi('/v1/subscriptions/history'),
       ])
 
-      if (remotePlans && remotePlans.length > 0) {
-        codexPlans.value = remotePlans
+      if (Array.isArray(remotePlans) && remotePlans.length > 0) {
+        codexPlans.value = remotePlans.map(enrichPlan)
       }
 
       if (Array.isArray(remoteActiveSubs)) {
@@ -175,7 +219,7 @@ export function usePlans() {
       })
       toast.success(t('plans.activationSuccess'), result?.message || t('plans.activationSuccessDetail'))
       isActivationCodeModalOpen.value = false
-      activationCode.value = ""
+      activationCode.value = ''
       await loadPlans()
     } catch (error) {
       toast.error(t('plans.activationFailed'), error.message)

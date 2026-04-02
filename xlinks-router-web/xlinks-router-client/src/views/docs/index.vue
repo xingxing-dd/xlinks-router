@@ -39,7 +39,7 @@ const handleCopy = async (text, section) => {
   }
 }
 
-const baseUrl = 'https://ai.xlinks.site/v1/codex'
+const baseUrl = 'https://ai.xlinks.site/v1/'
 </script>
 
 <template>

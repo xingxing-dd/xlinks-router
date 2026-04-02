@@ -809,7 +809,10 @@
 | price | BigDecimal | 价格(元) |
 | dailyLimit | BigDecimal | 每日额度(美元) |
 | monthlyQuota | BigDecimal | 月度额度(美元) |
-| features | Array | 套餐特性列表 |
+| durationDays | Integer | 有效期天数 |
+| allowedModels | Array | 允许访问的模型列表 |
+| carryOverDailyQuota | Boolean | 是否支持昨日未用额度结转 |
+| stackQuotaOnly | Boolean | 多买是否只叠加额度不叠加时长 |
 | isRecommended | Boolean | 是否推荐（用于高亮） |
 
 **响应示例**:
@@ -824,12 +827,10 @@
       "price": 45.00,
       "dailyLimit": 30,
       "monthlyQuota": 900,
-      "features": [
-        "有效期 30 天",
-        "仅可用 Codex",
-        "月度可用 $900 额度",
-        "每日可用 $30 + 昨日未用完额度"
-      ],
+      "durationDays": 30,
+      "allowedModels": ["codex"],
+      "carryOverDailyQuota": true,
+      "stackQuotaOnly": true,
       "isRecommended": false
     }
   ]

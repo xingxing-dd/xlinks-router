@@ -1,5 +1,7 @@
 package site.xlinks.ai.router.client.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +31,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -37,6 +40,9 @@ import java.util.List;
 public class PlanController {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
+    };
 
     private final PlanService planService;
     private final PlanOrderService planOrderService;
@@ -124,14 +130,22 @@ public class PlanController {
         response.setDailyLimit(toBigDecimal(plan.getDailyQuota()));
         response.setMonthlyQuota(toBigDecimal(plan.getTotalQuota()));
         response.setDurationDays(plan.getDurationDays());
-        response.setFeatures(List.of(
-                "仅可用 Codex",
-                "总共可用 $" + plan.getTotalQuota() + " 额度",
-                "每日可用 $" + plan.getDailyQuota() + " + 昨日未用完额度",
-                "套餐多买只叠加额度，不叠加时间"
-        ));
+        response.setAllowedModels(parseAllowedModels(plan.getAllowedModels()));
+        response.setCarryOverDailyQuota(Boolean.TRUE);
+        response.setStackQuotaOnly(Boolean.TRUE);
         response.setRecommended(false);
         return response;
+    }
+
+    private List<String> parseAllowedModels(String allowedModels) {
+        if (allowedModels == null || allowedModels.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(allowedModels, STRING_LIST_TYPE);
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
     }
 
     private ActiveSubscriptionResponse toActiveSubscriptionResponse(CustomerPlan plan, LocalDateTime now) {
@@ -231,3 +245,4 @@ public class PlanController {
         return "cancelled";
     }
 }
+

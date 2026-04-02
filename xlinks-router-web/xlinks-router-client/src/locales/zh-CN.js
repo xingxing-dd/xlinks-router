@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   common: {
     confirm: '确认',
     cancel: '取消',
@@ -266,6 +266,14 @@ export default {
     activationCodeEmptyDetail: '请输入有效的激活码',
     activationCodeFormatError: '激活码格式不正确',
     activationCodeFormatErrorDetail: '激活码至少需要 8 位字符',
+    features: {
+      defaultModel: 'Codex',
+      allowedModels: '仅可用 {models}',
+      totalQuota: '总共可用 ${quota} 额度',
+      dailyQuota: '每日可用 ${quota} 额度',
+      dailyQuotaCarryOver: '每日可用 ${quota} + 昨日未用完额度',
+      stackQuotaOnly: '套餐多买只叠加额度，不叠加时间',
+    },
   },
   promotion: {
     title: '推广有礼',

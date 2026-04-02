@@ -12,7 +12,9 @@ public class PlanItemResponse {
     private BigDecimal price;
     private BigDecimal dailyLimit;
     private BigDecimal monthlyQuota;
-    private List<String> features;
+    private List<String> allowedModels;
+    private Boolean carryOverDailyQuota;
+    private Boolean stackQuotaOnly;
     private Boolean isRecommended;
     private Integer durationDays;
 
