@@ -396,6 +396,133 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   KEY `idx_endpoint_code` (`endpoint_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 17. Contact messages 联系我们问题记录表
+CREATE TABLE IF NOT EXISTS `contact_messages` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message` varchar(2000) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` tinyint(4) NOT NULL DEFAULT '0',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_account_id` (`account_id`),
+  KEY `idx_email` (`email`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18. Contact message records 联系问题沟通记录表
+CREATE TABLE IF NOT EXISTS `contact_message_records` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `contact_message_id` bigint(20) NOT NULL,
+  `sender_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sender_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `content` varchar(2000) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_contact_message_id` (`contact_message_id`),
+  KEY `idx_sender_type` (`sender_type`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18.1 Contact faqs 联系页常见问题表
+CREATE TABLE IF NOT EXISTS `contact_faqs` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `question` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `answer` varchar(4000) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT '0',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_sort_order` (`sort_order`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `contact_faqs` (`question`, `answer`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+SELECT '如何获取 API Key?', '您可以登录平台后进入“令牌管理”页面，点击“创建 Token”生成专属 API Key。创建成功后请妥善保存，避免泄露。', 10, 1, '联系页常见问题', 'system', 'system'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_faqs` WHERE `question` = '如何获取 API Key?'
+);
+
+INSERT INTO `contact_faqs` (`question`, `answer`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+SELECT '套餐可以随时更改吗?', '可以。您可以根据业务需求选择新的套餐方案，新的配置会按平台规则生效；如涉及已生效套餐，请以当前订阅说明和结算规则为准。', 20, 1, '联系页常见问题', 'system', 'system'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_faqs` WHERE `question` = '套餐可以随时更改吗?'
+);
+
+INSERT INTO `contact_faqs` (`question`, `answer`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+SELECT '如何查看使用统计?', '登录后进入“数据看板”或相关使用记录页面，即可查看请求量、Token 消耗、费用统计以及模型调用分布等信息。', 30, 1, '联系页常见问题', 'system', 'system'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_faqs` WHERE `question` = '如何查看使用统计?'
+);
+
+INSERT INTO `contact_faqs` (`question`, `answer`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+SELECT '支持哪些支付方式?', '当前平台支持支付宝、微信支付以及第三方支付链接，具体可用方式请以购买页面展示的支付渠道为准。', 40, 1, '联系页常见问题', 'system', 'system'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_faqs` WHERE `question` = '支持哪些支付方式?'
+);
+
+INSERT INTO `contact_faqs` (`question`, `answer`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
+SELECT '推广奖励如何结算?', '推广奖励会根据平台推广规则按结算周期自动统计并发放，您可以在推广页面查看奖励明细、待结算金额和历史结算记录。', 50, 1, '联系页常见问题', 'system', 'system'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_faqs` WHERE `question` = '推广奖励如何结算?'
+);
+
+
+-- 18.2 Contact channel configs
+CREATE TABLE IF NOT EXISTS `contact_channel_configs` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `channel_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contact_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `action_link` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `action_label` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT '0',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_channel_type` (`channel_type`),
+  KEY `idx_sort_order` (`sort_order`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+INSERT INTO `contact_channel_configs` (`channel_type`, `title`, `description`, `contact_value`, `action_link`, `action_label`, `sort_order`, `status`, `remark`)
+SELECT 'email', '邮箱支持', '我们会在 24 小时内回复您的邮件', 'support@token-hub.com', 'mailto:support@token-hub.com', NULL, 10, 1, '默认邮箱支持'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_channel_configs` WHERE `channel_type` = 'email' AND `contact_value` = 'support@token-hub.com'
+);
+
+INSERT INTO `contact_channel_configs` (`channel_type`, `title`, `description`, `contact_value`, `action_link`, `action_label`, `sort_order`, `status`, `remark`)
+SELECT 'online', '在线客服', '工作日 9:00 - 18:00 在线服务', '启动在线对话', '#', '启动在线对话', 20, 1, '默认在线客服入口'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_channel_configs` WHERE `channel_type` = 'online' AND `title` = '在线客服'
+);
+
+INSERT INTO `contact_channel_configs` (`channel_type`, `title`, `description`, `contact_value`, `action_link`, `action_label`, `sort_order`, `status`, `remark`)
+SELECT 'phone', '电话支持', '企业版用户专享电话支持', '400-123-4567', 'tel:+864001234567', NULL, 30, 1, '默认电话支持'
+WHERE NOT EXISTS (
+  SELECT 1 FROM `contact_channel_configs` WHERE `channel_type` = 'phone' AND `contact_value` = '400-123-4567'
+);
+
+
 -- ============================================
 -- Seed data
 -- ============================================

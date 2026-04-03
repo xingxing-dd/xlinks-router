@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { 
   Mail, 
@@ -8,14 +8,32 @@ import {
   Send, 
   MapPin, 
   Clock, 
-  Github, 
-  Twitter, 
-  Linkedin 
+  MessageCircleMore
 } from 'lucide-vue-next'
-import { postApi } from '@/utils/request'
+import { getApi, postApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
 
 const { t } = useI18n()
+const channelConfigs = ref([])
+const faqs = ref([])
+
+const channelMetaMap = {
+  email: {
+    icon: Mail,
+    wrapperClass: 'bg-gradient-to-br from-blue-500 to-cyan-500',
+    actionClass: 'text-primary hover:text-primary',
+  },
+  online: {
+    icon: MessageCircle,
+    wrapperClass: 'bg-gradient-to-br from-green-500 to-emerald-500',
+    actionClass: 'text-green-600 hover:text-green-700',
+  },
+  phone: {
+    icon: Phone,
+    wrapperClass: 'bg-gradient-icon',
+    actionClass: 'text-primary hover:text-primary',
+  },
+}
 
 const formData = reactive({
   name: '',
@@ -27,6 +45,87 @@ const formData = reactive({
 const submitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const subjectOptions = ref([])
+const historyItems = ref([])
+const selectedHistory = ref(null)
+const historyRecords = ref([])
+const historyLoading = ref(false)
+const recordsLoading = ref(false)
+const isHistoryModalOpen = ref(false)
+
+const loadChannelConfigs = async () => {
+  try {
+    channelConfigs.value = await getApi('/v1/contact/channels')
+  } catch (error) {
+    toast.error(error.message || t('contact.channelLoadFailed'))
+  }
+}
+
+const loadFaqs = async () => {
+  try {
+    faqs.value = await getApi('/v1/contact/faqs')
+  } catch (error) {
+    toast.error(error.message || '常见问题加载失败')
+  }
+}
+
+const getChannelMeta = (channelType) => channelMetaMap[channelType] || channelMetaMap.email
+
+const resolveActionLink = (item) => {
+  if (item.actionLink) return item.actionLink
+  if (item.channelType === 'email' && item.contactValue) return `mailto:${item.contactValue}`
+  if (item.channelType === 'phone' && item.contactValue) return `tel:${item.contactValue.replace(/[^\d+]/g, '')}`
+  return '#'
+}
+
+const isButtonAction = (item) => item.channelType === 'online' && !item.contactValue
+
+const loadSubjectOptions = async () => {
+  try {
+    subjectOptions.value = await getApi('/v1/contact/subjects')
+  } catch (error) {
+    toast.error(error.message || t('contact.subjectLoadFailed'))
+  }
+}
+
+const loadHistory = async () => {
+  historyLoading.value = true
+  try {
+    historyItems.value = await getApi('/v1/contact/history')
+  } catch (error) {
+    toast.error(error.message || t('contact.historyLoadFailed'))
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const openHistoryRecords = async (item) => {
+  selectedHistory.value = item
+  isHistoryModalOpen.value = true
+  recordsLoading.value = true
+  historyRecords.value = []
+  try {
+    historyRecords.value = await getApi(`/v1/contact/history/${item.id}/records`)
+  } catch (error) {
+    toast.error(error.message || t('contact.recordLoadFailed'))
+  } finally {
+    recordsLoading.value = false
+  }
+}
+
+const getStatusLabel = (status) => {
+  return status === 1 ? t('contact.statusProcessed') : t('contact.statusPending')
+}
+
+const getStatusClass = (status) => {
+  return status === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+}
+
+const getSenderLabel = (senderType) => {
+  if (senderType === 'admin') return t('contact.senderAdmin')
+  if (senderType === 'system') return t('contact.senderSystem')
+  return t('contact.senderUser')
+}
 
 const handleSubmit = async () => {
   submitting.value = true
@@ -41,6 +140,7 @@ const handleSubmit = async () => {
     formData.email = ''
     formData.subject = ''
     formData.message = ''
+    loadHistory()
   } catch (error) {
     toast.error(error.message || t('contact.submitFailed'))
     errorMessage.value = ''
@@ -48,16 +148,17 @@ const handleSubmit = async () => {
     submitting.value = false
   }
 }
+
+onMounted(() => {
+  loadChannelConfigs()
+  loadFaqs()
+  loadSubjectOptions()
+  loadHistory()
+})
 </script>
 
 <template>
-  <div class="min-h-[60vh] flex items-center justify-center px-4">
-    <div class="rounded-3xl border border-slate-200 bg-white/80 px-10 py-8 text-center shadow-sm backdrop-blur">
-      <p class="text-lg font-semibold text-slate-900">功能正在开发中</p>
-      <p class="mt-2 text-sm text-slate-500">敬请期待</p>
-    </div>
-  </div>
-  <div v-if="false" class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="p-4 md:p-8 max-w-7xl mx-auto">
     <div v-if="errorMessage" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
       {{ errorMessage }}
     </div>
@@ -66,55 +167,33 @@ const handleSubmit = async () => {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-      <!-- 联系方式卡片 -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center mb-4 shadow-lg">
-          <Mail class="w-6 h-6 text-white" />
+      <div
+        v-for="item in channelConfigs"
+        :key="item.id"
+        class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow"
+      >
+        <div :class="['w-12 h-12 rounded-xl flex items-center justify-center mb-4 shadow-lg', getChannelMeta(item.channelType).wrapperClass]">
+          <component :is="getChannelMeta(item.channelType).icon" class="w-6 h-6 text-white" />
         </div>
         <h3 class="font-semibold text-slate-900 mb-2">
-          {{ t('contact.emailSupport') }}
+          {{ item.title }}
         </h3>
         <p class="text-sm text-slate-600 mb-3">
-          {{ t('contact.emailSupportDesc') }}
+          {{ item.description }}
         </p>
-        <a
-          href="mailto:support@token-hub.com"
-          class="text-primary hover:text-primary font-medium"
+        <button
+          v-if="isButtonAction(item)"
+          type="button"
+          :class="['font-medium', getChannelMeta(item.channelType).actionClass]"
         >
-          support@token-hub.com
-        </a>
-      </div>
-
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center mb-4 shadow-lg">
-          <MessageCircle class="w-6 h-6 text-white" />
-        </div>
-        <h3 class="font-semibold text-slate-900 mb-2">
-          {{ t('contact.onlineSupport') }}
-        </h3>
-        <p class="text-sm text-slate-600 mb-3">
-          {{ t('contact.onlineSupportDesc') }}
-        </p>
-        <button class="text-green-600 hover:text-green-700 font-medium">
-          {{ t('contact.onlineSupportBtn') }}
+          {{ item.actionLabel || item.contactValue }}
         </button>
-      </div>
-
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
-        <div class="w-12 h-12 bg-gradient-icon rounded-xl flex items-center justify-center mb-4 shadow-lg">
-          <Phone class="w-6 h-6 text-white" />
-        </div>
-        <h3 class="font-semibold text-slate-900 mb-2">
-          {{ t('contact.phoneSupport') }}
-        </h3>
-        <p class="text-sm text-slate-600 mb-3">
-          {{ t('contact.phoneSupportDesc') }}
-        </p>
         <a
-          href="tel:+8640012345678"
-          class="text-primary hover:text-primary font-medium"
+          v-else
+          :href="resolveActionLink(item)"
+          :class="['font-medium break-all', getChannelMeta(item.channelType).actionClass]"
         >
-          400-123-4567
+          {{ item.actionLabel || item.contactValue }}
         </a>
       </div>
     </div>
@@ -162,11 +241,13 @@ const handleSubmit = async () => {
               required
             >
               <option value="">{{ t('contact.subjectPlaceholder') }}</option>
-              <option value="technical">{{ t('contact.subjectTechnical') }}</option>
-              <option value="billing">{{ t('contact.subjectBilling') }}</option>
-              <option value="feature">{{ t('contact.subjectFeature') }}</option>
-              <option value="bug">{{ t('contact.subjectBug') }}</option>
-              <option value="other">{{ t('contact.subjectOther') }}</option>
+              <option
+                v-for="option in subjectOptions"
+                :key="option.code"
+                :value="option.code"
+              >
+                {{ option.label }}
+              </option>
             </select>
           </div>
 
@@ -196,6 +277,54 @@ const handleSubmit = async () => {
 
       <!-- 其他信息 -->
       <div class="space-y-6">
+        <div class="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
+          <div class="flex items-center justify-between mb-6 gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">{{ t('contact.historyTitle') }}</h2>
+              <p class="text-sm text-slate-500 mt-1">{{ t('contact.historyDesc') }}</p>
+            </div>
+          </div>
+
+          <div v-if="historyLoading" class="py-8 text-center text-slate-500">
+            {{ t('common.loading') }}
+          </div>
+
+          <div v-else-if="!historyItems.length" class="py-8 text-center text-sm text-slate-500">
+            {{ t('contact.noHistory') }}
+          </div>
+
+          <div v-else class="space-y-4">
+            <div
+              v-for="item in historyItems"
+              :key="item.id"
+              class="rounded-2xl border border-slate-200 p-4 bg-slate-50/60"
+            >
+              <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="font-semibold text-slate-900">{{ item.subjectLabel }}</h3>
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium" :class="getStatusClass(item.status)">
+                      {{ getStatusLabel(item.status) }}
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">{{ item.createdAt }}</p>
+                </div>
+
+                <button
+                  type="button"
+                  @click="openHistoryRecords(item)"
+                  class="shrink-0 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-primary hover:text-primary transition-all"
+                >
+                  <MessageCircle class="w-4 h-4" />
+                  {{ t('contact.viewRecords') }}
+                </button>
+              </div>
+
+              <p class="text-sm text-slate-600 line-clamp-2 break-all">{{ item.message }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- 公司信息 -->
         <div class="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
           <h2 class="text-xl font-bold text-slate-900 mb-6">
@@ -252,20 +381,9 @@ const handleSubmit = async () => {
             <a
               href="#"
               class="w-12 h-12 bg-white/30 rounded-xl flex items-center justify-center hover:bg-white/40 transition-all backdrop-blur-sm shadow-lg border-2 border-white/30"
+              aria-label="QQ"
             >
-              <Github class="w-6 h-6 text-white" />
-            </a>
-            <a
-              href="#"
-              class="w-12 h-12 bg-white/30 rounded-xl flex items-center justify-center hover:bg-white/40 transition-all backdrop-blur-sm shadow-lg border-2 border-white/30"
-            >
-              <Twitter class="w-6 h-6 text-white" />
-            </a>
-            <a
-              href="#"
-              class="w-12 h-12 bg-white/30 rounded-xl flex items-center justify-center hover:bg-white/40 transition-all backdrop-blur-sm shadow-lg border-2 border-white/30"
-            >
-              <Linkedin class="w-6 h-6 text-white" />
+              <MessageCircleMore class="w-6 h-6 text-white" />
             </a>
           </div>
         </div>
@@ -276,38 +394,69 @@ const handleSubmit = async () => {
             {{ t('contact.faq') }}
           </h2>
           <div class="space-y-3">
-            <a
-              href="#"
-              class="block text-primary hover:text-primary hover:underline font-medium"
+            <details
+              v-for="item in faqs"
+              :key="item.id"
+              class="group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3"
             >
-              {{ t('contact.faq1') }}
-            </a>
-            <a
-              href="#"
-              class="block text-primary hover:text-primary hover:underline font-medium"
-            >
-              {{ t('contact.faq2') }}
-            </a>
-            <a
-              href="#"
-              class="block text-primary hover:text-primary hover:underline font-medium"
-            >
-              {{ t('contact.faq3') }}
-            </a>
-            <a
-              href="#"
-              class="block text-primary hover:text-primary hover:underline font-medium"
-            >
-              {{ t('contact.faq4') }}
-            </a>
-            <a
-              href="#"
-              class="block text-primary hover:text-primary hover:underline font-medium"
-            >
-              {{ t('contact.faq5') }}
-            </a>
+              <summary class="cursor-pointer list-none font-medium text-primary transition-colors group-open:text-slate-900">
+                {{ item.question }}
+              </summary>
+              <p class="mt-3 text-sm leading-6 text-slate-600 whitespace-pre-line">
+                {{ item.answer }}
+              </p>
+            </details>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="isHistoryModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div class="absolute inset-0" @click="isHistoryModalOpen = false" />
+    <div class="relative w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <div class="bg-gradient-hero px-6 py-5 text-white">
+        <h3 class="text-xl font-bold">{{ t('contact.recordDialogTitle') }}</h3>
+        <p class="mt-1 text-sm text-white/85">{{ selectedHistory?.subjectLabel || '-' }}</p>
+      </div>
+
+      <div class="max-h-[70vh] overflow-y-auto p-6">
+        <div v-if="recordsLoading" class="py-10 text-center text-slate-500">
+          {{ t('common.loading') }}
+        </div>
+
+        <div v-else-if="!historyRecords.length" class="py-10 text-center text-slate-500">
+          {{ t('contact.noRecords') }}
+        </div>
+
+        <div v-else class="space-y-4">
+          <div
+            v-for="record in historyRecords"
+            :key="record.id"
+            class="rounded-2xl border border-slate-200 p-4"
+          >
+            <div class="flex items-center justify-between gap-4 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                  {{ getSenderLabel(record.senderType) }}
+                </span>
+                <span class="text-sm font-medium text-slate-900">{{ record.senderName || '-' }}</span>
+              </div>
+              <span class="text-xs text-slate-500">{{ record.createdAt }}</span>
+            </div>
+            <p class="text-sm leading-6 text-slate-700 whitespace-pre-line break-all">{{ record.content }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 px-6 py-4 flex justify-end bg-slate-50">
+        <button
+          type="button"
+          @click="isHistoryModalOpen = false"
+          class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
+        >
+          {{ t('common.confirm') }}
+        </button>
       </div>
     </div>
   </div>

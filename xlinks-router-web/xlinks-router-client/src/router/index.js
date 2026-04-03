@@ -89,8 +89,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
-  // Allow promotion and auth pages to be visited without login.
-  const publicPaths = ['/landing', '/login', '/register', '/forgot-password', '/promotion']
+  // Allow marketing, support, and auth pages to be visited without login.
+  const publicPaths = ['/landing', '/login', '/register', '/forgot-password', '/promotion', '/contact']
 
   if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
     return {
@@ -101,7 +101,7 @@ router.beforeEach((to) => {
     }
   }
 
-  if (publicPaths.includes(to.path) && authStore.isAuthenticated && to.path !== '/promotion') {
+  if (publicPaths.includes(to.path) && authStore.isAuthenticated && !['/promotion', '/contact'].includes(to.path)) {
     return '/tokens'
   }
 

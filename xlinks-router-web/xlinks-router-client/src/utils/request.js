@@ -76,6 +76,12 @@ export function getApi(path) {
   })
 }
 
+export function getRaw(path) {
+  return request(path, {
+    method: 'GET',
+  })
+}
+
 export function postApi(path, body) {
   return request(`${API_PREFIX}${path}`, {
     method: 'POST',
