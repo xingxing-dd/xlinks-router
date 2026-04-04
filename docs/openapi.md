@@ -17,7 +17,6 @@ Authentication:
 ## 2. Standard Model Rules
 
 - request field `model` maps to `models.model_code`
-- standard models belong only to `model_endpoints`
 - standard models do not directly bind to providers
 - the real upstream model code comes from `provider_models.provider_model_code`
 
@@ -43,14 +42,13 @@ Authentication:
 
 For `chat/completions`:
 
-1. derive `endpoint_code = chat/completions` from the request protocol
-2. resolve the standard model by `endpoint + model_code`
-3. load candidate `provider_models`
-4. keep only providers that support `chat/completions`
-5. sort by `providers.priority DESC`
-6. choose the highest-priority available provider
-7. rewrite request field `model` to `provider_model_code`
-8. invoke the selected upstream provider
+1. resolve the standard model by `model_code`
+2. load candidate `provider_models`
+3. keep only providers that support `chat/completions`
+4. sort by `providers.priority DESC`
+5. choose the highest-priority available provider
+6. rewrite request field `model` to `provider_model_code`
+7. invoke the selected upstream provider
 
 ## 4. Responses
 
@@ -69,8 +67,8 @@ For `chat/completions`:
 
 For `responses`:
 
-1. derive `endpoint_code = responses`
-2. follow the same standard-model and provider-mapping flow
+1. resolve the standard model by `model_code`
+2. follow the same provider-mapping flow
 3. only providers supporting `responses` are eligible
 
 ## 5. Models List
@@ -99,9 +97,9 @@ Example:
 
 Provider selection depends on:
 
-- `provider_type`: adapter selection
 - `supported_protocols`: protocol filtering
 - `priority`: candidate ordering, larger value first
+- request protocol: adapter selection
 
 Examples for `supported_protocols`:
 

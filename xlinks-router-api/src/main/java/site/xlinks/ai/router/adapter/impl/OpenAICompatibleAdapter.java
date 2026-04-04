@@ -33,7 +33,6 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
 
-    private static final String PROVIDER_TYPE = "openai-compatible";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String EVENT_STREAM_CONTENT_TYPE = "text/event-stream";
 
@@ -41,9 +40,8 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
     private final ObjectMapper objectMapper;
 
     @Override
-    public boolean supports(String providerType) {
-        return PROVIDER_TYPE.equalsIgnoreCase(providerType)
-                || "openai".equalsIgnoreCase(providerType);
+    public boolean supports(OpenAIProtocol protocol) {
+        return protocol != null;
     }
 
     @Override

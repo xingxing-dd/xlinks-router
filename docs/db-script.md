@@ -1,6 +1,6 @@
 # xlinks-router Schema Notes
 
-This document focuses on the routing-related schema only. The full bootstrap script is:
+This document focuses on routing-related schema only. The full bootstrap script is:
 
 - `xlinks-router-admin/src/main/resources/db/init.sql`
 
@@ -16,7 +16,6 @@ The schema serves a multi-provider aggregation router:
 ## 2. Core Relationships
 
 ```text
-model_endpoints 1 ---- n models
 models          1 ---- n provider_models
 providers       1 ---- n provider_models
 providers       1 ---- n provider_tokens
@@ -29,7 +28,6 @@ CREATE TABLE `providers` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `provider_code` VARCHAR(50) NOT NULL,
   `provider_name` VARCHAR(100) NOT NULL,
-  `provider_type` VARCHAR(20) NOT NULL DEFAULT 'openai-compatible',
   `supported_protocols` VARCHAR(255) DEFAULT NULL,
   `priority` INT NOT NULL DEFAULT 0,
   `base_url` VARCHAR(255) NOT NULL,
@@ -40,32 +38,15 @@ CREATE TABLE `providers` (
 );
 ```
 
-## 4. model_endpoints
+## 4. models
 
-```sql
-CREATE TABLE `model_endpoints` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `endpoint_code` VARCHAR(100) NOT NULL,
-  `endpoint_name` VARCHAR(100) NOT NULL,
-  `endpoint_url` VARCHAR(255) NOT NULL,
-  `status` TINYINT NOT NULL DEFAULT 1,
-  `deleted` TINYINT NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_code` (`endpoint_code`),
-  UNIQUE KEY `uk_endpoint_url` (`endpoint_url`)
-);
-```
-
-## 5. models
-
-`models` no longer stores `provider_id`.
+`models` does not store `provider_id` or endpoint dimensions. Standard model identity is `model_code`.
 
 ```sql
 CREATE TABLE `models` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `model_name` VARCHAR(100) NOT NULL,
   `model_code` VARCHAR(100) NOT NULL,
-  `endpoint_id` BIGINT NOT NULL,
   `model_desc` VARCHAR(500) DEFAULT NULL,
   `input_price` DECIMAL(12, 2) DEFAULT NULL,
   `output_price` DECIMAL(12, 2) DEFAULT NULL,
@@ -73,11 +54,11 @@ CREATE TABLE `models` (
   `status` TINYINT NOT NULL DEFAULT 1,
   `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`, `model_code`)
+  UNIQUE KEY `uk_model_code` (`model_code`)
 );
 ```
 
-## 6. provider_models
+## 5. provider_models
 
 ```sql
 CREATE TABLE `provider_models` (
@@ -89,39 +70,28 @@ CREATE TABLE `provider_models` (
   `status` TINYINT NOT NULL DEFAULT 1,
   `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_provider_model` (`provider_id`, `model_id`),
-  UNIQUE KEY `uk_provider_model_code` (`provider_id`, `provider_model_code`)
+  UNIQUE KEY `uk_provider_model` (`provider_id`, `model_id`)
 );
 ```
 
-## 7. Main Changes from the Old Design
-
-Old design issues:
-
-- `models.provider_id` coupled standard models with upstream providers
-- one standard model could not map to multiple providers
-- protocol filtering and priority routing were not explicit
-- standard model codes and upstream model codes were mixed
-
-Current design changes:
+## 6. Main Changes
 
 - remove `models.provider_id`
-- add `provider_models`
-- add `providers.supported_protocols`
-- add `providers.priority`
-- use `model_endpoints.endpoint_code` as the protocol capability key
+- keep `provider_models` for multi-provider mapping
+- keep `providers.supported_protocols` + `providers.priority` for filtering and sorting
+- remove `model_endpoints` table and remove endpoint dimension from models
 
-## 8. Routing Query Order
+## 7. Routing Query Order
 
 ```sql
--- 1) resolve endpoint by protocol
-SELECT * FROM model_endpoints WHERE endpoint_code = 'chat/completions' AND status = 1;
+-- 1) resolve standard model by model code
+SELECT * FROM models
+WHERE model_code = ? AND status = 1;
 
--- 2) resolve standard model
-SELECT * FROM models WHERE endpoint_id = ? AND model_code = ? AND status = 1;
-
--- 3) load provider mappings
+-- 2) load provider mappings
 SELECT * FROM provider_models WHERE model_id = ? AND status = 1;
 
--- 4) filter by provider protocol support and sort by priority
+-- 3) filter providers by supported_protocols and sort by priority
+
+-- 4) select available provider_token under selected provider
 ```

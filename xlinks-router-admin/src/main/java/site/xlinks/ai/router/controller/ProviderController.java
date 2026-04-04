@@ -38,7 +38,6 @@ public class ProviderController {
         Provider provider = new Provider();
         provider.setProviderCode(dto.getProviderCode());
         provider.setProviderName(dto.getProviderName());
-        provider.setProviderType(dto.getProviderType());
         provider.setSupportedProtocols(dto.getSupportedProtocols());
         provider.setPriority(dto.getPriority());
         provider.setBaseUrl(dto.getBaseUrl());

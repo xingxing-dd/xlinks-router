@@ -118,7 +118,6 @@ CREATE TABLE IF NOT EXISTS `providers` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `provider_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `provider_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'openai-compatible',
   `supported_protocols` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `priority` int(11) NOT NULL DEFAULT '0',
   `base_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -137,32 +136,11 @@ CREATE TABLE IF NOT EXISTS `providers` (
   KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. Model endpoints
-CREATE TABLE IF NOT EXISTS `model_endpoints` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `endpoint_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `endpoint_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `endpoint_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` tinyint(4) NOT NULL DEFAULT '1',
-  `deleted` tinyint(4) NOT NULL DEFAULT '0',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_code` (`endpoint_code`),
-  UNIQUE KEY `uk_endpoint_url` (`endpoint_url`),
-  KEY `idx_status` (`status`),
-  KEY `idx_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 7. Standard models
+-- 6. Standard models
 CREATE TABLE IF NOT EXISTS `models` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `model_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `model_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `endpoint_id` bigint(20) NOT NULL,
   `model_desc` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `input_price` decimal(12,2) DEFAULT NULL,
   `output_price` decimal(12,2) DEFAULT NULL,
@@ -175,13 +153,12 @@ CREATE TABLE IF NOT EXISTS `models` (
   `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_endpoint_model_code` (`endpoint_id`,`model_code`),
-  KEY `idx_endpoint_id` (`endpoint_id`),
+  UNIQUE KEY `uk_model_code` (`model_code`),
   KEY `idx_status` (`status`),
   KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. Provider model mappings
+-- 7. Provider model mappings
 CREATE TABLE IF NOT EXISTS `provider_models` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `provider_id` bigint(20) NOT NULL,
@@ -203,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `provider_models` (
   KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. Provider tokens
+-- 8. Provider tokens
 CREATE TABLE IF NOT EXISTS `provider_tokens` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `provider_id` bigint(20) NOT NULL,
@@ -225,7 +202,7 @@ CREATE TABLE IF NOT EXISTS `provider_tokens` (
   KEY `idx_expire_time` (`expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 10. Customer tokens
+-- 9. Customer tokens
 CREATE TABLE IF NOT EXISTS `customer_tokens` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `account_id` bigint(20) NOT NULL,
@@ -247,7 +224,7 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
   KEY `idx_expire_time` (`expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 11. Subscription plans
+-- 10. Subscription plans
 CREATE TABLE IF NOT EXISTS `plans` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `plan_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -268,7 +245,7 @@ CREATE TABLE IF NOT EXISTS `plans` (
   KEY `idx_visible` (`visible`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 12. Customer subscriptions
+-- 11. Customer subscriptions
 CREATE TABLE IF NOT EXISTS `customer_plans` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `account_id` bigint(20) NOT NULL,
@@ -296,7 +273,7 @@ CREATE TABLE IF NOT EXISTS `customer_plans` (
   KEY `idx_plan_expire_time` (`plan_expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 13. Activation code stocks
+-- 12. Activation code stocks
 CREATE TABLE IF NOT EXISTS `activation_code_stocks` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `activation_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -317,7 +294,7 @@ CREATE TABLE IF NOT EXISTS `activation_code_stocks` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 14. Payment methods
+-- 13. Payment methods
 CREATE TABLE IF NOT EXISTS `payment_methods` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `method_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -339,7 +316,7 @@ CREATE TABLE IF NOT EXISTS `payment_methods` (
   KEY `idx_sort` (`sort`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. Third-party pay links
+-- 14. Third-party pay links
 CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `target_id` bigint(20) NOT NULL,
@@ -356,7 +333,7 @@ CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 16. Usage records
+-- 15. Usage records
 CREATE TABLE IF NOT EXISTS `usage_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `request_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -396,7 +373,7 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   KEY `idx_endpoint_code` (`endpoint_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 17. Contact messages 联系我们问题记录表
+-- 16. Contact messages 联系我们问题记录表
 CREATE TABLE IF NOT EXISTS `contact_messages` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `account_id` bigint(20) NOT NULL,
@@ -416,7 +393,7 @@ CREATE TABLE IF NOT EXISTS `contact_messages` (
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 18. Contact message records 联系问题沟通记录表
+-- 17. Contact message records 联系问题沟通记录表
 CREATE TABLE IF NOT EXISTS `contact_message_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `contact_message_id` bigint(20) NOT NULL,
@@ -433,7 +410,7 @@ CREATE TABLE IF NOT EXISTS `contact_message_records` (
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 18.1 Contact faqs 联系页常见问题表
+-- 17.1 Contact faqs 联系页常见问题表
 CREATE TABLE IF NOT EXISTS `contact_faqs` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `question` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -481,7 +458,7 @@ WHERE NOT EXISTS (
 );
 
 
--- 18.2 Contact channel configs
+-- 17.2 Contact channel configs
 CREATE TABLE IF NOT EXISTS `contact_channel_configs` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `channel_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -527,26 +504,20 @@ WHERE NOT EXISTS (
 -- Seed data
 -- ============================================
 
-INSERT IGNORE INTO `model_endpoints`
-  (`id`, `endpoint_code`, `endpoint_name`, `endpoint_url`, `status`, `create_by`, `update_by`)
-VALUES
-  (1, 'chat/completions', 'Chat Completions', '/v1/chat/completions', 1, 'system', 'system'),
-  (2, 'responses', 'Responses', '/v1/responses', 1, 'system', 'system');
-
 INSERT IGNORE INTO `providers`
-  (`id`, `provider_code`, `provider_name`, `provider_type`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
+  (`id`, `provider_code`, `provider_name`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (1, 'deepseek', 'DeepSeek', 'openai-compatible', 'chat/completions,responses', 100, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 'default provider', 'system', 'system'),
-  (2, 'right-codex', 'Right Codex', 'openai-compatible', 'chat/completions', 50, 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
+  (1, 'deepseek', 'DeepSeek', 'chat/completions,responses', 100, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 'default provider', 'system', 'system'),
+  (2, 'right-codex', 'Right Codex', 'chat/completions', 50, 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
 
 INSERT IGNORE INTO `models`
-  (`id`, `model_name`, `model_code`, `endpoint_id`, `model_desc`, `input_price`, `output_price`, `context_size`, `status`, `remark`, `create_by`, `update_by`)
+  (`id`, `model_name`, `model_code`, `model_desc`, `input_price`, `output_price`, `context_size`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (1, 'DeepSeek V3', 'deepseek-v3', 1, 'DeepSeek V3 chat model', 0.27, 1.10, 64000, 1, 'default chat model', 'system', 'system'),
-  (2, 'DeepSeek Chat', 'deepseek-chat', 1, 'DeepSeek Chat model', 0.14, 0.28, 32000, 1, 'chat model', 'system', 'system'),
-  (3, 'GPT-5.2', 'gpt-5.2', 1, 'GPT-5.2 chat model', 2.00, 8.00, 128000, 1, 'aggregated model', 'system', 'system'),
-  (4, 'GPT-5.3', 'gpt-5.3', 1, 'GPT-5.3 chat model', 3.00, 15.00, 128000, 1, 'aggregated model', 'system', 'system'),
-  (5, 'GPT-5.4', 'gpt-5.4', 1, 'GPT-5.4 chat model', 5.00, 20.00, 200000, 1, 'aggregated model', 'system', 'system');
+  (1, 'DeepSeek V3', 'deepseek-v3', 'DeepSeek V3 chat model', 0.27, 1.10, 64000, 1, 'default chat model', 'system', 'system'),
+  (2, 'DeepSeek Chat', 'deepseek-chat', 'DeepSeek Chat model', 0.14, 0.28, 32000, 1, 'chat model', 'system', 'system'),
+  (3, 'GPT-5.2', 'gpt-5.2', 'GPT-5.2 chat model', 2.00, 8.00, 128000, 1, 'aggregated model', 'system', 'system'),
+  (4, 'GPT-5.3', 'gpt-5.3', 'GPT-5.3 chat model', 3.00, 15.00, 128000, 1, 'aggregated model', 'system', 'system'),
+  (5, 'GPT-5.4', 'gpt-5.4', 'GPT-5.4 chat model', 5.00, 20.00, 200000, 1, 'aggregated model', 'system', 'system');
 
 INSERT IGNORE INTO `provider_models`
   (`provider_id`, `model_id`, `provider_model_code`, `provider_model_name`, `status`, `remark`, `create_by`, `update_by`)

@@ -17,7 +17,6 @@ import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.Model;
-import site.xlinks.ai.router.entity.ModelEndpoint;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
@@ -53,7 +52,7 @@ public class OpenAIProxyService {
         ProviderInvokeContext context = null;
         try {
             context = buildContext(token, request, requestId);
-            OpenAIProviderAdapter adapter = resolveAdapter(context.getProviderType());
+            OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
             JsonNode response = adapter.forward(request, context);
             UsageMetrics usageMetrics = openAIUsageExtractor.extract(response);
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
@@ -74,7 +73,7 @@ public class OpenAIProxyService {
         ProviderInvokeContext context = null;
         try {
             context = buildContext(token, request, requestId);
-            OpenAIProviderAdapter adapter = resolveAdapter(context.getProviderType());
+            OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             adapter.forwardStream(request, context, event -> {
                 UsageMetrics usageMetrics = openAIUsageExtractor.extract(event);
@@ -137,28 +136,42 @@ public class OpenAIProxyService {
         }
 
         String endpointCode = request.getProtocol().getCode();
-        ModelEndpoint modelEndpoint = routeCacheService.getEndpoint(endpointCode);
-        if (modelEndpoint == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Invalid endpoint: " + endpointCode);
-        }
-
-        Model model = routeCacheService.getModel(modelEndpoint.getId(), request.getModel());
+        Model model = routeCacheService.getModel(request.getModel());
         if (model == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Model does not exist or is unavailable: " + request.getModel());
         }
 
-        ProviderModel providerModel = routeCacheService.selectProviderModel(model.getId(), request.getProtocol());
-        if (providerModel == null || providerModel.getProviderId() == null) {
+        List<ProviderModel> providerModels = routeCacheService.listProviderModelsByPriority(model.getId(), request.getProtocol());
+        if (providerModels == null || providerModels.isEmpty()) {
             throw new BusinessException(ErrorCode.ROUTE_ERROR,
                     "No available provider mapping for model and protocol: " + request.getModel());
         }
 
-        Provider provider = routeCacheService.getProvider(providerModel.getProviderId());
-        if (provider == null || provider.getStatus() == null || provider.getStatus() != 1) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Provider is unavailable");
+        Provider provider = null;
+        ProviderModel providerModel = null;
+        ProviderToken providerToken = null;
+        for (ProviderModel candidate : providerModels) {
+            if (candidate == null || candidate.getProviderId() == null) {
+                continue;
+            }
+            Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());
+            if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
+                continue;
+            }
+            ProviderToken candidateToken = providerTokenSelectService.selectTokenOrNull(candidateProvider.getId());
+            if (candidateToken == null) {
+                continue;
+            }
+            provider = candidateProvider;
+            providerModel = candidate;
+            providerToken = candidateToken;
+            break;
         }
 
-        ProviderToken providerToken = providerTokenSelectService.selectToken(provider.getId());
+        if (provider == null || providerModel == null || providerToken == null) {
+            throw new BusinessException(ErrorCode.ROUTE_ERROR,
+                    "No available provider token for model and protocol: " + request.getModel());
+        }
 
         String upstreamModelCode = providerModel.getProviderModelCode();
         if (upstreamModelCode == null || upstreamModelCode.isBlank()) {
@@ -170,11 +183,10 @@ public class OpenAIProxyService {
                 .providerId(provider.getId())
                 .providerCode(provider.getProviderCode())
                 .providerName(provider.getProviderName())
-                .providerType(provider.getProviderType())
                 .baseUrl(provider.getBaseUrl())
                 .providerToken(providerToken.getTokenValue())
                 .customerToken(token)
-                .endpointCode(modelEndpoint.getEndpointCode())
+                .endpointCode(endpointCode)
                 .modelId(model.getId())
                 .modelCode(model.getModelCode())
                 .modelName(model.getModelName())
@@ -188,10 +200,10 @@ public class OpenAIProxyService {
                 .build();
     }
 
-    private OpenAIProviderAdapter resolveAdapter(String providerType) {
-        OpenAIProviderAdapter adapter = adapterFactory.getAdapter(providerType);
+    private OpenAIProviderAdapter resolveAdapter(OpenAIProtocol protocol) {
+        OpenAIProviderAdapter adapter = adapterFactory.getAdapter(protocol);
         if (adapter == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported provider type: " + providerType);
+            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported OpenAI protocol: " + protocol);
         }
         return adapter;
     }

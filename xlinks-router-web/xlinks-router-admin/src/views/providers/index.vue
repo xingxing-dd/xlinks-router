@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { createProvider, deleteProvider, listProviders, updateProvider, updateProviderStatus } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
-import { formatDateTime, formatNullable, formatStatus } from '@/utils/format'
+import { formatDateTime, formatStatus } from '@/utils/format'
 
 const toastStore = useToastStore()
 const loading = ref(false)
@@ -10,18 +10,30 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const currentId = ref(null)
+
+const defaultProtocolOptions = [
+  { value: 'chat/completions', label: 'Chat Completions' },
+  { value: 'responses', label: 'Responses' },
+  { value: 'messages', label: 'Anthropic Messages' },
+  { value: '*', label: 'All Protocols (*)' },
+]
+const protocolOptions = ref([...defaultProtocolOptions])
+
 const filters = reactive({
   providerCode: '',
   providerName: '',
   status: '',
 })
+
 const page = reactive({ page: 1, pageSize: 10, total: 0 })
 const records = ref([])
+const protocolDropdownOpen = ref(false)
+const protocolPickerRef = ref(null)
+
 const form = reactive({
   providerCode: '',
   providerName: '',
-  providerType: 'openai-compatible',
-  supportedProtocols: 'chat/completions,responses',
+  supportedProtocols: ['chat/completions', 'responses'],
   priority: 0,
   baseUrl: '',
   providerLogo: '',
@@ -31,13 +43,96 @@ const form = reactive({
 })
 
 const pageCount = computed(() => Math.max(1, Math.ceil((page.total || 0) / page.pageSize)))
+const selectedProtocolText = computed(() => {
+  const selected = normalizeProtocols(form.supportedProtocols)
+  if (!selected.length) return '请选择支持协议'
+  const labelMap = Object.fromEntries(protocolOptions.value.map((item) => [item.value, item.label]))
+  return selected.map((item) => labelMap[item] || item).join(', ')
+})
+
+const selectedProtocolItems = computed(() => {
+  const selected = normalizeProtocols(form.supportedProtocols)
+  const labelMap = Object.fromEntries(protocolOptions.value.map((item) => [item.value, item.label]))
+  return selected.map((value) => ({ value, label: labelMap[value] || value }))
+})
+
+const parseProtocols = (raw) => {
+  if (!raw || !String(raw).trim()) return []
+  return String(raw)
+    .split(/[,;，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const normalizeProtocols = (items) => {
+  const unique = Array.from(new Set((items || []).map((item) => String(item).trim()).filter(Boolean)))
+  if (unique.includes('*')) {
+    return ['*']
+  }
+  return unique
+}
+
+const stringifyProtocols = (items) => normalizeProtocols(items).join(',')
+
+const ensureProtocolOptions = (items) => {
+  const values = new Set(protocolOptions.value.map((item) => item.value))
+  for (const protocol of items || []) {
+    if (!values.has(protocol)) {
+      protocolOptions.value.push({ value: protocol, label: protocol })
+      values.add(protocol)
+    }
+  }
+}
+
+const toggleProtocolSelection = (value) => {
+  const set = new Set(form.supportedProtocols || [])
+  if (value === '*') {
+    if (set.has('*')) {
+      set.delete('*')
+    } else {
+      set.clear()
+      set.add('*')
+    }
+  } else {
+    if (set.has(value)) {
+      set.delete(value)
+    } else {
+      set.add(value)
+    }
+    set.delete('*')
+  }
+  form.supportedProtocols = Array.from(set)
+}
+
+const isProtocolSelected = (value) => {
+  return (form.supportedProtocols || []).includes(value)
+}
+
+const clearProtocolSelection = () => {
+  form.supportedProtocols = []
+}
+
+const handleDocumentClick = (event) => {
+  if (!protocolDropdownOpen.value) return
+  const root = protocolPickerRef.value
+  if (!root) return
+  if (!root.contains(event.target)) {
+    protocolDropdownOpen.value = false
+  }
+}
+
+const formatSupportedProtocols = (raw) => {
+  const protocols = parseProtocols(raw)
+  if (!protocols.length) return '-'
+  const labelMap = Object.fromEntries(protocolOptions.value.map((item) => [item.value, item.label]))
+  return protocols.map((item) => labelMap[item] || item).join(', ')
+}
 
 const resetForm = () => {
   Object.assign(form, {
     providerCode: '',
     providerName: '',
-    providerType: 'openai-compatible',
-    supportedProtocols: 'chat/completions,responses',
+    supportedProtocols: ['chat/completions', 'responses'],
     priority: 0,
     baseUrl: '',
     providerLogo: '',
@@ -70,17 +165,19 @@ const openCreate = () => {
   dialogMode.value = 'create'
   currentId.value = null
   resetForm()
+  protocolDropdownOpen.value = false
   dialogVisible.value = true
 }
 
 const openEdit = (record) => {
+  const protocols = normalizeProtocols(parseProtocols(record.supportedProtocols))
+  ensureProtocolOptions(protocols)
   dialogMode.value = 'edit'
   currentId.value = record.id
   Object.assign(form, {
     providerCode: record.providerCode || '',
     providerName: record.providerName || '',
-    providerType: record.providerType || 'openai-compatible',
-    supportedProtocols: record.supportedProtocols || '',
+    supportedProtocols: protocols,
     priority: record.priority ?? 0,
     baseUrl: record.baseUrl || '',
     providerLogo: record.providerLogo || '',
@@ -88,24 +185,30 @@ const openEdit = (record) => {
     status: record.status ?? 1,
     remark: record.remark || '',
   })
+  protocolDropdownOpen.value = false
   dialogVisible.value = true
 }
 
 const handleSubmit = async () => {
   if (!form.providerName || !form.baseUrl || (dialogMode.value === 'create' && !form.providerCode)) {
-    toastStore.push('请完整填写服务商编码、名称与 Base URL', 'warning')
+    toastStore.push('请完整填写服务商编码、名称和 Base URL', 'warning')
     return
   }
-
+  const supportedProtocols = stringifyProtocols(form.supportedProtocols)
   submitting.value = true
   try {
     if (dialogMode.value === 'create') {
-      await createProvider({ ...form, priority: Number(form.priority || 0), status: Number(form.status || 1) })
+      await createProvider({
+        ...form,
+        supportedProtocols,
+        priority: Number(form.priority || 0),
+        status: Number(form.status || 1),
+      })
       toastStore.push('服务商创建成功', 'success')
     } else {
       await updateProvider(currentId.value, {
         providerName: form.providerName,
-        supportedProtocols: form.supportedProtocols,
+        supportedProtocols,
         priority: Number(form.priority || 0),
         baseUrl: form.baseUrl,
         providerLogo: form.providerLogo,
@@ -134,15 +237,11 @@ const handleToggleStatus = async (record) => {
 }
 
 const handleDelete = async (record) => {
-  if (!window.confirm(`确认删除服务商「${record.providerName}」吗？`)) {
-    return
-  }
+  if (!window.confirm(`确认删除服务商「${record.providerName}」吗？`)) return
   try {
     await deleteProvider(record.id)
     toastStore.push('服务商已删除', 'success')
-    if (records.value.length === 1 && page.page > 1) {
-      page.page -= 1
-    }
+    if (records.value.length === 1 && page.page > 1) page.page -= 1
     await loadProviders()
   } catch (error) {
     toastStore.push(error.message || '删除服务商失败', 'error')
@@ -156,14 +255,18 @@ const resetFilters = async () => {
 }
 
 const changePage = async (nextPage) => {
-  if (nextPage < 1 || nextPage > pageCount.value) {
-    return
-  }
+  if (nextPage < 1 || nextPage > pageCount.value) return
   page.page = nextPage
   await loadProviders()
 }
 
 onMounted(loadProviders)
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
 </script>
 
 <template>
@@ -216,7 +319,7 @@ onMounted(loadProviders)
               <tr>
                 <th>编码</th>
                 <th>名称</th>
-                <th>协议</th>
+                <th>支持协议</th>
                 <th>优先级</th>
                 <th>Base URL</th>
                 <th>状态</th>
@@ -232,9 +335,8 @@ onMounted(loadProviders)
                 <td>{{ record.providerCode }}</td>
                 <td>
                   <div class="font-medium text-slate-800">{{ record.providerName }}</div>
-                  <div class="text-xs text-slate-400 mt-1">{{ record.providerType || '-' }}</div>
                 </td>
-                <td>{{ formatNullable(record.supportedProtocols) }}</td>
+                <td>{{ formatSupportedProtocols(record.supportedProtocols) }}</td>
                 <td>{{ record.priority ?? 0 }}</td>
                 <td class="max-w-[280px] break-all">{{ record.baseUrl }}</td>
                 <td>
@@ -273,7 +375,7 @@ onMounted(loadProviders)
         <div class="flex items-center justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">{{ dialogMode === 'create' ? '新增服务商' : '编辑服务商' }}</h3>
-            <p class="text-sm text-slate-400 mt-1">创建时可维护协议类型与启用状态，编辑时仅修改基础信息。</p>
+            <p class="text-sm text-slate-400 mt-1">创建时可维护协议能力与启用状态，编辑时可调整基础信息。</p>
           </div>
           <button class="btn-text" @click="dialogVisible = false">关闭</button>
         </div>
@@ -287,21 +389,61 @@ onMounted(loadProviders)
             <label class="text-sm text-slate-500">服务商名称</label>
             <input v-model.trim="form.providerName" class="input mt-2" placeholder="OpenAI" />
           </div>
-          <div>
-            <label class="text-sm text-slate-500">协议类型</label>
-            <input v-model.trim="form.providerType" class="input mt-2" :disabled="dialogMode === 'edit'" placeholder="openai-compatible" />
-          </div>
-          <div>
-            <label class="text-sm text-slate-500">路由优先级</label>
-            <input v-model.number="form.priority" type="number" class="input mt-2" placeholder="100" />
-          </div>
-          <div class="md:col-span-2">
-            <label class="text-sm text-slate-500">支持协议</label>
-            <input v-model.trim="form.supportedProtocols" class="input mt-2" placeholder="chat/completions,responses" />
-          </div>
           <div class="md:col-span-2">
             <label class="text-sm text-slate-500">Base URL</label>
             <input v-model.trim="form.baseUrl" class="input mt-2" placeholder="https://api.openai.com/v1" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-sm text-slate-500">支持协议（多选）</label>
+            <div ref="protocolPickerRef" class="relative mt-2">
+              <button
+                type="button"
+                class="input w-full min-h-11 text-left flex items-center justify-between gap-3"
+                @click.stop="protocolDropdownOpen = !protocolDropdownOpen"
+              >
+                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                  <template v-if="selectedProtocolItems.length">
+                    <span
+                      v-for="item in selectedProtocolItems"
+                      :key="item.value"
+                      class="inline-flex max-w-full items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+                    >
+                      <span class="truncate">{{ item.label }}</span>
+                    </span>
+                  </template>
+                  <span v-else class="text-slate-400">{{ selectedProtocolText }}</span>
+                </div>
+                <span class="text-slate-400 text-xs">{{ protocolDropdownOpen ? '^' : 'v' }}</span>
+              </button>
+              <div
+                v-if="protocolDropdownOpen"
+                class="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-xl p-2 max-h-60 overflow-auto"
+              >
+                <div class="flex items-center justify-between border-b border-slate-100 px-2 pb-2 text-xs text-slate-500">
+                  <span>已选 {{ selectedProtocolItems.length }} 项</span>
+                  <button type="button" class="btn-text text-xs" @click="clearProtocolSelection">清空</button>
+                </div>
+                <div class="max-h-44 overflow-auto pt-2">
+                  <label
+                    v-for="item in protocolOptions"
+                    :key="item.value"
+                    class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4"
+                      :checked="isProtocolSelected(item.value)"
+                      @change="toggleProtocolSelection(item.value)"
+                    />
+                    <span class="text-sm text-slate-700">{{ item.label }}</span>
+                  </label>
+                </div>
+                <div class="mt-2 flex justify-end border-t border-slate-100 pt-2">
+                  <button type="button" class="btn-outline !px-3 !py-1.5 text-xs" @click="protocolDropdownOpen = false">完成</button>
+                </div>
+              </div>
+            </div>
+            <p class="mt-2 text-xs text-slate-400">可直接勾选多项。选择 `All Protocols (*)` 时会覆盖其他选择。</p>
           </div>
           <div>
             <label class="text-sm text-slate-500">Logo URL</label>
@@ -310,6 +452,10 @@ onMounted(loadProviders)
           <div>
             <label class="text-sm text-slate-500">官网地址</label>
             <input v-model.trim="form.providerWebsite" class="input mt-2" placeholder="可选" />
+          </div>
+          <div>
+            <label class="text-sm text-slate-500">路由优先级</label>
+            <input v-model.number="form.priority" type="number" class="input mt-2" placeholder="100" />
           </div>
           <div v-if="dialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>

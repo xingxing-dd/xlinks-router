@@ -1,4 +1,4 @@
--- NOTE: migrated dump for new routing schema
+﻿-- NOTE: migrated dump for new routing schema
 -- Key migrations in this file:
 -- 1) models.provider_id removed; provider_models added
 -- 2) model_endpoints now use protocol codes chat/completions and responses
@@ -524,7 +524,6 @@ CREATE TABLE `providers` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '??',
   `provider_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '?????',
   `provider_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '?????',
-  `provider_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'openai-compatible' COMMENT '????',
   `supported_protocols` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '????????????',
   `priority` int(11) NOT NULL DEFAULT '0' COMMENT '?????????',
   `base_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '???? URL',
@@ -549,10 +548,10 @@ CREATE TABLE `providers` (
 
 LOCK TABLES `providers` WRITE;
 /*!40000 ALTER TABLE `providers` DISABLE KEYS */;
-INSERT INTO `providers` (`id`, `provider_code`, `provider_name`, `provider_type`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `deleted`, `remark`, `created_at`, `updated_at`, `create_by`, `update_by`) VALUES
-  (1, 'deepseek', 'DeepSeek', 'openai-compatible', 'chat/completions', 1, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 0, '默认初始化 Provider', '2026-03-20 01:02:11', '2026-03-31 23:36:29', 'system', 'system'),
-  (2, 'right-codex', 'Codex', 'openai-compatible', 'chat/completions,responses', 2, 'https://right.codes/codex/v1', '', 'https://right.codes', 1, 0, '测试 Provider', '2026-03-20 01:02:11', '2026-03-31 23:36:29', 'system', 'system'),
-  (3, 'rawchat', 'Rawchat', 'openai-compatible', 'responses', 1, 'https://rawchat.cn/codex', NULL, 'https://rawchat.cn', 1, 0, NULL, '2026-03-31 22:47:11', '2026-03-31 23:36:29', 'system', 'system');
+INSERT INTO `providers` (`id`, `provider_code`, `provider_name`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `deleted`, `remark`, `created_at`, `updated_at`, `create_by`, `update_by`) VALUES
+  (1, 'deepseek', 'DeepSeek', 'chat/completions', 1, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 0, '默认初始化 Provider', '2026-03-20 01:02:11', '2026-03-31 23:36:29', 'system', 'system'),
+  (2, 'right-codex', 'Codex', 'chat/completions,responses', 2, 'https://right.codes/codex/v1', '', 'https://right.codes', 1, 0, '测试 Provider', '2026-03-20 01:02:11', '2026-03-31 23:36:29', 'system', 'system'),
+  (3, 'rawchat', 'Rawchat', 'responses', 1, 'https://rawchat.cn/codex', NULL, 'https://rawchat.cn', 1, 0, NULL, '2026-03-31 22:47:11', '2026-03-31 23:36:29', 'system', 'system');
 /*!40000 ALTER TABLE `providers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1221,3 +1220,4 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-04-01 13:04:16
+

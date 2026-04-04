@@ -19,10 +19,6 @@ public class ProviderCreateDTO {
     @NotBlank(message = "Provider name must not be blank")
     private String providerName;
 
-    @Schema(description = "Adapter type", required = true)
-    @NotBlank(message = "Provider type must not be blank")
-    private String providerType;
-
     @Schema(description = "Supported request protocols, comma-separated, e.g. chat/completions,responses")
     private String supportedProtocols;
 

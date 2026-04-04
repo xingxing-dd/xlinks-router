@@ -29,12 +29,6 @@ export const updateCustomerToken = (id, body) => request(`/admin/customer-tokens
 export const updateCustomerTokenStatus = (id, status) => request(`/admin/customer-tokens/${id}/status`, { method: 'PATCH', query: { status } })
 export const deleteCustomerToken = (id) => request(`/admin/customer-tokens/${id}`, { method: 'DELETE' })
 
-export const listModelEndpoints = (params) => request('/admin/model-endpoints', { query: params })
-export const createModelEndpoint = (body) => request('/admin/model-endpoints', { method: 'POST', body })
-export const updateModelEndpoint = (id, body) => request(`/admin/model-endpoints/${id}`, { method: 'PUT', body })
-export const updateModelEndpointStatus = (id, status) => request(`/admin/model-endpoints/${id}/status`, { method: 'PATCH', query: { status } })
-export const deleteModelEndpoint = (id) => request(`/admin/model-endpoints/${id}`, { method: 'DELETE' })
-
 export const listModels = (params) => request('/admin/models', { query: params })
 export const createModel = (body) => request('/admin/models', { method: 'POST', body })
 export const updateModel = (id, body) => request(`/admin/models/${id}`, { method: 'PUT', body })

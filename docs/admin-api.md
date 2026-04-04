@@ -1,34 +1,29 @@
-# xlinks-router Admin API
+﻿# xlinks-router Admin API
 
-本文档定义 `D:\project\xlinks-router\xlinks-router-admin` 与 `D:\project\xlinks-router\xlinks-router-web\xlinks-router-admin` 之间的后台运营接口约定。
+鏈枃妗ｅ畾涔?`D:\project\xlinks-router\xlinks-router-admin` 涓?`D:\project\xlinks-router\xlinks-router-web\xlinks-router-admin` 涔嬮棿鐨勫悗鍙拌繍钀ユ帴鍙ｇ害瀹氥€?
+## 鑳藉姏鑼冨洿
 
-## 能力范围
+褰撳墠 admin 绔鐩栦互涓嬭兘鍔涳細
 
-当前 admin 端覆盖以下能力：
+1. 绠＄悊鍛樿璇侊紙`admin_accounts`锛?2. Dashboard 杩愯惀鎬昏
+3. 鍟嗘埛绠＄悊
+4. 鏈嶅姟鍟?/ 鏈嶅姟鍟?Token 绠＄悊
+5. 鏍囧噯绔偣 / 鏍囧噯妯″瀷 / 鏈嶅姟鍟嗘ā鍨嬫槧灏勭鐞?6. 瀹㈡埛 Token 绠＄悊
+7. 濂楅绠＄悊
+8. 濂楅璁㈤槄璁板綍绠＄悊
+9. 婵€娲荤爜搴撳瓨涓庝娇鐢ㄨ褰曠鐞?10. 鏀粯鏂瑰紡绠＄悊
+11. 鏀粯閾炬帴绠＄悊
 
-1. 管理员认证（`admin_accounts`）
-2. Dashboard 运营总览
-3. 商户管理
-4. 服务商 / 服务商 Token 管理
-5. 标准端点 / 标准模型 / 服务商模型映射管理
-6. 客户 Token 管理
-7. 套餐管理
-8. 套餐订阅记录管理
-9. 激活码库存与使用记录管理
-10. 支付方式管理
-11. 支付链接管理
+## 閫氱敤绾﹀畾
 
-## 通用约定
+- 鍩虹璺緞锛歚/admin`
+- 閴存潈鏂瑰紡锛歚Authorization: Bearer <accessToken>`
+- 閫氱敤鐘舵€侊細`1 = 鍚敤`锛宍0 = 鍋滅敤`
+- 鍒嗛〉鍙傛暟锛歚page`銆乣pageSize`
+- 鍒楄〃鍝嶅簲锛歚Result<PageResult<T>>`
+- 鏅€氬搷搴旓細`Result<T>`
 
-- 基础路径：`/admin`
-- 鉴权方式：`Authorization: Bearer <accessToken>`
-- 通用状态：`1 = 启用`，`0 = 停用`
-- 分页参数：`page`、`pageSize`
-- 列表响应：`Result<PageResult<T>>`
-- 普通响应：`Result<T>`
-
-统一响应示例：
-
+缁熶竴鍝嶅簲绀轰緥锛?
 ```json
 {
   "code": 0,
@@ -37,8 +32,7 @@
 }
 ```
 
-分页响应示例：
-
+鍒嗛〉鍝嶅簲绀轰緥锛?
 ```json
 {
   "code": 0,
@@ -52,21 +46,17 @@
 }
 ```
 
-常用错误码：
+甯哥敤閿欒鐮侊細
 
-- `4001`：参数错误或业务校验失败
-- `4010`：未登录或管理员 Token 无效
-- `4014`：管理员账号已停用
-- `5000`：系统异常
-
-## 管理员认证
-
+- `4001`锛氬弬鏁伴敊璇垨涓氬姟鏍￠獙澶辫触
+- `4010`锛氭湭鐧诲綍鎴栫鐞嗗憳 Token 鏃犳晥
+- `4014`锛氱鐞嗗憳璐﹀彿宸插仠鐢?- `5000`锛氱郴缁熷紓甯?
+## 绠＄悊鍛樿璇?
 - `POST /admin/auth/login`
 - `GET /admin/auth/me`
 - `POST /admin/auth/logout`
 
-登录请求示例：
-
+鐧诲綍璇锋眰绀轰緥锛?
 ```json
 {
   "username": "admin",
@@ -78,41 +68,37 @@
 
 - `GET /admin/dashboard/overview`
 
-返回字段包括：
-
+杩斿洖瀛楁鍖呮嫭锛?
 - `merchantCount`
 - `activeMerchantCount`
 - `providerCount`
 - `activeProviderCount`
-- `endpointCount`
 - `modelCount`
 - `providerModelCount`
 - `providerTokenCount`
 - `customerTokenCount`
 - `expiringTokenCount`
 
-## 商户管理
+## 鍟嗘埛绠＄悊
 
-资源：`merchants`
+璧勬簮锛歚merchants`
 
 - `GET /admin/merchants?page=1&pageSize=10`
 - `GET /admin/merchants/{id}`
 - `PUT /admin/merchants/{id}`
 - `PATCH /admin/merchants/{id}/status?status=0`
 
-查询参数：
-
-- `keyword`：支持用户名 / 手机号 / 邮箱搜索
+鏌ヨ鍙傛暟锛?
+- `keyword`锛氭敮鎸佺敤鎴峰悕 / 鎵嬫満鍙?/ 閭鎼滅储
 - `status`
 
-说明：
+璇存槑锛?
+- 褰撳墠寮€鏀捐繍钀ュ娉ㄧ淮鎶わ細`remark`
+- 鍟嗘埛鍚仠浠呮敮鎸?`0 / 1`
 
-- 当前开放运营备注维护：`remark`
-- 商户启停仅支持 `0 / 1`
+## 鏈嶅姟鍟嗕笌 Token
 
-## 服务商与 Token
-
-服务商资源：`providers`
+鏈嶅姟鍟嗚祫婧愶細`providers`
 
 - `POST /admin/providers`
 - `GET /admin/providers`
@@ -121,7 +107,7 @@
 - `PATCH /admin/providers/{id}/status`
 - `DELETE /admin/providers/{id}`
 
-服务商 Token 资源：`provider_tokens`
+鏈嶅姟鍟?Token 璧勬簮锛歚provider_tokens`
 
 - `POST /admin/provider-tokens`
 - `GET /admin/provider-tokens`
@@ -130,22 +116,11 @@
 - `PATCH /admin/provider-tokens/{id}/status`
 - `DELETE /admin/provider-tokens/{id}`
 
-## 模型管理
+## 妯″瀷绠＄悊
 
-### 标准端点
+### 鏍囧噯妯″瀷
 
-资源：`model_endpoints`
-
-- `POST /admin/model-endpoints`
-- `GET /admin/model-endpoints`
-- `GET /admin/model-endpoints/{id}`
-- `PUT /admin/model-endpoints/{id}`
-- `PATCH /admin/model-endpoints/{id}/status`
-- `DELETE /admin/model-endpoints/{id}`
-
-### 标准模型
-
-资源：`models`
+璧勬簮锛歚models`
 
 - `POST /admin/models`
 - `GET /admin/models`
@@ -154,11 +129,10 @@
 - `PATCH /admin/models/{id}/status`
 - `DELETE /admin/models/{id}`
 
-查询参数：`endpointId`、`modelCode`、`status`
+鏌ヨ鍙傛暟锛歚modelCode`銆乣status`
 
-### 服务商模型映射
-
-资源：`provider_models`
+### 鏈嶅姟鍟嗘ā鍨嬫槧灏?
+璧勬簮锛歚provider_models`
 
 - `POST /admin/provider-models`
 - `GET /admin/provider-models`
@@ -167,9 +141,9 @@
 - `PATCH /admin/provider-models/{id}/status`
 - `DELETE /admin/provider-models/{id}`
 
-## 客户 Token 管理
+## 瀹㈡埛 Token 绠＄悊
 
-资源：`customer_tokens`
+璧勬簮锛歚customer_tokens`
 
 - `POST /admin/customer-tokens`
 - `GET /admin/customer-tokens`
@@ -178,17 +152,16 @@
 - `PATCH /admin/customer-tokens/{id}/status`
 - `DELETE /admin/customer-tokens/{id}`
 
-说明：
+璇存槑锛?
+- 鍒涘缓鎴愬姛鍚庝粎杩斿洖涓€娆℃槑鏂?`tokenValue`
+- 鍚庣画鍒楄〃鍜岃鎯呬笉鍐嶈繑鍥炴槑鏂?Token
+- `customerName` 鏀寔鐢ㄦ埛鍚嶃€佹墜鏈哄彿銆侀偖绠辫嚜鍔ㄨВ鏋愪负 `accountId`
 
-- 创建成功后仅返回一次明文 `tokenValue`
-- 后续列表和详情不再返回明文 Token
-- `customerName` 支持用户名、手机号、邮箱自动解析为 `accountId`
+## 濂楅杩愯惀
 
-## 套餐运营
+### 濂楅绠＄悊
 
-### 套餐管理
-
-资源：`plans`
+璧勬簮锛歚plans`
 
 - `POST /admin/plans`
 - `GET /admin/plans`
@@ -198,21 +171,18 @@
 - `PATCH /admin/plans/{id}/visible`
 - `DELETE /admin/plans/{id}`
 
-说明：
+璇存槑锛?
+- `allowedModels` 浣跨敤 JSON 瀛楃涓叉暟缁?- `payUrl` 浠嶉€氳繃 `third_party_pay_links` 涓哄椁愮粦瀹氫笓灞炴敮浠橀摼鎺?
+### 濂楅璁㈤槄璁板綍
 
-- `allowedModels` 使用 JSON 字符串数组
-- `payUrl` 仍通过 `third_party_pay_links` 为套餐绑定专属支付链接
-
-### 套餐订阅记录
-
-资源：`customer_plans`
+璧勬簮锛歚customer_plans`
 
 - `GET /admin/subscriptions`
 - `GET /admin/subscriptions/{id}`
 
-### 激活码库存
+### 婵€娲荤爜搴撳瓨
 
-资源：`activation_code_stocks`
+璧勬簮锛歚activation_code_stocks`
 
 - `POST /admin/activation-codes/generate`
 - `GET /admin/activation-codes`
@@ -221,16 +191,16 @@
 - `PATCH /admin/activation-codes/{id}/status`
 - `DELETE /admin/activation-codes/{id}`
 
-### 激活码使用记录
+### 婵€娲荤爜浣跨敤璁板綍
 
-- 与 `activation_code_stocks` 列表/详情联动返回
-- 前端运营页路由：`/activation-usage`
+- 涓?`activation_code_stocks` 鍒楄〃/璇︽儏鑱斿姩杩斿洖
+- 鍓嶇杩愯惀椤佃矾鐢憋細`/activation-usage`
 
-## 支付管理
+## 鏀粯绠＄悊
 
-### 支付方式管理
+### 鏀粯鏂瑰紡绠＄悊
 
-资源：`payment_methods`
+璧勬簮锛歚payment_methods`
 
 - `POST /admin/payment-methods`
 - `GET /admin/payment-methods`
@@ -239,34 +209,26 @@
 - `PATCH /admin/payment-methods/{id}/status`
 - `DELETE /admin/payment-methods/{id}`
 
-字段说明：
-
-- `methodCode`：支付方式编码，唯一
-- `methodName`：支付方式名称
-- `methodType`：渠道类型，如 `alipay` / `wechat` / `local`
-- `iconUrl`：图标地址，可选
-- `sort`：排序值
-- `status`：启停状态
-- `configJson`：支付参数 JSON 字符串
-- `remark`：运营备注
-
-创建示例：
-
+瀛楁璇存槑锛?
+- `methodCode`锛氭敮浠樻柟寮忕紪鐮侊紝鍞竴
+- `methodName`锛氭敮浠樻柟寮忓悕绉?- `methodType`锛氭笭閬撶被鍨嬶紝濡?`alipay` / `wechat` / `local`
+- `iconUrl`锛氬浘鏍囧湴鍧€锛屽彲閫?- `sort`锛氭帓搴忓€?- `status`锛氬惎鍋滅姸鎬?- `configJson`锛氭敮浠樺弬鏁?JSON 瀛楃涓?- `remark`锛氳繍钀ュ娉?
+鍒涘缓绀轰緥锛?
 ```json
 {
   "methodCode": "alipay_official",
-  "methodName": "支付宝官方收款",
+  "methodName": "鏀粯瀹濆畼鏂规敹娆?,
   "methodType": "alipay",
   "sort": 10,
   "status": 1,
   "configJson": "{\"appId\":\"demo-app\",\"merchantId\":\"2088xxxx\",\"notifyUrl\":\"https://example.com/pay/notify/alipay\"}",
-  "remark": "默认支付宝配置"
+  "remark": "榛樿鏀粯瀹濋厤缃?
 }
 ```
 
-### 支付链接管理
+### 鏀粯閾炬帴绠＄悊
 
-资源：`third_party_pay_links`
+璧勬簮锛歚third_party_pay_links`
 
 - `POST /admin/pay-links`
 - `GET /admin/pay-links`
@@ -275,15 +237,12 @@
 - `PATCH /admin/pay-links/{id}/status`
 - `DELETE /admin/pay-links/{id}`
 
-说明：
+璇存槑锛?
+- 褰撳墠鐢ㄤ簬缁存姢濂楅缁村害鐨勬敮浠橀摼鎺?- 鍓嶇鑿滃崟褰掑睘锛歚鏀粯绠＄悊 -> 鏀粯閾炬帴绠＄悊`
 
-- 当前用于维护套餐维度的支付链接
-- 前端菜单归属：`支付管理 -> 支付链接管理`
+## 鍓嶇瀵规帴寤鸿
 
-## 前端对接建议
-
-建议后台前端维护以下路由：
-
+寤鸿鍚庡彴鍓嶇缁存姢浠ヤ笅璺敱锛?
 - `/login`
 - `/dashboard`
 - `/merchants`
@@ -298,8 +257,9 @@
 - `/payment-methods`
 - `/pay-links`
 
-联调约定：
+鑱旇皟绾﹀畾锛?
+- 鍓嶇榛樿璇锋眰鐩稿璺緞 `/admin/**`
+- Vite 寮€鍙戠幆澧冧唬鐞嗗埌 `http://localhost:8080`
+- 鑻ュ墠鍚庣鍒嗙閮ㄧ讲锛屽彲閫氳繃 `VITE_ADMIN_API_BASE_URL` 鎸囧畾鍚庣鍦板潃
 
-- 前端默认请求相对路径 `/admin/**`
-- Vite 开发环境代理到 `http://localhost:8080`
-- 若前后端分离部署，可通过 `VITE_ADMIN_API_BASE_URL` 指定后端地址
+

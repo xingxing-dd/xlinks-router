@@ -2,7 +2,6 @@ package site.xlinks.ai.router.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -21,10 +20,6 @@ public class ModelCreateDTO {
     @Schema(description = "Model code", required = true)
     @NotBlank(message = "Model code must not be blank")
     private String modelCode;
-
-    @Schema(description = "Endpoint ID", required = true)
-    @NotNull(message = "Endpoint ID must not be null")
-    private Long endpointId;
 
     @Schema(description = "Model description")
     private String modelDesc;

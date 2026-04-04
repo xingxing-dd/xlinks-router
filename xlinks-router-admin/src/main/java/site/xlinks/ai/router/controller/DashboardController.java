@@ -14,7 +14,6 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 import site.xlinks.ai.router.service.CustomerTokenService;
-import site.xlinks.ai.router.service.ModelEndpointService;
 import site.xlinks.ai.router.service.ModelService;
 import site.xlinks.ai.router.service.ProviderModelService;
 import site.xlinks.ai.router.service.ProviderService;
@@ -34,7 +33,6 @@ public class DashboardController {
 
     private final CustomerAccountMapper customerAccountMapper;
     private final ProviderService providerService;
-    private final ModelEndpointService modelEndpointService;
     private final ModelService modelService;
     private final ProviderModelService providerModelService;
     private final ProviderTokenService providerTokenService;
@@ -52,7 +50,6 @@ public class DashboardController {
         overview.setActiveProviderCount(providerService.count(
                 new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
         ));
-        overview.setEndpointCount(modelEndpointService.count());
         overview.setModelCount(modelService.count());
         overview.setProviderModelCount(providerModelService.count());
         overview.setProviderTokenCount(providerTokenService.count());

@@ -34,8 +34,6 @@ public class Provider extends BaseEntity {
     /**
      * 协议类型
      */
-    private String providerType;
-
     /**
      * Supported request protocols, comma-separated. Empty means all protocols.
      */

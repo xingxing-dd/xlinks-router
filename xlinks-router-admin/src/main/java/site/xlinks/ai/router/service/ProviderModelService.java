@@ -91,17 +91,8 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider and standard model mapping already exists");
         }
 
-        if (StringUtils.hasText(providerModelCode)) {
-            LambdaQueryWrapper<ProviderModel> codeWrapper = new LambdaQueryWrapper<>();
-            codeWrapper.eq(providerId != null, ProviderModel::getProviderId, providerId)
-                    .eq(ProviderModel::getProviderModelCode, providerModelCode);
-            if (excludeId != null) {
-                codeWrapper.ne(ProviderModel::getId, excludeId);
-            }
-            if (this.count(codeWrapper) > 0) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider model code already exists for this provider");
-            }
-        }
+        // Keep provider_model_code reusable under a provider:
+        // one upstream model code can be shared by multiple standard models/endpoints.
     }
 
     private void validateReferences(Long providerId, Long modelId) {

@@ -1,13 +1,14 @@
 package site.xlinks.ai.router.adapter;
 
 import org.springframework.stereotype.Component;
+import site.xlinks.ai.router.dto.OpenAIProtocol;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Resolves OpenAI-compatible provider adapters by provider type.
+ * Resolves OpenAI-compatible provider adapters by request protocol.
  */
 @Component
 public class OpenAIProviderAdapterFactory {
@@ -19,15 +20,20 @@ public class OpenAIProviderAdapterFactory {
         this.providerAdapters = providerAdapters;
     }
 
-    public OpenAIProviderAdapter getAdapter(String providerType) {
-        OpenAIProviderAdapter cachedAdapter = adapterCache.get(providerType);
+    public OpenAIProviderAdapter getAdapter(OpenAIProtocol protocol) {
+        if (protocol == null) {
+            return null;
+        }
+
+        String protocolCode = protocol.getCode();
+        OpenAIProviderAdapter cachedAdapter = adapterCache.get(protocolCode);
         if (cachedAdapter != null) {
             return cachedAdapter;
         }
 
         for (OpenAIProviderAdapter adapter : providerAdapters) {
-            if (adapter.supports(providerType)) {
-                adapterCache.put(providerType, adapter);
+            if (adapter.supports(protocol)) {
+                adapterCache.put(protocolCode, adapter);
                 return adapter;
             }
         }

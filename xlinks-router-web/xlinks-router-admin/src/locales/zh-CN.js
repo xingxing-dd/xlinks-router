@@ -32,7 +32,7 @@
     plans: '套餐管理',
     subscriptions: '订阅记录',
     activationCodes: '激活码管理',
-    activationUsage: '激活码使用记录',
+    activationUsage: '激活记录',
     paymentMethods: '支付方式管理',
     payLinks: '支付链接管理',
   },

@@ -4,15 +4,15 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * Provider 调用上下文
- * 包含调用下游 Provider 所需的完整信息
+ * Provider 璋冪敤涓婁笅鏂?
+ * 鍖呭惈璋冪敤涓嬫父 Provider 鎵€闇€鐨勫畬鏁翠俊鎭?
  */
 @Data
 @Builder
 public class ProviderInvokeContext {
 
     /**
-     * 请求 ID
+     * 璇锋眰 ID
      */
     private String requestId;
 
@@ -22,22 +22,18 @@ public class ProviderInvokeContext {
     private Long providerId;
 
     /**
-     * Provider 编码
+     * Provider 缂栫爜
      */
     private String providerCode;
 
     /**
-     * Provider 名称
+     * Provider 鍚嶇О
      */
     private String providerName;
 
-    /**
-     * Provider 类型
-     */
-    private String providerType;
 
     /**
-     * 基础 URL
+     * 鍩虹 URL
      */
     private String baseUrl;
 
@@ -47,62 +43,62 @@ public class ProviderInvokeContext {
     private String providerToken;
 
     /**
-     * 客户 Token
+     * 瀹㈡埛 Token
      */
     private String customerToken;
 
     /**
-     * 端点编码
+     * 绔偣缂栫爜
      */
     private String endpointCode;
 
     /**
-     * 模型 ID
+     * 妯″瀷 ID
      */
     private Long modelId;
 
     /**
-     * 模型编码
+     * 妯″瀷缂栫爜
      */
     private String modelCode;
 
     /**
-     * 模型名称
+     * 妯″瀷鍚嶇О
      */
     private String modelName;
 
     /**
-     * 输入价格（每百万 token）
+     * 杈撳叆浠锋牸锛堟瘡鐧句竾 token锛?
      */
     private java.math.BigDecimal inputPrice;
 
     /**
-     * 输出价格（每百万 token）
+     * 杈撳嚭浠锋牸锛堟瘡鐧句竾 token锛?
      */
     private java.math.BigDecimal outputPrice;
 
     /**
-     * 底层模型名称
+     * 搴曞眰妯″瀷鍚嶇О
      */
     private String providerModel;
 
     /**
-     * 套餐记录 ID
+     * 濂楅璁板綍 ID
      */
     private Long planId;
 
     /**
-     * 客户 Token ID
+     * 瀹㈡埛 Token ID
      */
     private Long customerTokenId;
 
     /**
-     * 客户账户 ID
+     * 瀹㈡埛璐︽埛 ID
      */
     private Long accountId;
 
     /**
-     * 客户模型编码
+     * 瀹㈡埛妯″瀷缂栫爜
      */
     private String customerModel;
 }

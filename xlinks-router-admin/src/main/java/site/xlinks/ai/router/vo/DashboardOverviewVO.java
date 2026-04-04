@@ -22,9 +22,6 @@ public class DashboardOverviewVO {
     @Schema(description = "Active provider count")
     private long activeProviderCount;
 
-    @Schema(description = "Endpoint count")
-    private long endpointCount;
-
     @Schema(description = "Model count")
     private long modelCount;
 

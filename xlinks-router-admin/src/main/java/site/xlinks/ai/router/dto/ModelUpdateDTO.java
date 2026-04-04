@@ -15,9 +15,6 @@ public class ModelUpdateDTO {
     @Schema(description = "Model name")
     private String modelName;
 
-    @Schema(description = "Endpoint ID")
-    private Long endpointId;
-
     @Schema(description = "Model description")
     private String modelDesc;
 

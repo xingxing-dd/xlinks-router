@@ -1,6 +1,6 @@
 ﻿<script setup>
 import { onMounted, ref } from 'vue'
-import { Boxes, Cloud, KeyRound, KeySquare, Link2, AlarmClock, Shield } from 'lucide-vue-next'
+import { Boxes, Cloud, KeyRound, KeySquare, AlarmClock, Shield, Link2 } from 'lucide-vue-next'
 import { getDashboardOverview } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 
@@ -11,7 +11,6 @@ const overview = ref({
   activeMerchantCount: 0,
   providerCount: 0,
   activeProviderCount: 0,
-  endpointCount: 0,
   modelCount: 0,
   providerModelCount: 0,
   providerTokenCount: 0,
@@ -24,7 +23,6 @@ const cards = [
   { key: 'activeMerchantCount', label: '启用商户', icon: Shield },
   { key: 'providerCount', label: '服务商总数', icon: Cloud },
   { key: 'activeProviderCount', label: '启用服务商', icon: Cloud },
-  { key: 'endpointCount', label: '标准端点', icon: Link2 },
   { key: 'modelCount', label: '标准模型', icon: Boxes },
   { key: 'providerTokenCount', label: '服务商 Token', icon: KeySquare },
   { key: 'customerTokenCount', label: '客户 Token', icon: KeyRound },

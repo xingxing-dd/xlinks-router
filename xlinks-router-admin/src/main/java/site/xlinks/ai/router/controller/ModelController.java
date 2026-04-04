@@ -38,7 +38,6 @@ public class ModelController {
         Model model = new Model();
         model.setModelName(dto.getModelName());
         model.setModelCode(dto.getModelCode());
-        model.setEndpointId(dto.getEndpointId());
         model.setModelDesc(dto.getModelDesc());
         model.setInputPrice(dto.getInputPrice());
         model.setOutputPrice(dto.getOutputPrice());
@@ -53,10 +52,9 @@ public class ModelController {
     @Operation(summary = "Model list")
     public Result<PageResult<Model>> list(@RequestParam(defaultValue = "1") Integer page,
                                           @RequestParam(defaultValue = "10") Integer pageSize,
-                                          @RequestParam(required = false) Long endpointId,
                                           @RequestParam(required = false) String modelCode,
                                           @RequestParam(required = false) Integer status) {
-        var pageResult = modelService.pageQuery(page, pageSize, endpointId, modelCode, status);
+        var pageResult = modelService.pageQuery(page, pageSize, modelCode, status);
         return Result.success(PageResult.of(
                 pageResult.getRecords(),
                 pageResult.getTotal(),
@@ -78,9 +76,6 @@ public class ModelController {
         model.setId(id);
         if (dto.getModelName() != null) {
             model.setModelName(dto.getModelName());
-        }
-        if (dto.getEndpointId() != null) {
-            model.setEndpointId(dto.getEndpointId());
         }
         if (dto.getModelDesc() != null) {
             model.setModelDesc(dto.getModelDesc());

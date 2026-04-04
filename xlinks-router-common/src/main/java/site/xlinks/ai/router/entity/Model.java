@@ -24,8 +24,6 @@ public class Model extends BaseEntity {
 
     private String modelCode;
 
-    private Long endpointId;
-
     private String modelDesc;
 
     private BigDecimal inputPrice;

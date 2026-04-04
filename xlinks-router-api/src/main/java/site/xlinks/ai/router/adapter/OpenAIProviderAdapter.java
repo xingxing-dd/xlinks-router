@@ -2,6 +2,7 @@ package site.xlinks.ai.router.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
+import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.dto.OpenAIProxyRequest;
 import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 
@@ -11,9 +12,9 @@ import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 public interface OpenAIProviderAdapter {
 
     /**
-     * Whether the adapter supports the provider type.
+     * Whether the adapter supports the request protocol.
      */
-    boolean supports(String providerType);
+    boolean supports(OpenAIProtocol protocol);
 
     /**
      * Forward a non-streaming OpenAI-compatible request.
