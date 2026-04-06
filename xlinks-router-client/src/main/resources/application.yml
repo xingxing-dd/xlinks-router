@@ -70,3 +70,33 @@ xlinks:
       api-url: ${XLS_EMAIL_BREVO_API_URL:https://api.brevo.com/v3/smtp/email}
       enabled: true
 
+# 支付宝配置
+alipay:
+  # 沙箱环境配置
+  sandbox:
+    enabled: true
+    app-id: ${ALIPAY_SANDBOX_APP_ID:your-sandbox-app-id}
+    private-key: ${ALIPAY_SANDBOX_PRIVATE_KEY:your-private-key}
+    public-key: ${ALIPAY_SANDBOX_PUBLIC_KEY:your-public-key}
+    alipay-public-key: ${ALIPAY_SANDBOX_ALIPAY_PUBLIC_KEY:your-alipay-public-key}
+    gateway-url: https://openapi.alipaydev.com/gateway.do
+    charset: UTF-8
+    sign-type: RSA2
+    format: json
+    # 回调地址配置
+    return-url: http://localhost:8082/alipay/return
+    notify-url: http://localhost:8082/alipay/notify
+  # 正式环境配置（预留）
+  production:
+    enabled: false
+    app-id: ${ALIPAY_APP_ID:}
+    private-key: ${ALIPAY_PRIVATE_KEY:}
+    public-key: ${ALIPAY_PUBLIC_KEY:}
+    alipay-public-key: ${ALIPAY_ALIPAY_PUBLIC_KEY:}
+    gateway-url: https://openapi.alipay.com/gateway.do
+    charset: UTF-8
+    sign-type: RSA2
+    format: json
+    return-url: ${ALIPAY_RETURN_URL:}
+    notify-url: ${ALIPAY_NOTIFY_URL:}
+

@@ -89,6 +89,21 @@
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
         </dependency>
+        
+        <!-- 支付宝SDK - 暂时注释，需要时启用 -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+            <version>4.39.200.ALL</version>
+        </dependency>
+
+        <!-- Jakarta Servlet API (JDK17+) -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
