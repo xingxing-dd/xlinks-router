@@ -1,4 +1,4 @@
-﻿import { clearStoredAuth, loadStoredAuth } from '@/utils/auth'
+import { clearStoredAuth, loadStoredAuth } from '@/utils/auth'
 
 const API_BASE_URL = (import.meta.env.VITE_ADMIN_API_BASE_URL || '').replace(/\/$/, '')
 

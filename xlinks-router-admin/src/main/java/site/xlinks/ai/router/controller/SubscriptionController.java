@@ -14,7 +14,7 @@ import site.xlinks.ai.router.service.SubscriptionService;
 import site.xlinks.ai.router.vo.SubscriptionRecordVO;
 
 @RestController
-@RequestMapping("/admin/subscriptions")
+@RequestMapping("/api/subscriptions")
 @RequiredArgsConstructor
 @Tag(name = "Subscription Management", description = "Plan subscription record APIs")
 public class SubscriptionController {

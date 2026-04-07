@@ -25,7 +25,7 @@ import site.xlinks.ai.router.service.ProviderService;
  * Provider management API.
  */
 @RestController
-@RequestMapping("/admin/providers")
+@RequestMapping("/api/providers")
 @RequiredArgsConstructor
 @Tag(name = "Provider Management", description = "Provider management APIs")
 public class ProviderController {

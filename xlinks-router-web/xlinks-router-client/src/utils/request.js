@@ -1,5 +1,11 @@
+import { getLocale } from '@/locales'
+
 const API_PREFIX = '/api'
 const AUTH_PREFIX = '/api/v1/auth'
+
+function defaultMessage(zh, en) {
+  return getLocale().startsWith('zh') ? zh : en
+}
 
 function redirectToLogin() {
   if (typeof window === 'undefined') {
@@ -48,16 +54,15 @@ async function request(path, options = {}) {
 
   if (response.status === 401) {
     redirectToLogin()
-    throw new Error(payload?.message || '登录已失效，请重新登录')
+    throw new Error(payload?.message || defaultMessage('登录已失效，请重新登录', 'Session expired, please sign in again'))
   }
 
   if (!response.ok) {
-    const message = payload?.message || '请求失败'
-    throw new Error(message)
+    throw new Error(payload?.message || defaultMessage('请求失败', 'Request failed'))
   }
 
   if (payload?.code !== 0) {
-    throw new Error(payload?.message || '接口返回异常')
+    throw new Error(payload?.message || defaultMessage('接口返回异常', 'Unexpected API response'))
   }
 
   return payload?.data

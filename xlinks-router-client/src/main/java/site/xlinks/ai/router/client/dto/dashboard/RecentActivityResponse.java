@@ -13,6 +13,7 @@ public class RecentActivityResponse {
     private String channel;
     private String model;
     private Integer inputTokens;
+    private Integer cacheHitTokens;
     private Integer outputTokens;
     private Integer totalTokens;
     private java.math.BigDecimal cost;

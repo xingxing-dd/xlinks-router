@@ -25,7 +25,7 @@ import site.xlinks.ai.router.service.ModelService;
  * Standard model management API.
  */
 @RestController
-@RequestMapping("/admin/models")
+@RequestMapping("/api/models")
 @RequiredArgsConstructor
 @Tag(name = "Model Management", description = "Standard model management APIs")
 public class ModelController {

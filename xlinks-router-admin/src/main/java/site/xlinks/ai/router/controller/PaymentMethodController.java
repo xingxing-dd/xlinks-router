@@ -22,7 +22,7 @@ import site.xlinks.ai.router.service.PaymentMethodService;
 import site.xlinks.ai.router.vo.PaymentMethodVO;
 
 @RestController
-@RequestMapping("/admin/payment-methods")
+@RequestMapping("/api/payment-methods")
 @RequiredArgsConstructor
 @Tag(name = "Payment Method Management", description = "Payment method configuration APIs")
 public class PaymentMethodController {

@@ -19,7 +19,7 @@ import site.xlinks.ai.router.service.MerchantService;
 import site.xlinks.ai.router.vo.MerchantVO;
 
 @RestController
-@RequestMapping("/admin/merchants")
+@RequestMapping("/api/merchants")
 @RequiredArgsConstructor
 @Tag(name = "Merchant Management", description = "Merchant account management APIs")
 public class MerchantController {

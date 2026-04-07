@@ -127,3 +127,4 @@ The endpoint is inferred from the request protocol and filtered by provider capa
 - `docs/openapi.md`: public gateway behavior
 - `docs/db-script.md`: core schema notes
 - `xlinks-router-admin/src/main/resources/db/init.sql`: bootstrap SQL
+- `docs/client-email.md`: client mail verification delivery and Mailtrap configuration

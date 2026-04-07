@@ -36,6 +36,7 @@ const modelForm = reactive({
   modelDesc: '',
   inputPrice: '',
   outputPrice: '',
+  cacheHitPrice: '',
   contextSize: '',
   status: 1,
   remark: '',
@@ -49,24 +50,33 @@ const mappingFilters = reactive({ providerId: '', modelId: '', providerModelCode
 const mappingDialogVisible = ref(false)
 const mappingDialogMode = ref('create')
 const currentMappingId = ref(null)
-const mappingForm = reactive({ providerId: '', modelId: '', providerModelCode: '', providerModelName: '', status: 1, remark: '' })
+const mappingForm = reactive({
+  providerId: '',
+  modelId: '',
+  providerModelCode: '',
+  providerModelName: '',
+  status: 1,
+  remark: '',
+})
 
-const modelNameMap = computed(() => Object.fromEntries(modelOptions.value.map((item) => [item.id, item.modelCode])))
+const modelCodeMap = computed(() => Object.fromEntries(modelOptions.value.map((item) => [item.id, item.modelCode])))
 const providerNameMap = computed(() => Object.fromEntries(providers.value.map((item) => [item.id, item.providerName])))
 
 const loadProviders = async () => {
   const data = await listProviders({ page: 1, pageSize: 200 })
   providers.value = data.records || []
 }
+
 const loadModelOptions = async () => {
   const data = await listModels({ page: 1, pageSize: 200 })
   modelOptions.value = data.records || []
 }
+
 const loadBaseOptions = async () => {
   try {
     await Promise.all([loadProviders(), loadModelOptions()])
   } catch (error) {
-    toastStore.push(error.message || '加载资源选项失败', 'error')
+    toastStore.push(error.message || '加载基础选项失败', 'error')
   }
 }
 
@@ -102,10 +112,12 @@ const resetModelForm = () => Object.assign(modelForm, {
   modelDesc: '',
   inputPrice: '',
   outputPrice: '',
+  cacheHitPrice: '',
   contextSize: '',
   status: 1,
   remark: '',
 })
+
 const resetMappingForm = () => Object.assign(mappingForm, {
   providerId: '',
   modelId: '',
@@ -121,6 +133,7 @@ const openModelCreate = () => {
   resetModelForm()
   modelDialogVisible.value = true
 }
+
 const openModelEdit = (record) => {
   modelDialogMode.value = 'edit'
   currentModelId.value = record.id
@@ -130,6 +143,7 @@ const openModelEdit = (record) => {
     modelDesc: record.modelDesc || '',
     inputPrice: record.inputPrice ?? '',
     outputPrice: record.outputPrice ?? '',
+    cacheHitPrice: record.cacheHitPrice ?? '',
     contextSize: record.contextSize ?? '',
     status: record.status ?? 1,
     remark: record.remark || '',
@@ -150,6 +164,7 @@ const submitModel = async () => {
       modelDesc: modelForm.modelDesc,
       inputPrice: modelForm.inputPrice === '' ? null : Number(modelForm.inputPrice),
       outputPrice: modelForm.outputPrice === '' ? null : Number(modelForm.outputPrice),
+      cacheHitPrice: modelForm.cacheHitPrice === '' ? null : Number(modelForm.cacheHitPrice),
       contextSize: modelForm.contextSize === '' ? null : Number(modelForm.contextSize),
       status: Number(modelForm.status || 1),
       remark: modelForm.remark,
@@ -163,6 +178,7 @@ const submitModel = async () => {
         modelDesc: payload.modelDesc,
         inputPrice: payload.inputPrice,
         outputPrice: payload.outputPrice,
+        cacheHitPrice: payload.cacheHitPrice,
         contextSize: payload.contextSize,
         remark: payload.remark,
       })
@@ -188,8 +204,11 @@ const toggleModelStatus = async (record) => {
     toastStore.push(error.message || '更新标准模型状态失败', 'error')
   }
 }
+
 const removeModel = async (record) => {
-  if (!window.confirm(`确认删除标准模型「${record.modelName}」吗？`)) return
+  if (!window.confirm(`确认删除标准模型“${record.modelName}”吗？`)) {
+    return
+  }
   try {
     await deleteModel(record.id)
     toastStore.push('标准模型已删除', 'success')
@@ -200,12 +219,26 @@ const removeModel = async (record) => {
   }
 }
 
+const handleMappingModelChange = () => {
+  if (mappingDialogMode.value !== 'create' || !mappingForm.modelId) {
+    return
+  }
+  const selectedModel = modelOptions.value.find((item) => Number(item.id) === Number(mappingForm.modelId))
+  if (!selectedModel) {
+    return
+  }
+  const defaultName = selectedModel.modelName || selectedModel.modelCode || ''
+  mappingForm.providerModelCode = defaultName
+  mappingForm.providerModelName = defaultName
+}
+
 const openMappingCreate = () => {
   mappingDialogMode.value = 'create'
   currentMappingId.value = null
   resetMappingForm()
   mappingDialogVisible.value = true
 }
+
 const openMappingEdit = (record) => {
   mappingDialogMode.value = 'edit'
   currentMappingId.value = record.id
@@ -222,7 +255,7 @@ const openMappingEdit = (record) => {
 
 const submitMapping = async () => {
   if (!mappingForm.providerId || !mappingForm.modelId || !mappingForm.providerModelCode) {
-    toastStore.push('请完整填写服务商、标准模型和上游模型编码', 'warning')
+    toastStore.push('请完整填写服务商、标准模型和模型编码', 'warning')
     return
   }
   mappingSubmitting.value = true
@@ -260,8 +293,11 @@ const toggleMappingStatus = async (record) => {
     toastStore.push(error.message || '更新服务商映射状态失败', 'error')
   }
 }
+
 const removeMapping = async (record) => {
-  if (!window.confirm(`确认删除映射「${record.providerModelCode}」吗？`)) return
+  if (!window.confirm(`确认删除映射“${record.providerModelCode}”吗？`)) {
+    return
+  }
   try {
     await deleteProviderModel(record.id)
     toastStore.push('服务商映射已删除', 'success')
@@ -281,8 +317,8 @@ onMounted(async () => {
   <div class="p-6 space-y-6">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">模型资源中心</h1>
-        <p class="text-slate-500">维护标准模型与服务商映射，完成路由配置。</p>
+        <h1 class="text-2xl font-bold text-slate-900">模型管理</h1>
+        <p class="text-slate-500">维护标准模型与服务商映射，统一平台模型配置。</p>
       </div>
       <div class="section-tabs self-start lg:self-auto">
         <button class="tab-button" :class="activeTab === 'models' ? 'tab-button-active' : ''" @click="activeTab = 'models'">标准模型</button>
@@ -336,16 +372,22 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!modelRecords.length && !modelLoading"><td colspan="7" class="empty-state">暂无标准模型数据</td></tr>
+                <tr v-if="!modelRecords.length && !modelLoading">
+                  <td colspan="7" class="empty-state">暂无标准模型数据</td>
+                </tr>
                 <tr v-for="record in modelRecords" :key="record.id">
                   <td>{{ record.modelCode }}</td>
                   <td>
                     <div class="font-medium text-slate-800">{{ record.modelName }}</div>
                     <div class="text-xs text-slate-400 mt-1">{{ formatNullable(record.modelDesc) }}</div>
                   </td>
-                  <td>输入 {{ record.inputPrice ?? '-' }} / 输出 {{ record.outputPrice ?? '-' }}</td>
+                  <td>输入 {{ record.inputPrice ?? '-' }} / 输出 {{ record.outputPrice ?? '-' }} / 缓存命中 {{ record.cacheHitPrice ?? '-' }}</td>
                   <td>{{ record.contextSize ?? '-' }}</td>
-                  <td><span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">{{ formatStatus(record.status) }}</span></td>
+                  <td>
+                    <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
+                      {{ formatStatus(record.status) }}
+                    </span>
+                  </td>
                   <td>{{ formatDateTime(record.updatedAt) }}</td>
                   <td>
                     <div class="flex items-center justify-end gap-2">
@@ -380,8 +422,8 @@ onMounted(async () => {
             </select>
           </div>
           <div>
-            <label class="text-sm text-slate-500">上游模型编码</label>
-            <input v-model.trim="mappingFilters.providerModelCode" class="input mt-2" placeholder="如 gpt-4o-mini" />
+            <label class="text-sm text-slate-500">模型编码</label>
+            <input v-model.trim="mappingFilters.providerModelCode" class="input mt-2" placeholder="支持按映射编码搜索" />
           </div>
           <div>
             <label class="text-sm text-slate-500">状态</label>
@@ -414,24 +456,30 @@ onMounted(async () => {
                 <tr>
                   <th>服务商</th>
                   <th>标准模型</th>
-                  <th>上游模型编码</th>
-                  <th>上游模型名称</th>
+                  <th>模型编码</th>
+                  <th>模型名称</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th class="text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!mappingRecords.length && !mappingLoading"><td colspan="7" class="empty-state">暂无服务商映射数据</td></tr>
+                <tr v-if="!mappingRecords.length && !mappingLoading">
+                  <td colspan="7" class="empty-state">暂无服务商映射数据</td>
+                </tr>
                 <tr v-for="record in mappingRecords" :key="record.id">
                   <td>{{ providerNameMap[record.providerId] || `#${record.providerId}` }}</td>
-                  <td>{{ modelNameMap[record.modelId] || `#${record.modelId}` }}</td>
+                  <td>{{ modelCodeMap[record.modelId] || `#${record.modelId}` }}</td>
                   <td>{{ record.providerModelCode }}</td>
                   <td>
                     <div class="font-medium text-slate-800">{{ formatNullable(record.providerModelName) }}</div>
                     <div class="text-xs text-slate-400 mt-1">{{ formatNullable(record.remark) }}</div>
                   </td>
-                  <td><span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">{{ formatStatus(record.status) }}</span></td>
+                  <td>
+                    <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
+                      {{ formatStatus(record.status) }}
+                    </span>
+                  </td>
                   <td>{{ formatDateTime(record.updatedAt) }}</td>
                   <td>
                     <div class="flex items-center justify-end gap-2">
@@ -476,6 +524,10 @@ onMounted(async () => {
             <label class="text-sm text-slate-500">输出价格</label>
             <input v-model="modelForm.outputPrice" type="number" step="0.01" class="input mt-2" placeholder="20" />
           </div>
+          <div>
+            <label class="text-sm text-slate-500">缓存命中价格</label>
+            <input v-model="modelForm.cacheHitPrice" type="number" step="0.01" class="input mt-2" placeholder="默认可与输入价格一致" />
+          </div>
           <div v-if="modelDialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>
             <select v-model.number="modelForm.status" class="input mt-2">
@@ -516,18 +568,18 @@ onMounted(async () => {
           </div>
           <div>
             <label class="text-sm text-slate-500">标准模型</label>
-            <select v-model="mappingForm.modelId" class="input mt-2">
+            <select v-model="mappingForm.modelId" class="input mt-2" @change="handleMappingModelChange">
               <option value="">请选择标准模型</option>
               <option v-for="model in modelOptions" :key="model.id" :value="model.id">{{ model.modelCode }}</option>
             </select>
           </div>
           <div>
-            <label class="text-sm text-slate-500">上游模型编码</label>
-            <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="gpt-4o-mini" />
+            <label class="text-sm text-slate-500">模型编码</label>
+            <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="默认带出标准模型名称，可自行修改" />
           </div>
           <div>
-            <label class="text-sm text-slate-500">上游模型名称</label>
-            <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="可选" />
+            <label class="text-sm text-slate-500">模型名称</label>
+            <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="默认带出标准模型名称，可自行修改" />
           </div>
           <div v-if="mappingDialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>

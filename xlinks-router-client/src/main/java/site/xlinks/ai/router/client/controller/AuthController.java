@@ -50,7 +50,7 @@ public class AuthController {
         );
 
         VerifyCodeSender sender = verifyCodeSenderFactory.getSender(request.getCodeType());
-        VerifyCodeSendResponse response = sender.send(request.getTarget(), issued.token(), issued.expireSeconds());
+        VerifyCodeSendResponse response = sender.send(request.getScene(), request.getTarget(), issued.token(), issued.expireSeconds());
         return Result.success(response);
     }
 

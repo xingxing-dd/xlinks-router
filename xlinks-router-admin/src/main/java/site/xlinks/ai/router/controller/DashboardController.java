@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
  * Admin dashboard API.
  */
 @RestController
-@RequestMapping("/admin/dashboard")
+@RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "Admin dashboard APIs")
 public class DashboardController {

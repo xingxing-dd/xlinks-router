@@ -23,7 +23,7 @@ import site.xlinks.ai.router.vo.ContactMessageVO;
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/contact-messages")
+@RequestMapping("/api/contact-messages")
 @RequiredArgsConstructor
 @Tag(name = "Contact Message Management", description = "Contact message management APIs")
 public class ContactMessageController {

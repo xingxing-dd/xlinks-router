@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { onMounted, ref } from 'vue'
 import { Boxes, Cloud, KeyRound, KeySquare, AlarmClock, Shield, Link2 } from 'lucide-vue-next'
 import { getDashboardOverview } from '@/api/admin'

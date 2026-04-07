@@ -16,7 +16,7 @@ import site.xlinks.ai.router.service.CustomerTokenService;
  * Customer token management API.
  */
 @RestController
-@RequestMapping("/admin/customer-tokens")
+@RequestMapping("/api/customer-tokens")
 @RequiredArgsConstructor
 @Tag(name = "Customer Token Management", description = "Customer token management APIs")
 public class CustomerTokenController {
