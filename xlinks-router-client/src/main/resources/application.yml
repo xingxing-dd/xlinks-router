@@ -86,8 +86,10 @@ alipay:
     # 回调地址配置
     return-url: https://ai.xlinks.site/alipay/return
     notify-url: https://ai.xlinks.site/alipay/notify
-    payment-success-url: http://localhost:5173/payment/success
-    payment-error-url: http://localhost:5173/payment/error
+    #payment-success-url: http://localhost:5173/payment/success
+    #payment-error-url: http://localhost:5173/payment/error
+    payment-success-url: https://ai.xlinks.site/alipay/payment/success
+    payment-error-url: https://ai.xlinks.site/alipay/payment/error
   # 正式环境配置（预留）
   production:
     enabled: false
