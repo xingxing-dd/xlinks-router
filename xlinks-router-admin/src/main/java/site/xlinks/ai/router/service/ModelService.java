@@ -35,6 +35,9 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
 
     public boolean save(Model model) {
         validateUnique(model.getModelCode(), null);
+        if (model.getCacheHitPrice() == null) {
+            model.setCacheHitPrice(model.getInputPrice());
+        }
         return super.save(model);
     }
 
@@ -42,6 +45,9 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         Model existing = getById(model.getId());
         String modelCode = StringUtils.hasText(model.getModelCode()) ? model.getModelCode() : existing.getModelCode();
         validateUnique(modelCode, model.getId());
+        if (model.getCacheHitPrice() == null && existing.getCacheHitPrice() == null && model.getInputPrice() != null) {
+            model.setCacheHitPrice(model.getInputPrice());
+        }
         return super.updateById(model);
     }
 

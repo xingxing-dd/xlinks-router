@@ -30,6 +30,7 @@ CREATE TABLE `providers` (
   `provider_name` VARCHAR(100) NOT NULL,
   `supported_protocols` VARCHAR(255) DEFAULT NULL,
   `priority` INT NOT NULL DEFAULT 0,
+  `cache_hit_strategy` VARCHAR(64) NOT NULL DEFAULT 'none',
   `base_url` VARCHAR(255) NOT NULL,
   `status` TINYINT NOT NULL DEFAULT 1,
   `deleted` TINYINT NOT NULL DEFAULT 0,
@@ -50,12 +51,21 @@ CREATE TABLE `models` (
   `model_desc` VARCHAR(500) DEFAULT NULL,
   `input_price` DECIMAL(12, 2) DEFAULT NULL,
   `output_price` DECIMAL(12, 2) DEFAULT NULL,
+  `cache_hit_price` DECIMAL(12, 2) DEFAULT NULL,
   `context_size` INT DEFAULT NULL,
   `status` TINYINT NOT NULL DEFAULT 1,
   `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_model_code` (`model_code`)
 );
+```
+
+Pricing formula (per request):
+
+```text
+(input_tokens - cache_hit_tokens) * input_price
++ cache_hit_tokens * cache_hit_price
++ output_tokens * output_price
 ```
 
 ## 5. provider_models
@@ -74,14 +84,36 @@ CREATE TABLE `provider_models` (
 );
 ```
 
-## 6. Main Changes
+## 6. usage_records (cost fields)
+
+```sql
+CREATE TABLE `usage_records` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `request_id` VARCHAR(64) NOT NULL,
+  `provider_id` BIGINT NOT NULL,
+  `model_id` BIGINT NOT NULL,
+  `prompt_tokens` INT DEFAULT 0,
+  `completion_tokens` INT DEFAULT 0,
+  `total_tokens` INT DEFAULT 0,
+  `cache_hit_tokens` INT DEFAULT 0,
+  `prompt_cost` DECIMAL(12, 6) DEFAULT 0.000000,
+  `cache_hit_cost` DECIMAL(12, 6) DEFAULT 0.000000,
+  `completion_cost` DECIMAL(12, 6) DEFAULT 0.000000,
+  `total_cost` DECIMAL(12, 6) DEFAULT 0.000000,
+  PRIMARY KEY (`id`)
+);
+```
+
+## 7. Main Changes
 
 - remove `models.provider_id`
 - keep `provider_models` for multi-provider mapping
 - keep `providers.supported_protocols` + `providers.priority` for filtering and sorting
+- add `providers.cache_hit_strategy` to support provider-specific cache-hit extraction
+- add `models.cache_hit_price` for cache-hit token billing
 - remove `model_endpoints` table and remove endpoint dimension from models
 
-## 7. Routing Query Order
+## 8. Routing Query Order
 
 ```sql
 -- 1) resolve standard model by model code

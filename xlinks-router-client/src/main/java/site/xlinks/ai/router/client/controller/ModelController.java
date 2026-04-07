@@ -79,6 +79,7 @@ public class ModelController {
                         model.getModelDesc(),
                         formatPrice(model.getInputPrice()),
                         formatPrice(model.getOutputPrice()),
+                        formatPrice(model.getCacheHitPrice()),
                         formatContextWindow(model.getContextSize()),
                         model.getStatus() != null && model.getStatus() == 1 ? "available" : "unavailable"
                 ))
@@ -121,6 +122,7 @@ public class ModelController {
         response.setDescription(model.getModelDesc());
         response.setInputPrice(formatPrice(model.getInputPrice()));
         response.setOutputPrice(formatPrice(model.getOutputPrice()));
+        response.setCacheHitPrice(formatPrice(model.getCacheHitPrice()));
         response.setContextWindow(formatContextWindow(model.getContextSize()));
         response.setRoutes(routes);
         return Result.success(response);

@@ -5,6 +5,15 @@
 -- 3) customer_tokens.status converted to new semantics: 1 = enabled
 -- 4) usage_records reordered to current schema and normalized endpoint_code
 -- 5) provider_models no longer enforces provider_id + provider_model_code uniqueness, because the same upstream model code may be used under multiple protocols
+-- 6) providers.cache_hit_strategy added for provider-specific cache-hit extraction policy
+-- 7) models.cache_hit_price added for cache-hit token billing price
+-- 8) usage_records.cache_hit_tokens/cache_hit_cost added for cache-hit accounting
+
+-- Incremental migration for cache-hit billing:
+-- ALTER TABLE `providers` ADD COLUMN `cache_hit_strategy` varchar(64) NOT NULL DEFAULT 'none' AFTER `priority`;
+-- ALTER TABLE `models` ADD COLUMN `cache_hit_price` decimal(12,2) DEFAULT NULL AFTER `output_price`;
+-- ALTER TABLE `usage_records` ADD COLUMN `cache_hit_tokens` int(11) DEFAULT '0' AFTER `total_tokens`;
+-- ALTER TABLE `usage_records` ADD COLUMN `cache_hit_cost` decimal(12,6) DEFAULT '0.000000' AFTER `prompt_cost`;
 
 -- MySQL dump 10.13  Distrib 8.0.19, for Win64 (x86_64)
 --

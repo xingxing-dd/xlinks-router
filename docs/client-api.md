@@ -4,6 +4,17 @@
 
 ---
 
+## 缓存命中计费补充（2026-04-07）
+
+Usage Record 明细建议补充两个字段（后端 usage_records 已落库）：
+
+- `cacheHitTokens`：缓存命中输入 Token 数
+- `cacheHitCost`：缓存命中输入 Token 费用
+
+计费公式：
+
+`(inputTokens - cacheHitTokens) * inputPrice + cacheHitTokens * cacheHitPrice + outputTokens * outputPrice`
+
 ## 1. 通用说明
 
 ### 1.1 基础信息

@@ -262,4 +262,29 @@
 - Vite 寮€鍙戠幆澧冧唬鐞嗗埌 `http://localhost:8080`
 - 鑻ュ墠鍚庣鍒嗙閮ㄧ讲锛屽彲閫氳繃 `VITE_ADMIN_API_BASE_URL` 鎸囧畾鍚庣鍦板潃
 
+## 2026-04-07 缓存命中计费字段变更
+
+### Provider
+
+`/admin/providers` 新增字段：
+
+- `cacheHitStrategy`：缓存命中策略（`none` / `openai_cached_tokens` / `anthropic_cache_read_input_tokens`）
+
+### Model
+
+`/admin/models` 新增字段：
+
+- `cacheHitPrice`：缓存命中输入 Token 的单价（按每百万 Token）
+
+### Usage Record
+
+`usage_records` 新增落库字段：
+
+- `cache_hit_tokens`
+- `cache_hit_cost`
+
+计费公式更新为：
+
+`(inputTokens - cacheHitTokens) * inputPrice + cacheHitTokens * cacheHitPrice + outputTokens * outputPrice`
+
 

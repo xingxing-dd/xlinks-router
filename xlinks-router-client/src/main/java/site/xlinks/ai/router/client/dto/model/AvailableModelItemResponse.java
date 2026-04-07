@@ -14,6 +14,7 @@ public class AvailableModelItemResponse {
     private String description;
     private String inputPrice;
     private String outputPrice;
+    private String cacheHitPrice;
     private String contextWindow;
     private String status;
 }

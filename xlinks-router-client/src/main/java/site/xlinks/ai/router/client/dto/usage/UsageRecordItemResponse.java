@@ -20,7 +20,9 @@ public class UsageRecordItemResponse {
     private Integer promptTokens;
     private Integer completionTokens;
     private Integer totalTokens;
+    private Integer cacheHitTokens;
     private BigDecimal promptCost;
+    private BigDecimal cacheHitCost;
     private BigDecimal completionCost;
     private BigDecimal totalCost;
     private Integer latencyMs;
