@@ -75,9 +75,9 @@
   },
   register: {
     title: '创建账号',
-    subtitle: '使用手机号注册成为 Xlinks Token Hub 用户',
-    phone: '手机号',
-    phonePlaceholder: '请输入手机号',
+    subtitle: '使用手机号/邮箱注册成为 Xlinks Token Hub 用户',
+    phone: '手机号/邮箱',
+    phonePlaceholder: '请输入手机号/邮箱',
     verificationCode: '验证码',
     sendCode: '发送验证码',
     sendCodeCountdown: '{countdown}s 后重试',
