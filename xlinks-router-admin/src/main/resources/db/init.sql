@@ -333,7 +333,38 @@ CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. Usage records
+-- 15. Third-party pay orders
+CREATE TABLE IF NOT EXISTS `third_party_pay_orders` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `order_no` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '平台订单号',
+  `third_party_order_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '三方订单号/交易号',
+  `account_id` bigint(20) DEFAULT NULL COMMENT '下单用户 ID',
+  `target_id` bigint(20) NOT NULL COMMENT '目标ID（如 plan_id）',
+  `target_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '目标类型（如 plan）',
+  `payment_method_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '支付方式编码',
+  `payment_method_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '支付方式类型，如 alipay',
+  `order_title` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '订单标题',
+  `total_amount` decimal(12,2) NOT NULL COMMENT '订单总金额',
+  `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '状态：0待支付，1支付成功，2支付失败，3已关闭，4已退款',
+  `trade_status` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '渠道交易状态，如 TRADE_SUCCESS',
+  `pay_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '支付链接/收银台链接',
+  `pay_time` datetime DEFAULT NULL COMMENT '支付完成时间',
+  `expired_at` datetime DEFAULT NULL COMMENT '支付过期时间',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  UNIQUE KEY `uk_third_party_order_no` (`third_party_order_no`),
+  KEY `idx_account_id` (`account_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_trade_status` (`trade_status`),
+  KEY `idx_pay_time` (`pay_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 16. Usage records
 CREATE TABLE IF NOT EXISTS `usage_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `request_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -373,7 +404,7 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   KEY `idx_endpoint_code` (`endpoint_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 16. Contact messages 联系我们问题记录表
+-- 17. Contact messages 联系我们问题记录表
 CREATE TABLE IF NOT EXISTS `contact_messages` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `account_id` bigint(20) NOT NULL,
@@ -393,7 +424,7 @@ CREATE TABLE IF NOT EXISTS `contact_messages` (
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 17. Contact message records 联系问题沟通记录表
+-- 18. Contact message records 联系问题沟通记录表
 CREATE TABLE IF NOT EXISTS `contact_message_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `contact_message_id` bigint(20) NOT NULL,
@@ -410,7 +441,7 @@ CREATE TABLE IF NOT EXISTS `contact_message_records` (
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 17.1 Contact faqs 联系页常见问题表
+-- 18.1 Contact faqs 联系页常见问题表
 CREATE TABLE IF NOT EXISTS `contact_faqs` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `question` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
