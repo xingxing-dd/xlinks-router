@@ -39,6 +39,8 @@ const DEFAULT_PLANS = [
   },
 ]
 
+const ALIPAY_ENABLED_PLAN_IDS = new Set(['10005'])
+
 export function usePlans() {
   const { t } = useI18n()
 
@@ -131,6 +133,7 @@ export function usePlans() {
 
   const currentSubscription = computed(() => activeSubscriptions.value[currentSubscriptionIndex.value] || emptySubscription)
   const selectedPlanData = computed(() => codexPlans.value.find((p) => p.id === selectedPlan.value))
+  const isAlipayAvailableForSelectedPlan = computed(() => ALIPAY_ENABLED_PLAN_IDS.has(String(selectedPlan.value)))
 
   const loadPlans = async () => {
     loading.value = true
@@ -168,6 +171,9 @@ export function usePlans() {
 
   const handlePurchasePlan = (planId) => {
     selectedPlan.value = planId
+    if (!ALIPAY_ENABLED_PLAN_IDS.has(String(planId)) && selectedPayment.value === 'alipay') {
+      selectedPayment.value = 'third-party'
+    }
     isCheckoutModalOpen.value = true
   }
 
@@ -191,6 +197,18 @@ export function usePlans() {
       actionMessage.value = `订单已创建：${result?.orderId || ''}`
 
       if (payUrl) {
+        // Alipay pagePay returns a full HTML form, not a URL.
+        if (payUrl.includes('<form') && payUrl.includes('submit')) {
+          const payWindow = window.open('', '_blank')
+          if (!payWindow) {
+            throw new Error('支付窗口被浏览器拦截，请允许弹窗后重试')
+          }
+          payWindow.document.open()
+          payWindow.document.write(payUrl)
+          payWindow.document.close()
+          return
+        }
+
         window.open(payUrl, '_blank', 'noopener,noreferrer')
         return
       }
@@ -246,6 +264,7 @@ export function usePlans() {
     actionMessage,
     currentSubscription,
     selectedPlanData,
+    isAlipayAvailableForSelectedPlan,
     loadPlans,
     handlePurchasePlan,
     createOrder,

@@ -75,17 +75,19 @@ alipay:
   # 沙箱环境配置
   sandbox:
     enabled: true
-    app-id: ${ALIPAY_SANDBOX_APP_ID:your-sandbox-app-id}
-    private-key: ${ALIPAY_SANDBOX_PRIVATE_KEY:your-private-key}
-    public-key: ${ALIPAY_SANDBOX_PUBLIC_KEY:your-public-key}
-    alipay-public-key: ${ALIPAY_SANDBOX_ALIPAY_PUBLIC_KEY:your-alipay-public-key}
-    gateway-url: https://openapi.alipaydev.com/gateway.do
+    app-id: ${ALIPAY_SANDBOX_APP_ID:9021000162659038}
+    private-key: ${ALIPAY_SANDBOX_PRIVATE_KEY:MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCDClQXdxR2T+GgXFK2DQ4jKdvgJnJxNIB+uASrSTwyUumjE8XjphbB4X4I7LrxKTwMMRV6mHfGD4tHb3WQv9OzVhKeNGqvujcNLHldLmYySyNg3CDS7aFeV6hQGf6UHlidKJB6hVSTYtG+416dIeHiYm94eXLDd6E1X31+VwPOqNfSHkTCAqYKb7KLEXXfhqzSl/XTdvfIncFpuWUaAJsmnwGfAxlVQWFhsdxz1bDf/k2jV2L5LPn2URRqDPD7YNtdtKvd5F0hDeQd9hINw9hVj00xzHhJeGcKTKEV/1u0JNeSrSTlv8VivlYodNmufYcogHwdorLUdiche09nHaGXAgMBAAECggEAedSpeCODR7he+lu7nnymzzSEs3KrZeq9KJNn6+Qr7lG93JtumYd6kwlVx3BpIfwHUwJziMamXONox6Kt+EUQyyRULPho1DZaJopZz7Nq2omXO9+NOO4r4G25E7gHQ6ivFHZ5VSAPEPSIM2RrO8YboAGKx8SKWYcov1mncEXwSTq7AYgyDMc71Ww86SNrK0cafm+Pe6TLcUTGx+qtoqgDDSSP/VQ4eZs0HpYZHOJP46ntxOjKIe9W/Aoa0OcDfg/Mm9YbG3ifbXjsIQd9vjy/7jEhJI+qpkW4SwtavQj91i6psTCHyEoXwm4XKvToiey1OAQm0Mq9Xf7Qc6HdsYN12QKBgQDuLGBfExmpE4+R1y1cCSJn9lQcX8pZ0Dva5BrTlMRpKUb3JZg8TYqO5ShLs2rotT/KpBxwT36BQxBmP7VnHDku3UxpWMaQS6Oi62FtTyV95w2NHSfjVZlO88gx5btzNc/WbY4S4tTKoINm95Ee58ERZho/T6pl4deYf2R/4K/HNQKBgQCM2S8MgUXDNDVT+dThxBBOxPjKWdRxRlKzB6yR02R2owjsIspifZzxOa/SNNrfvMI+uDKjIDlgcpzT4cqnMHPH3PViJXELWvp699IHLHW3RIaEgDbK0NaIh17Rx1fOkMHy/8+0YvKCI/60JcBK0xVQ/T5f6HqYlF8DHxCXUgYDGwKBgAkcY3dfmKyyFdzjWVXa95j4gFExjOEQqSl/blNHrpfDP3a21nMAGFvNAlSbAWzzegQ7cOcO82zobtkqeLsABmP3jTO+dKIScqkJzglLbMi7LPaH9f2pSZsOkkruWdRXa6LtP/ETAkbaCwzGTaPcA7OxrzFaz87j68ZmoSaPJso9AoGAElG9ONcnh7gmp4F7GtIxfM1JvqfoZcNLxlVdMKpaCsQxyOTNhfnoi8eBAso1HZyjdxzmGSl7zPubQkO/4/b9WCV5FQbhqSRwJ8ZL3vr9ZJTZGirC9aYsAR36SzauSQOy9jQng8LK3/pmim/OjuzdfOczUa4fI/FIWlOUCNp2RbkCgYEAzTZd9tZ9tkl7PPWaBQDKajKx23uZwyYE8tbSlj3nBGxGPjJxLF0fNK1Ws1wAlZrDVRigQ202R+U9u5SzYE427vErWmkTMNcftQR4z/ZzV9VY05K6QyplSGHPMgZgLMfnWUtdwiJArELbGdgCPxNgE/Xizut0ejlstJ1jGhg1xUM=}
+    public-key: ${ALIPAY_SANDBOX_PUBLIC_KEY:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgwpUF3cUdk/hoFxStg0OIynb4CZycTSAfrgEq0k8MlLpoxPF46YWweF+COy68Sk8DDEVeph3xg+LR291kL/Ts1YSnjRqr7o3DSx5XS5mMksjYNwg0u2hXleoUBn+lB5YnSiQeoVUk2LRvuNenSHh4mJveHlyw3ehNV99flcDzqjX0h5EwgKmCm+yixF134as0pf103b3yJ3BabllGgCbJp8BnwMZVUFhYbHcc9Ww3/5No1di+Sz59lEUagzw+2DbXbSr3eRdIQ3kHfYSDcPYVY9NMcx4SXhnCkyhFf9btCTXkq0k5b/FYr5WKHTZrn2HKIB8HaKy1HYnIXtPZx2hlwIDAQAB}
+    alipay-public-key: ${ALIPAY_SANDBOX_ALIPAY_PUBLIC_KEY:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnnmE+y7hGMbPa2i/oUAQgyjsTEZF/+oCvYjQlI8svpSiVE1IadScu36/fSfFeo5cBOuUcEAKRW/qgnGwqjovFTljAMD4ZMi4MJGvoJQs5+kev6sOKX0RzPHjONEd4yTbt9yqYa1JMJ3FSTFCrAuZBony1YgrRQ7q7GFhAY+MWze3Wk2mBOetUGuAS32wDxYZeDjteXo9Wyam5M/bVo/H6XTMp5pHNpBWy8HN+/gnexleAIgk6WakJTzrYZDrNE/0Z/a2f/wxK98G+Rn0kDXHpjI5lI7lwHn6xAAzH3uoy4MNKO5lKVsiCLjyjcwWHg//AcrIAkj1xu49a0sUO43/bQIDAQAB}
+    gateway-url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
     charset: UTF-8
     sign-type: RSA2
     format: json
     # 回调地址配置
-    return-url: http://localhost:8082/alipay/return
-    notify-url: http://localhost:8082/alipay/notify
+    return-url: https://ai.xlinks.site/alipay/return
+    notify-url: https://ai.xlinks.site/alipay/notify
+    payment-success-url: http://localhost:5173/payment/success
+    payment-error-url: http://localhost:5173/payment/error
   # 正式环境配置（预留）
   production:
     enabled: false
@@ -97,6 +99,8 @@ alipay:
     charset: UTF-8
     sign-type: RSA2
     format: json
-    return-url: ${ALIPAY_RETURN_URL:}
-    notify-url: ${ALIPAY_NOTIFY_URL:}
+    return-url: ${ALIPAY_RETURN_URL:https://ai.xlinks.site/alipay/return}
+    notify-url: ${ALIPAY_NOTIFY_URL:https://ai.xlinks.site/alipay/notify}
+    payment-success-url: ${ALIPAY_PAYMENT_SUCCESS_URL:https://ai.xlinks.site/payment/success}
+    payment-error-url: ${ALIPAY_PAYMENT_ERROR_URL:https://ai.xlinks.site/payment/error}
 

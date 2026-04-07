@@ -85,6 +85,16 @@ public class AlipayConfig {
          * 异步通知地址
          */
         private String notifyUrl;
+
+        /**
+         * 前端支付成功页地址
+         */
+        private String paymentSuccessUrl;
+
+        /**
+         * 前端支付失败页地址
+         */
+        private String paymentErrorUrl;
     }
 
     @Data
@@ -143,6 +153,16 @@ public class AlipayConfig {
          * 异步通知地址
          */
         private String notifyUrl;
+
+        /**
+         * 前端支付成功页地址
+         */
+        private String paymentSuccessUrl;
+
+        /**
+         * 前端支付失败页地址
+         */
+        private String paymentErrorUrl;
     }
 
     /**
@@ -268,6 +288,34 @@ public class AlipayConfig {
             return ((SandboxConfig) config).getNotifyUrl();
         } else {
             return ((ProductionConfig) config).getNotifyUrl();
+        }
+    }
+
+    /**
+     * 获取前端支付成功页地址
+     *
+     * @return 成功页地址
+     */
+    public String getPaymentSuccessUrl() {
+        Object config = getCurrentConfig();
+        if (config instanceof SandboxConfig) {
+            return ((SandboxConfig) config).getPaymentSuccessUrl();
+        } else {
+            return ((ProductionConfig) config).getPaymentSuccessUrl();
+        }
+    }
+
+    /**
+     * 获取前端支付失败页地址
+     *
+     * @return 失败页地址
+     */
+    public String getPaymentErrorUrl() {
+        Object config = getCurrentConfig();
+        if (config instanceof SandboxConfig) {
+            return ((SandboxConfig) config).getPaymentErrorUrl();
+        } else {
+            return ((ProductionConfig) config).getPaymentErrorUrl();
         }
     }
 }

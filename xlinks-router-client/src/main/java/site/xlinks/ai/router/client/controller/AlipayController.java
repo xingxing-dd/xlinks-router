@@ -28,6 +28,8 @@ import site.xlinks.ai.router.client.payment.utils.AlipaySignatureUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
@@ -51,54 +53,6 @@ public class AlipayController {
     private AlipayConfig alipayConfig;
 
     /**
-     * 电脑网站支付
-     * 
-     * @param request 支付请求参数
-     * @return 支付页面URL
-     */
-    @PostMapping("/pay")
-    @Operation(summary = "电脑网站支付", description = "创建支付宝电脑网站支付订单")
-    public ResponseEntity<ApiResponse<String>> pagePay(@RequestBody AlipayPayRequest request) {
-        try {
-            log.info("开始创建支付宝支付订单: {}", request.getOutTradeNo());
-
-            // 创建支付请求
-            AlipayTradePagePayRequest alipayRequest = new AlipayTradePagePayRequest();
-            
-            // 设置回调地址
-            alipayRequest.setReturnUrl(alipayConfig.getReturnUrl());
-            alipayRequest.setNotifyUrl(alipayConfig.getNotifyUrl());
-
-            // 设置业务参数
-            AlipayTradePagePayModel model = new AlipayTradePagePayModel();
-            model.setOutTradeNo(request.getOutTradeNo());
-            model.setTotalAmount(request.getTotalAmount().toString());
-            model.setSubject(request.getSubject());
-            model.setBody(request.getBody());
-            model.setProductCode("FAST_INSTANT_TRADE_PAY");
-            
-            alipayRequest.setBizModel(model);
-
-            // 调用支付宝API
-            AlipayTradePagePayResponse response = alipayClient.pageExecute(alipayRequest);
-            
-            if (response.isSuccess()) {
-                log.info("支付宝支付订单创建成功: {}", response.getBody());
-                return ResponseEntity.ok(ApiResponse.success(response.getBody()));
-            } else {
-                log.error("支付宝支付订单创建失败: {}", response.getSubMsg());
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("支付订单创建失败: " + response.getSubMsg()));
-            }
-
-        } catch (AlipayApiException e) {
-            log.error("支付宝支付订单创建异常", e);
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("支付订单创建异常: " + e.getMessage()));
-        }
-    }
-
-    /**
      * 支付同步回调
      * 
      * @param request HTTP请求
@@ -112,7 +66,8 @@ public class AlipayController {
         try {
             // 获取回调参数
             Map<String, String> params = getCallbackParams(request);
-            
+            log.info("支付宝同步通知完整参数: {}", params);
+
             // 验证签名
             boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, 
                 getAlipayPublicKey(), "UTF-8", "RSA2");
@@ -142,18 +97,22 @@ public class AlipayController {
                     log.info("订单状态: {}, 订单号: {}", tradeStatus, outTradeNo);
                 }
                 
-                // 重定向到成功页面
-                response.sendRedirect("/payment/success?orderNo=" + outTradeNo);
+                // 通过后端同步回调统一跳转到前端支付结果页。
+                response.sendRedirect(alipayConfig.getPaymentSuccessUrl() + "?orderNo=" + encode(outTradeNo));
                 
             } else {
                 log.error("支付宝同步回调签名验证失败");
-                response.sendRedirect("/payment/error?msg=签名验证失败");
+                response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("签名验证失败"));
             }
             
         } catch (Exception e) {
             log.error("支付宝同步回调处理异常", e);
-            response.sendRedirect("/payment/error?msg=回调处理异常");
+            response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("回调处理异常"));
         }
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     /**
@@ -170,6 +129,7 @@ public class AlipayController {
         try {
             // 获取通知参数
             Map<String, String> params = getCallbackParams(request);
+            log.info("支付宝异步通知完整参数: {}", params);
             
             // 验证签名
             boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, 

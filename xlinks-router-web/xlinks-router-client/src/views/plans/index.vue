@@ -24,6 +24,7 @@ const {
   actionMessage,
   currentSubscription,
   selectedPlanData,
+  isAlipayAvailableForSelectedPlan,
   loadPlans,
   handlePurchasePlan,
   createOrder,
@@ -31,10 +32,17 @@ const {
 } = usePlans()
 
 const paymentMethods = [
-  { id: 'alipay', name: t('plans.alipay'), icon: '💳', enabled: false, isDefault: false },
+  { id: 'alipay', name: t('plans.alipay'), icon: '💳', isDefault: true },
   { id: 'wechat', name: t('plans.wechat'), icon: '💚', enabled: false, isDefault: false },
   { id: 'third-party', name: t('plans.thirdParty'), icon: '🌐', enabled: true, isDefault: true },
 ]
+
+const isPaymentMethodEnabled = (method) => {
+  if (method.id === 'alipay') {
+    return isAlipayAvailableForSelectedPlan.value
+  }
+  return method.enabled !== false
+}
 
 const historyStatusMeta = {
   expired: { label: t('plans.status.expired'), badgeClass: 'bg-slate-100 text-slate-700' },
@@ -51,7 +59,7 @@ const getHistoryStatusBadgeClass = (status) => {
 }
 
 onMounted(() => {
-  const defaultMethod = paymentMethods.find(m => m.isDefault && m.enabled)
+  const defaultMethod = paymentMethods.find(m => m.isDefault && isPaymentMethodEnabled(m))
   if (defaultMethod) {
     selectedPayment.value = defaultMethod.id
   }
@@ -446,7 +454,7 @@ onMounted(loadPlans)
               :key="method.id"
               class="flex items-center gap-3 p-3 border-2 rounded-xl transition-colors"
               :class="[
-                method.enabled 
+                isPaymentMethodEnabled(method)
                   ? (selectedPayment === method.id ? 'border-primary bg-primary/5 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer')
                   : 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
               ]"
@@ -456,12 +464,12 @@ onMounted(loadPlans)
                 name="payment"
                 :value="method.id"
                 v-model="selectedPayment"
-                :disabled="!method.enabled"
+                :disabled="!isPaymentMethodEnabled(method)"
                 class="w-4 h-4 text-primary disabled:opacity-50"
               />
               <span class="text-2xl">{{ method.icon }}</span>
-              <span class="font-medium" :class="method.enabled ? 'text-slate-900' : 'text-slate-400'">{{ method.name }}</span>
-              <span v-if="!method.enabled" class="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span class="font-medium" :class="isPaymentMethodEnabled(method) ? 'text-slate-900' : 'text-slate-400'">{{ method.name }}</span>
+              <span v-if="!isPaymentMethodEnabled(method)" class="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                 {{ t('models.status.unavailable') }}
               </span>
             </label>

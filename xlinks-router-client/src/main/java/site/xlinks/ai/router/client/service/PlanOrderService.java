@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.client.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.client.payment.PaymentRequest;
 import site.xlinks.ai.router.client.payment.PaymentResult;
@@ -19,6 +20,7 @@ import java.time.format.DateTimeFormatter;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PlanOrderService {
 
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -33,11 +35,12 @@ public class PlanOrderService {
         }
 
         PaymentStrategy strategy = paymentStrategyFactory.getStrategy(paymentMethod);
-        if (strategy == null || !"third-party".equals(strategy.getMethod())) {
+        if (strategy == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "支付方式不支持");
         }
 
         String orderId = generateOrderId(plan.getId());
+        log.info("购买套餐 orderId,{}", orderId);
         PaymentRequest request = new PaymentRequest(orderId, plan, plan.getPrice(), paymentMethod);
         return strategy.pay(request);
     }
