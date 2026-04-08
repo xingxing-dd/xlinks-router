@@ -21,7 +21,7 @@ mybatis-plus:
   type-aliases-package: site.xlinks.ai.router.entity
   configuration:
     map-underscore-to-camel-case: true
-    # 绂佺敤 MyBatis 鎺у埗鍙?SQL 杈撳嚭锛堥伩鍏?StdOutImpl 鎵撳嵃 SQL锛?
+    # 禁用 MyBatis 控制台 SQL 输出（避免 StdOutImpl 打印 SQL）
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
@@ -48,7 +48,7 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
 xlinks:
-  # 閭€璇锋湁绀奸摼鎺?
+  # 邀请有礼链接
   promotion:
     referral-link-prefix: https://ai.xlinks.site/register?ref=
   sms:
@@ -74,9 +74,9 @@ xlinks:
       category: ${XLS_EMAIL_MAILTRAP_CATEGORY:Integration Test}
       enabled: true
 
-# 鏀粯瀹濋厤缃?
+# 支付宝配置
 alipay:
-  # 娌欑鐜閰嶇疆
+  # 沙箱环境配置
   sandbox:
     enabled: true
     app-id: ${ALIPAY_SANDBOX_APP_ID:9021000162659038}
@@ -87,12 +87,14 @@ alipay:
     charset: UTF-8
     sign-type: RSA2
     format: json
-    # 鍥炶皟鍦板潃閰嶇疆
+    # 回调地址配置
     return-url: https://ai.xlinks.site/alipay/return
     notify-url: https://ai.xlinks.site/alipay/notify
-    payment-success-url: http://localhost:5173/payment/success
-    payment-error-url: http://localhost:5173/payment/error
-  # 姝ｅ紡鐜閰嶇疆锛堥鐣欙級
+    #payment-success-url: http://localhost:5173/payment/success
+    #payment-error-url: http://localhost:5173/payment/error
+    payment-success-url: https://ai.xlinks.site/alipay/payment/success
+    payment-error-url: https://ai.xlinks.site/alipay/payment/error
+  # 正式环境配置（预留）
   production:
     enabled: false
     app-id: ${ALIPAY_APP_ID:}
