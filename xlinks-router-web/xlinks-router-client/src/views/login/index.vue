@@ -6,6 +6,7 @@ import { Key, Phone, Lock, Sparkles } from 'lucide-vue-next'
 import { postAuth } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/utils/toast'
+import LocaleSwitch from '@/components/common/LocaleSwitch.vue'
 
 const REMEMBER_ACCOUNT_KEY = 'xlinks-remember-account'
 const REMEMBER_PHONE_KEY = 'xlinks-remember-phone'
@@ -57,7 +58,11 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-main flex">
+  <div class="relative min-h-screen bg-gradient-main flex">
+    <div class="absolute right-4 top-4 z-20">
+      <LocaleSwitch />
+    </div>
+
     <div class="hidden lg:flex lg:w-1/2 items-center justify-center p-12">
       <div class="max-w-xl">
         <div class="flex items-center gap-3 mb-6">

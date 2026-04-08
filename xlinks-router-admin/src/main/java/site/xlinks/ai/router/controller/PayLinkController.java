@@ -22,7 +22,7 @@ import site.xlinks.ai.router.service.PayLinkService;
 import site.xlinks.ai.router.vo.PayLinkVO;
 
 @RestController
-@RequestMapping("/admin/pay-links")
+@RequestMapping("/api/pay-links")
 @RequiredArgsConstructor
 @Tag(name = "Pay Link Management", description = "Third-party pay link APIs")
 public class PayLinkController {

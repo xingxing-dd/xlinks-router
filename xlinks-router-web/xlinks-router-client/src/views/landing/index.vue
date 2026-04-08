@@ -1,5 +1,6 @@
 <script setup>
 import { ArrowRight, Sparkles, Shield, Gauge, Globe } from 'lucide-vue-next'
+import LocaleSwitch from '@/components/common/LocaleSwitch.vue'
 </script>
 
 <template>
@@ -16,6 +17,7 @@ import { ArrowRight, Sparkles, Shield, Gauge, Globe } from 'lucide-vue-next'
           </div>
         </div>
         <div class="flex items-center gap-3">
+          <LocaleSwitch dark />
           <RouterLink
             to="/login"
             class="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white/90 hover:border-white/40 hover:text-white"

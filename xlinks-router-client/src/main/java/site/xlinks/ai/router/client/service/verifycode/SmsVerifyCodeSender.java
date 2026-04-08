@@ -7,7 +7,7 @@ import site.xlinks.ai.router.client.service.GuoyangyunSmsClient;
 import site.xlinks.ai.router.client.service.VerifyCodeService;
 
 /**
- * 手机验证码发送策略
+ * SMS verification-code sender.
  */
 @Component
 @RequiredArgsConstructor
@@ -19,19 +19,16 @@ public class SmsVerifyCodeSender implements VerifyCodeSender {
     private final VerifyCodeService verifyCodeService;
 
     @Override
-    public VerifyCodeSendResponse send(String target, String token, int expireSeconds) {
-        // 通过 token 从 Redis 获取验证码
+    public VerifyCodeSendResponse send(String scene, String target, String token, int expireSeconds) {
         String code = verifyCodeService.getCodeByToken(token);
         if (code == null || code.isBlank()) {
-            throw new IllegalStateException("验证码已过期或不存在");
+            throw new IllegalStateException("Verification code is expired or missing");
         }
 
-        // 调用短信客户端发送验证码
         smsClient.sendVerifyCode(target, code);
 
-        // 构建响应
         VerifyCodeSendResponse response = new VerifyCodeSendResponse();
-        response.setMessage("手机验证码发送成功");
+        response.setMessage("SMS verification code sent successfully");
         response.setToken(token);
         response.setExpireSeconds(expireSeconds);
         return response;

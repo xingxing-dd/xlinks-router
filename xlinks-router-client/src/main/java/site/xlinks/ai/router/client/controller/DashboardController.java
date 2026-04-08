@@ -10,6 +10,7 @@ import site.xlinks.ai.router.client.dto.dashboard.DashboardStatsResponse;
 import site.xlinks.ai.router.client.dto.dashboard.ModelUsageItemResponse;
 import site.xlinks.ai.router.client.dto.dashboard.RecentActivityResponse;
 import site.xlinks.ai.router.client.dto.dashboard.UsageTrendItemResponse;
+import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.entity.UsageRecord;
 import site.xlinks.ai.router.mapper.UsageRecordMapper;
@@ -139,16 +140,45 @@ public class DashboardController {
     }
 
     @GetMapping("/recent-activities")
-    public Result<List<RecentActivityResponse>> getRecentActivities(@RequestParam(defaultValue = "5") Integer limit) {
+    public Result<PageResult<RecentActivityResponse>> getRecentActivities(@RequestParam(defaultValue = "1") Integer page,
+                                                                          @RequestParam(defaultValue = "20") Integer pageSize,
+                                                                          @RequestParam(required = false) Integer limit) {
         Long accountId = CustomerAccountContext.getAccountId();
-        if (limit == null || limit <= 0) {
-            limit = 5;
+        if (accountId == null) {
+            return Result.success(PageResult.of(List.of(), 0, 1, 20));
         }
+
+        if (limit != null && limit > 0) {
+            page = 1;
+            pageSize = limit;
+        }
+
+        if (page == null || page < 1) {
+            page = 1;
+        }
+        if (pageSize == null || pageSize < 1) {
+            pageSize = 20;
+        }
+        if (pageSize > 20) {
+            pageSize = 20;
+        }
+
+        Long totalCount = usageRecordMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, accountId)
+        );
+        long total = totalCount == null ? 0L : totalCount;
+
+        long offset = (long) (page - 1) * pageSize;
+        if (offset >= total) {
+            return Result.success(PageResult.of(List.of(), total, page, pageSize));
+        }
+
         List<UsageRecord> records = usageRecordMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
                         .eq(UsageRecord::getAccountId, accountId)
                         .orderByDesc(UsageRecord::getCreatedAt)
-                        .last("limit " + limit)
+                        .last("limit " + offset + "," + pageSize)
         );
         java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         List<RecentActivityResponse> responses = new ArrayList<>();
@@ -168,12 +198,13 @@ public class DashboardController {
                     ? (record.getModelCode() == null ? "" : record.getModelCode())
                     : record.getModelName();
             Integer inputTokens = record.getPromptTokens();
+            Integer cacheHitTokens = record.getCacheHitTokens();
             Integer outputTokens = record.getCompletionTokens();
             Integer totalTokens = record.getTotalTokens();
             java.math.BigDecimal cost = record.getTotalCost();
-            responses.add(new RecentActivityResponse(time, token, channel, model, inputTokens, outputTokens, totalTokens, cost));
+            responses.add(new RecentActivityResponse(time, token, channel, model, inputTokens, cacheHitTokens, outputTokens, totalTokens, cost));
         }
-        return Result.success(responses);
+        return Result.success(PageResult.of(responses, total, page, pageSize));
     }
 
     private StatsSummary querySummary(Long accountId, LocalDateTime start, LocalDateTime end) {

@@ -42,7 +42,7 @@ public class CustomerPlanService {
         plan.setUsedQuota(updatedUsed);
         plan.setTotalUsedQuota(defaultDecimal(plan.getTotalUsedQuota()).add(usedIncrement));
 
-        if (dailyQuota.compareTo(BigDecimal.ZERO) > 0 && updatedUsed.compareTo(dailyQuota) >= 0) {
+        if (updatedUsed.compareTo(dailyQuota) >= 0) {
             LocalDate today = LocalDate.now();
             LocalDateTime refreshTime = plan.getQuotaRefreshTime();
             boolean refreshToday = refreshTime != null && refreshTime.toLocalDate().isEqual(today);

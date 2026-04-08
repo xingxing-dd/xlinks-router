@@ -135,3 +135,31 @@ This separation is required for an aggregation router, because the platform-faci
 - no provider available for the current protocol: route error
 - no provider token available: route error
 - customer token invalid or expired: `401`
+
+## 9. Usage & Billing (Cache-hit Aware)
+
+Provider-specific field:
+
+- `providers.cache_hit_strategy`
+  - `none`
+  - `openai_cached_tokens`
+  - `anthropic_cache_read_input_tokens`
+
+Model pricing fields:
+
+- `models.input_price`
+- `models.cache_hit_price`
+- `models.output_price`
+
+Recorded usage fields:
+
+- `usage_records.cache_hit_tokens`
+- `usage_records.cache_hit_cost`
+
+Billing formula:
+
+```text
+(input_tokens - cache_hit_tokens) * input_price
++ cache_hit_tokens * cache_hit_price
++ output_tokens * output_price
+```

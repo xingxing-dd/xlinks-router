@@ -39,12 +39,14 @@ Key fields:
 - `provider_code`
 - `supported_protocols`
 - `priority`
+- `cache_hit_strategy`
 - `base_url`
 
 Notes:
 
 - `supported_protocols`: comma-separated protocol list; empty means all protocols
 - `priority`: larger value means higher routing priority
+- `cache_hit_strategy`: provider-specific usage parsing strategy (`none`, `openai_cached_tokens`, `anthropic_cache_read_input_tokens`)
 
 ### models
 
@@ -60,7 +62,16 @@ Current platform-level fields:
 
 - `input_price`
 - `output_price`
+- `cache_hit_price`
 - `context_size`
+
+Cost formula:
+
+```text
+(input_tokens - cache_hit_tokens) * input_price
++ cache_hit_tokens * cache_hit_price
++ output_tokens * output_price
+```
 
 ### provider_models
 
@@ -116,3 +127,4 @@ The endpoint is inferred from the request protocol and filtered by provider capa
 - `docs/openapi.md`: public gateway behavior
 - `docs/db-script.md`: core schema notes
 - `xlinks-router-admin/src/main/resources/db/init.sql`: bootstrap SQL
+- `docs/client-email.md`: client mail verification delivery and Mailtrap configuration

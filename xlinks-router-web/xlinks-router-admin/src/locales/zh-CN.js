@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   common: {
     logout: '退出登录',
     search: '搜索',

@@ -1,4 +1,10 @@
-export function formatDateTime(value) {
+import { getLocale } from '@/locales'
+
+function resolveLocale(locale) {
+  return locale || getLocale() || 'zh-CN'
+}
+
+export function formatDateTime(value, locale) {
   if (!value) {
     return '--'
   }
@@ -10,7 +16,7 @@ export function formatDateTime(value) {
     return value
   }
 
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(resolveLocale(locale), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -19,14 +25,15 @@ export function formatDateTime(value) {
   })
 }
 
-export function formatRelativeTime(value) {
+export function formatRelativeTime(value, locale) {
+  const resolvedLocale = resolveLocale(locale)
+
   if (!value) {
-    return '从未使用'
+    return resolvedLocale.startsWith('zh') ? '从未使用' : 'Never used'
   }
 
   const normalized = value.includes('T') ? value : value.replace(' ', 'T')
   const date = new Date(normalized)
-
   if (Number.isNaN(date.getTime())) {
     return value
   }
@@ -35,16 +42,15 @@ export function formatRelativeTime(value) {
   const minute = 60 * 1000
   const hour = 60 * minute
   const day = 24 * hour
+  const formatter = new Intl.RelativeTimeFormat(resolvedLocale, { numeric: 'auto' })
 
   if (diff < hour) {
-    return `${Math.max(1, Math.floor(diff / minute))} 分钟前`
+    return formatter.format(-Math.max(1, Math.floor(diff / minute)), 'minute')
   }
-
   if (diff < day) {
-    return `${Math.floor(diff / hour)} 小时前`
+    return formatter.format(-Math.max(1, Math.floor(diff / hour)), 'hour')
   }
-
-  return `${Math.floor(diff / day)} 天前`
+  return formatter.format(-Math.max(1, Math.floor(diff / day)), 'day')
 }
 
 export function formatCurrency(
@@ -54,7 +60,6 @@ export function formatCurrency(
   fractionDigits = 2,
 ) {
   const amount = Number(value || 0)
-
   const resolvedLocale = locale || (currency === 'USD' ? 'en-US' : 'zh-CN')
   const digits = Number.isFinite(Number(fractionDigits)) ? Number(fractionDigits) : 2
 
@@ -66,8 +71,8 @@ export function formatCurrency(
   }).format(amount)
 }
 
-export function formatNumber(value) {
-  return Number(value || 0).toLocaleString('zh-CN')
+export function formatNumber(value, locale) {
+  return Number(value || 0).toLocaleString(resolveLocale(locale))
 }
 
 export function formatCompactNumber(value) {

@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { Key, Shield, Lock, Phone, Sparkles } from 'lucide-vue-next'
 import { useForgotPassword } from '@/composables/useForgotPassword'
+import LocaleSwitch from '@/components/common/LocaleSwitch.vue'
 
 const { t } = useI18n()
 const {
@@ -15,7 +16,11 @@ const {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-main flex">
+  <div class="relative min-h-screen bg-gradient-main flex">
+    <div class="absolute right-4 top-4 z-20">
+      <LocaleSwitch />
+    </div>
+
     <div class="hidden lg:flex lg:w-1/2 items-center justify-center p-12">
       <div class="max-w-xl">
         <div class="flex items-center gap-3 mb-6">

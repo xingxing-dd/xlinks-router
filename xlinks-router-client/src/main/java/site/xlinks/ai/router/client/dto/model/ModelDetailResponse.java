@@ -12,6 +12,7 @@ public class ModelDetailResponse {
     private String description;
     private String inputPrice;
     private String outputPrice;
+    private String cacheHitPrice;
     private String contextWindow;
     private List<ModelRouteItemResponse> routes;
 }

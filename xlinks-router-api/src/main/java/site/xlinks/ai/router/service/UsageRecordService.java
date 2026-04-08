@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.UsageRecord;
@@ -89,20 +90,44 @@ public class UsageRecordService {
         record.setModelId(context.getModelId());
         record.setModelCode(context.getModelCode());
         record.setModelName(context.getModelName());
+
+        int promptTokens;
+        int completionTokens;
+        int totalTokens;
+        int cacheHitTokens;
         if (usageMetrics != null) {
-            record.setPromptTokens(defaultInt(usageMetrics.getInputTokens()));
-            record.setCompletionTokens(defaultInt(usageMetrics.getOutputTokens()));
-            record.setTotalTokens(defaultInt(usageMetrics.getTotalTokens()));
+            promptTokens = defaultInt(usageMetrics.getInputTokens());
+            completionTokens = defaultInt(usageMetrics.getOutputTokens());
+            totalTokens = usageMetrics.getTotalTokens() == null
+                    ? promptTokens + completionTokens
+                    : defaultInt(usageMetrics.getTotalTokens());
+            cacheHitTokens = normalizeCacheHitTokens(
+                    usageMetrics.getCacheHitTokens(),
+                    promptTokens,
+                    context.getCacheHitStrategy()
+            );
         } else {
-            record.setPromptTokens(0);
-            record.setCompletionTokens(0);
-            record.setTotalTokens(0);
+            promptTokens = 0;
+            completionTokens = 0;
+            totalTokens = 0;
+            cacheHitTokens = 0;
         }
-        BigDecimal promptCost = calculateCost(context.getInputPrice(), record.getPromptTokens());
-        BigDecimal completionCost = calculateCost(context.getOutputPrice(), record.getCompletionTokens());
+
+        int promptBillableTokens = Math.max(promptTokens - cacheHitTokens, 0);
+
+        record.setPromptTokens(promptTokens);
+        record.setCompletionTokens(completionTokens);
+        record.setTotalTokens(totalTokens);
+        record.setCacheHitTokens(cacheHitTokens);
+
+        BigDecimal promptCost = calculateCost(context.getInputPrice(), promptBillableTokens);
+        BigDecimal cacheHitCost = calculateCost(resolveCacheHitPrice(context), cacheHitTokens);
+        BigDecimal completionCost = calculateCost(context.getOutputPrice(), completionTokens);
+
         record.setPromptCost(promptCost);
+        record.setCacheHitCost(cacheHitCost);
         record.setCompletionCost(completionCost);
-        record.setTotalCost(promptCost.add(completionCost));
+        record.setTotalCost(promptCost.add(cacheHitCost).add(completionCost));
         return record;
     }
 
@@ -120,12 +145,35 @@ public class UsageRecordService {
         customerPlanService.consumeQuota(planId, record.getTotalCost());
     }
 
+    private int normalizeCacheHitTokens(Integer cacheHitTokens, int promptTokens, String cacheHitStrategyCode) {
+        ProviderCacheHitStrategy strategy = ProviderCacheHitStrategy.fromCode(cacheHitStrategyCode);
+        if (!strategy.isCacheHitSupported() || promptTokens <= 0) {
+            return 0;
+        }
+        int value = defaultInt(cacheHitTokens);
+        if (value < 0) {
+            return 0;
+        }
+        return Math.min(value, promptTokens);
+    }
+
+    private BigDecimal resolveCacheHitPrice(ProviderInvokeContext context) {
+        if (context == null) {
+            return null;
+        }
+        if (context.getCacheHitPrice() != null) {
+            return context.getCacheHitPrice();
+        }
+        // Backward compatibility for old model rows that have no cache_hit_price yet.
+        return context.getInputPrice();
+    }
+
     private int defaultInt(Integer value) {
         return value == null ? 0 : value;
     }
 
-    private BigDecimal calculateCost(BigDecimal pricePerMillion, Integer tokens) {
-        if (pricePerMillion == null || tokens == null) {
+    private BigDecimal calculateCost(BigDecimal pricePerMillion, int tokens) {
+        if (pricePerMillion == null || tokens <= 0) {
             return BigDecimal.ZERO;
         }
         return pricePerMillion

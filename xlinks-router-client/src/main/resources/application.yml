@@ -63,11 +63,15 @@ xlinks:
       daily-limit: 20
       min-interval-seconds: 60
   email:
-    brevo:
-      access-token: ${XLS_EMAIL_BREVO_ACCESS_TOKEN:}
-      sender-email: ${XLS_EMAIL_BREVO_SENDER_EMAIL:xingxingdd132311@gmail.com}
-      sender-name: ${XLS_EMAIL_BREVO_SENDER_NAME:xlinks-tech}
-      api-url: ${XLS_EMAIL_BREVO_API_URL:https://api.brevo.com/v3/smtp/email}
+    mailtrap:
+      access-token: ${XLS_EMAIL_MAILTRAP_ACCESS_TOKEN:}
+      sender-email: ${XLS_EMAIL_MAILTRAP_SENDER_EMAIL:tech@xlinks.site}
+      sender-name: ${XLS_EMAIL_MAILTRAP_SENDER_NAME:xlinks-tech}
+      sender-name-template: ${XLS_EMAIL_MAILTRAP_SENDER_NAME_TEMPLATE:{appName}}
+      verify-code-subject-template: "${XLS_EMAIL_MAILTRAP_VERIFY_CODE_SUBJECT_TEMPLATE:[{appName}] {sceneLabel} verification code}"
+      app-name: ${XLS_EMAIL_MAILTRAP_APP_NAME:xlinks}
+      api-url: ${XLS_EMAIL_MAILTRAP_API_URL:https://send.api.mailtrap.io/api/send}
+      category: ${XLS_EMAIL_MAILTRAP_CATEGORY:Integration Test}
       enabled: true
 
 # 支付宝配置

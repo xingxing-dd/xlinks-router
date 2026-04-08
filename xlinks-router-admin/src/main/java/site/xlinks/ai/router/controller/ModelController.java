@@ -25,7 +25,7 @@ import site.xlinks.ai.router.service.ModelService;
  * Standard model management API.
  */
 @RestController
-@RequestMapping("/admin/models")
+@RequestMapping("/api/models")
 @RequiredArgsConstructor
 @Tag(name = "Model Management", description = "Standard model management APIs")
 public class ModelController {
@@ -41,6 +41,7 @@ public class ModelController {
         model.setModelDesc(dto.getModelDesc());
         model.setInputPrice(dto.getInputPrice());
         model.setOutputPrice(dto.getOutputPrice());
+        model.setCacheHitPrice(dto.getCacheHitPrice());
         model.setContextSize(dto.getContextSize());
         model.setStatus(dto.getStatus());
         model.setRemark(dto.getRemark());
@@ -85,6 +86,9 @@ public class ModelController {
         }
         if (dto.getOutputPrice() != null) {
             model.setOutputPrice(dto.getOutputPrice());
+        }
+        if (dto.getCacheHitPrice() != null) {
+            model.setCacheHitPrice(dto.getCacheHitPrice());
         }
         if (dto.getContextSize() != null) {
             model.setContextSize(dto.getContextSize());

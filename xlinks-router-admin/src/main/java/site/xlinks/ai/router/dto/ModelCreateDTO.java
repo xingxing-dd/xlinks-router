@@ -30,6 +30,9 @@ public class ModelCreateDTO {
     @Schema(description = "Platform output price")
     private BigDecimal outputPrice;
 
+    @Schema(description = "Platform cache-hit input price")
+    private BigDecimal cacheHitPrice;
+
     @Schema(description = "Context window")
     private Integer contextSize;
 

@@ -19,7 +19,7 @@ import site.xlinks.ai.router.vo.AdminLoginVO;
  * Admin authentication API.
  */
 @RestController
-@RequestMapping("/admin/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AdminAuthController {
 

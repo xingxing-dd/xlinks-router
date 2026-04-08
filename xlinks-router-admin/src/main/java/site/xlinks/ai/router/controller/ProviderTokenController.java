@@ -16,7 +16,7 @@ import site.xlinks.ai.router.service.ProviderTokenService;
  * Provider token management API.
  */
 @RestController
-@RequestMapping("/admin/provider-tokens")
+@RequestMapping("/api/provider-tokens")
 @RequiredArgsConstructor
 @Tag(name = "Provider Token Management", description = "Provider token management APIs")
 public class ProviderTokenController {

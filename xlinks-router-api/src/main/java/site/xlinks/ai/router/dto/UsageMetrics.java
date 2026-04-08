@@ -16,6 +16,8 @@ public class UsageMetrics {
 
     private Integer inputTokens;
 
+    private Integer cacheHitTokens;
+
     private Integer outputTokens;
 
     private Integer totalTokens;

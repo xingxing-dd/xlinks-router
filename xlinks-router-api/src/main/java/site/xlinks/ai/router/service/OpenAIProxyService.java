@@ -54,7 +54,7 @@ public class OpenAIProxyService {
             context = buildContext(token, request, requestId);
             OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
             JsonNode response = adapter.forward(request, context);
-            UsageMetrics usageMetrics = openAIUsageExtractor.extract(response);
+            UsageMetrics usageMetrics = openAIUsageExtractor.extract(response, context.getCacheHitStrategy());
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
             return response;
         } catch (BusinessException e) {
@@ -75,8 +75,9 @@ public class OpenAIProxyService {
             context = buildContext(token, request, requestId);
             OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
+            String cacheHitStrategy = context.getCacheHitStrategy();
             adapter.forwardStream(request, context, event -> {
-                UsageMetrics usageMetrics = openAIUsageExtractor.extract(event);
+                UsageMetrics usageMetrics = openAIUsageExtractor.extract(event, cacheHitStrategy);
                 if (usageMetrics != null) {
                     usageMetricsRef.set(usageMetrics);
                 }
@@ -191,7 +192,9 @@ public class OpenAIProxyService {
                 .modelCode(model.getModelCode())
                 .modelName(model.getModelName())
                 .inputPrice(model.getInputPrice())
+                .cacheHitPrice(model.getCacheHitPrice())
                 .outputPrice(model.getOutputPrice())
+                .cacheHitStrategy(provider.getCacheHitStrategy())
                 .providerModel(upstreamModelCode)
                 .planId(usageDecision.getPlanId())
                 .customerTokenId(customerToken.getId())

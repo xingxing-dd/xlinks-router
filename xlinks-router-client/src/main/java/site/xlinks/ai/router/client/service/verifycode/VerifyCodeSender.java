@@ -3,26 +3,23 @@ package site.xlinks.ai.router.client.service.verifycode;
 import site.xlinks.ai.router.client.dto.auth.VerifyCodeSendResponse;
 
 /**
- * 验证码发送策略接口
- * 使用策略模式实现不同类型验证码的发送，便于扩展
+ * Strategy interface for sending verification codes.
  */
 public interface VerifyCodeSender {
 
     /**
-     * 发送验证码
+     * Send verification code.
      *
-     * @param target       目标地址（手机号或邮箱）
-     * @param token        验证码 token（Redis key，用于后续验证）
-     * @param expireSeconds 过期秒数
-     * @return 发送结果响应
+     * @param scene business scene, such as register/resetpwd
+     * @param target recipient target, such as phone or email
+     * @param token verification-code token stored in Redis
+     * @param expireSeconds expiration time in seconds
+     * @return send result
      */
-    VerifyCodeSendResponse send(String target, String token, int expireSeconds);
+    VerifyCodeSendResponse send(String scene, String target, String token, int expireSeconds);
 
     /**
-     * 获取支持的验证码类型
-     * 例如: "phone", "email"
-     *
-     * @return 支持的类型
+     * Supported code type.
      */
     String getSupportedCodeType();
 }

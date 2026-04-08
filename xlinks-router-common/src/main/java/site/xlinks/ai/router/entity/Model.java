@@ -30,6 +30,8 @@ public class Model extends BaseEntity {
 
     private BigDecimal outputPrice;
 
+    private BigDecimal cacheHitPrice;
+
     private Integer contextSize;
 
     private Integer status;

@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { listMerchants, updateMerchant, updateMerchantStatus } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'

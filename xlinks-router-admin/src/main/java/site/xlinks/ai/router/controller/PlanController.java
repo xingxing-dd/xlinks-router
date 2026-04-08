@@ -25,7 +25,7 @@ import site.xlinks.ai.router.vo.PlanVO;
  * Plan management API.
  */
 @RestController
-@RequestMapping("/admin/plans")
+@RequestMapping("/api/plans")
 @RequiredArgsConstructor
 @Tag(name = "Plan Management", description = "Plan and payment link management APIs")
 public class PlanController {

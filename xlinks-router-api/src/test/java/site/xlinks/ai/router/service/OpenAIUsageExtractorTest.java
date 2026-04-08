@@ -38,6 +38,7 @@ class OpenAIUsageExtractorTest {
 
         assertNotNull(usage);
         assertEquals(12, usage.getInputTokens());
+        assertEquals(0, usage.getCacheHitTokens());
         assertEquals(34, usage.getOutputTokens());
         assertEquals(46, usage.getTotalTokens());
     }
@@ -59,6 +60,7 @@ class OpenAIUsageExtractorTest {
 
         assertNotNull(usage);
         assertEquals(20, usage.getInputTokens());
+        assertEquals(0, usage.getCacheHitTokens());
         assertEquals(10, usage.getOutputTokens());
         assertEquals(30, usage.getTotalTokens());
     }
@@ -83,6 +85,7 @@ class OpenAIUsageExtractorTest {
 
         assertNotNull(usage);
         assertEquals(28, usage.getInputTokens());
+        assertEquals(0, usage.getCacheHitTokens());
         assertEquals(14, usage.getOutputTokens());
         assertEquals(42, usage.getTotalTokens());
     }
@@ -108,6 +111,7 @@ class OpenAIUsageExtractorTest {
 
         assertNotNull(usage);
         assertEquals(8, usage.getInputTokens());
+        assertEquals(0, usage.getCacheHitTokens());
         assertEquals(5, usage.getOutputTokens());
         assertEquals(13, usage.getTotalTokens());
     }
@@ -125,7 +129,55 @@ class OpenAIUsageExtractorTest {
 
         assertNotNull(usage);
         assertEquals(9, usage.getInputTokens());
+        assertEquals(0, usage.getCacheHitTokens());
         assertEquals(4, usage.getOutputTokens());
         assertEquals(13, usage.getTotalTokens());
+    }
+
+    @Test
+    void shouldExtractCacheHitTokensForOpenAIStrategy() {
+        String payload = """
+                {
+                  "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "total_tokens": 120,
+                    "input_tokens_details": {
+                      "cached_tokens": 40
+                    }
+                  }
+                }
+                """;
+
+        UsageMetrics usage = extractor.extract(payload, "openai_cached_tokens");
+
+        assertNotNull(usage);
+        assertEquals(100, usage.getInputTokens());
+        assertEquals(40, usage.getCacheHitTokens());
+        assertEquals(20, usage.getOutputTokens());
+        assertEquals(120, usage.getTotalTokens());
+    }
+
+    @Test
+    void shouldClampCacheHitTokensToInputTokens() {
+        String payload = """
+                {
+                  "usage": {
+                    "prompt_tokens": 32,
+                    "completion_tokens": 6,
+                    "prompt_tokens_details": {
+                      "cached_tokens": 80
+                    }
+                  }
+                }
+                """;
+
+        UsageMetrics usage = extractor.extract(payload, "openai_cached_tokens");
+
+        assertNotNull(usage);
+        assertEquals(32, usage.getInputTokens());
+        assertEquals(32, usage.getCacheHitTokens());
+        assertEquals(6, usage.getOutputTokens());
+        assertEquals(38, usage.getTotalTokens());
     }
 }

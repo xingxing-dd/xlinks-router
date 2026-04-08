@@ -102,7 +102,7 @@ public class UsageEntitlementService {
         if (refreshTime == null) {
             return true;
         }
-        return !refreshTime.toLocalDate().isEqual(today);
+        return usedQuota.compareTo(dailyQuota) < 0 || !refreshTime.toLocalDate().isEqual(today);
     }
 
     /**

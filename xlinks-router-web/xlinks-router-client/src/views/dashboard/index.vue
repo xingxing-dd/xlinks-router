@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { 
   TrendingUp, 
@@ -9,7 +9,8 @@ import {
   Key, 
   Zap,
   CreditCard,
-  Plus
+  Plus,
+  RefreshCcw
 } from 'lucide-vue-next'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -43,12 +44,18 @@ const {
   modelUsage,
   dashboardStats,
   usageRecords,
+  usageLoading,
+  usageCurrentPage,
+  usageTotal,
+  usageTotalPages,
   loading,
   isRechargeModalOpen,
   usdAmount,
   selectedPayment,
   calculateCnyAmount,
   loadDashboard,
+  handleUsagePageChange,
+  handleUsageRefresh,
   handleConfirmRecharge,
   formatChange,
 } = useDashboard()
@@ -265,16 +272,26 @@ onMounted(loadDashboard)
 
     <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden">
       <div class="bg-gradient-hero p-6">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-white/25 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30">
-            <Activity class="w-5 h-5 text-white" />
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-white/25 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30">
+              <Activity class="w-5 h-5 text-white" />
+            </div>
+            <h2 class="text-xl font-bold text-white">{{ t('dashboard.usageRecords') }}</h2>
           </div>
-          <h2 class="text-xl font-bold text-white">{{ t('dashboard.usageRecords') }}</h2>
+          <button
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-white/15 border border-white/30 rounded-lg hover:bg-white/25 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="usageLoading"
+            @click="handleUsageRefresh"
+          >
+            <RefreshCcw class="w-4 h-4" :class="{ 'animate-spin': usageLoading }" />
+            <span>{{ t('common.refresh') }}</span>
+          </button>
         </div>
       </div>
 
       <div class="p-6">
-        <div v-if="loading && !usageRecords.length" class="py-12 text-center text-slate-500">
+        <div v-if="usageLoading && !usageRecords.length" class="py-12 text-center text-slate-500">
           {{ t('common.loading') }}
         </div>
 
@@ -289,9 +306,10 @@ onMounted(loadDashboard)
                 <tr class="border-b-2 border-slate-200">
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.time') }}</th>
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[180px]">{{ t('dashboard.usageTable.token') }}</th>
-                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.channel') }}</th>
+                  <!-- <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.channel') }}</th> -->
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[140px]">{{ t('dashboard.usageTable.model') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.inputTokens') }}</th>
+                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.cacheHitTokens') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.outputTokens') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.totalTokens') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700 w-[120px]">{{ t('dashboard.usageTable.cost') }}</th>
@@ -307,15 +325,16 @@ onMounted(loadDashboard)
                   <td class="py-4 px-4 text-sm text-slate-700 font-medium">
                     <div class="truncate max-w-[180px]" :title="record.token">{{ record.token }}</div>
                   </td>
-                  <td class="py-4 px-4 text-sm text-slate-700 font-medium">
+                  <!-- <td class="py-4 px-4 text-sm text-slate-700 font-medium">
                     <div class="truncate max-w-[160px]" :title="record.channel">{{ record.channel }}</div>
-                  </td>
+                  </td> -->
                   <td class="py-4 px-4">
                     <div class="truncate max-w-[140px]" :title="record.model">
                       <span class="font-medium text-slate-900">{{ record.model }}</span>
                     </div>
                   </td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
+                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</td>
@@ -338,9 +357,9 @@ onMounted(loadDashboard)
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/15">
                       {{ t('dashboard.usageTable.token') }}：{{ record.token }}
                     </span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/60 text-slate-700 border border-slate-200">
+                    <!-- <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/60 text-slate-700 border border-slate-200">
                       {{ t('dashboard.usageTable.channel') }}：{{ record.channel }}
-                    </span>
+                    </span> -->
                   </div>
                 </div>
                 <div class="text-right">
@@ -349,10 +368,14 @@ onMounted(loadDashboard)
                 </div>
               </div>
 
-              <div class="grid grid-cols-3 gap-3">
+              <div class="grid grid-cols-2 gap-3">
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.inputTokens') }}</p>
                   <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.inputTokens) }}</p>
+                </div>
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.cacheHitTokens') }}</p>
+                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.cacheHitTokens) }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.outputTokens') }}</p>
@@ -363,6 +386,33 @@ onMounted(loadDashboard)
                   <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.totalTokens) }}</p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="mt-6 border-slate-200 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p class="text-sm text-slate-500">
+              {{ t('dashboard.pagination.summary', { total: usageTotal, page: usageCurrentPage, pages: usageTotalPages }) }}
+            </p>
+            <div class="flex items-center gap-2">
+              <button
+                class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm transition-colors"
+                :class="usageCurrentPage <= 1 || usageLoading ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'text-slate-700 hover:bg-slate-100'"
+                :disabled="usageCurrentPage <= 1 || usageLoading"
+                @click="handleUsagePageChange(usageCurrentPage - 1)"
+              >
+                {{ t('dashboard.pagination.prev') }}
+              </button>
+              <span class="text-sm text-slate-600 min-w-[72px] text-center">
+                {{ usageCurrentPage }} / {{ usageTotalPages }}
+              </span>
+              <button
+                class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm transition-colors"
+                :class="usageCurrentPage >= usageTotalPages || usageLoading ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'text-slate-700 hover:bg-slate-100'"
+                :disabled="usageCurrentPage >= usageTotalPages || usageLoading"
+                @click="handleUsagePageChange(usageCurrentPage + 1)"
+              >
+                {{ t('dashboard.pagination.next') }}
+              </button>
             </div>
           </div>
         </template>

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import LocaleSwitch from '@/components/common/LocaleSwitch.vue'
 import {
   LayoutDashboard,
   Key,
@@ -14,7 +15,6 @@ import {
   Gift,
   MessageCircle,
   BookOpen,
-  Globe,
   User,
   ChevronDown,
 } from 'lucide-vue-next'
@@ -26,7 +26,6 @@ const authStore = useAuthStore()
 
 const isMobileMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
-const language = ref('zh')
 
 const navItems = computed(() => [
   { path: '/dashboard', label: t('dashboard.title'), icon: LayoutDashboard },
@@ -47,10 +46,6 @@ const currentLabel = computed(() => {
   const item = navItems.value.find(item => isActive(item.path))
   return item ? item.label : t('dashboard.title')
 })
-
-const toggleLanguage = () => {
-  language.value = language.value === 'zh' ? 'en' : 'zh'
-}
 
 const handleLogout = () => {
   isUserMenuOpen.value = false
@@ -104,15 +99,7 @@ const handleLogout = () => {
         
         <div class="flex items-center gap-5">
           <!-- Language Switch -->
-          <button
-            @click="toggleLanguage"
-            class="flex items-center gap-2 px-4 py-2 h-12 bg-primary/10 hover:bg-primary/15 rounded-xl border border-primary/15 transition-all group"
-          >
-            <Globe class="w-4 h-4 text-slate-500 group-hover:scale-110 transition-transform duration-300" />
-            <span class="text-sm font-medium text-slate-700">
-              {{ language === 'zh' ? t('common.chinese') : t('common.english') }}
-            </span>
-          </button>
+          <LocaleSwitch header />
 
           <!-- User Menu -->
           <div class="relative">
@@ -154,9 +141,7 @@ const handleLogout = () => {
             </h1>
           </div>
           <div class="flex items-center gap-2">
-            <button @click="toggleLanguage" class="p-2 hover:bg-slate-50 rounded-lg transition-colors">
-              <Globe class="w-5 h-5 text-slate-600" />
-            </button>
+            <LocaleSwitch compact />
             <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="p-2 hover:bg-slate-50 rounded-xl transition-colors">
               <component :is="isMobileMenuOpen ? X : Menu" class="w-6 h-6 text-slate-600" />
             </button>

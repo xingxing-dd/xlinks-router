@@ -26,7 +26,7 @@ import site.xlinks.ai.router.vo.ActivationCodeVO;
  * Activation code management API.
  */
 @RestController
-@RequestMapping("/admin/activation-codes")
+@RequestMapping("/api/activation-codes")
 @RequiredArgsConstructor
 @Tag(name = "Activation Code Management", description = "Plan activation code management APIs")
 public class ActivationCodeController {
