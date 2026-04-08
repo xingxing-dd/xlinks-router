@@ -8,12 +8,32 @@
 -- 6) providers.cache_hit_strategy added for provider-specific cache-hit extraction policy
 -- 7) models.cache_hit_price added for cache-hit token billing price
 -- 8) usage_records.cache_hit_tokens/cache_hit_cost added for cache-hit accounting
+-- 9) customer_orders reshaped to unified business-order fields:
+--    ref_no/order_type/order_info/payment_channel/complete_at/expired_at
 
 -- Incremental migration for cache-hit billing:
 -- ALTER TABLE `providers` ADD COLUMN `cache_hit_strategy` varchar(64) NOT NULL DEFAULT 'none' AFTER `priority`;
 -- ALTER TABLE `models` ADD COLUMN `cache_hit_price` decimal(12,2) DEFAULT NULL AFTER `output_price`;
 -- ALTER TABLE `usage_records` ADD COLUMN `cache_hit_tokens` int(11) DEFAULT '0' AFTER `total_tokens`;
 -- ALTER TABLE `usage_records` ADD COLUMN `cache_hit_cost` decimal(12,6) DEFAULT '0.000000' AFTER `prompt_cost`;
+
+-- Incremental migration for order model:
+-- ALTER TABLE `customer_orders` CHANGE COLUMN `third_party_order_no` `ref_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+-- ALTER TABLE `customer_orders` ADD COLUMN `order_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'subscription_purchase' AFTER `account_id`;
+-- ALTER TABLE `customer_orders` ADD COLUMN `order_info` json DEFAULT NULL AFTER `order_title`;
+-- ALTER TABLE `customer_orders` ADD COLUMN `payment_channel` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'third-party' AFTER `order_info`;
+-- ALTER TABLE `customer_orders` ADD COLUMN `complete_at` datetime DEFAULT NULL AFTER `status`;
+-- ALTER TABLE `customer_orders` ADD COLUMN `expired_at` datetime DEFAULT NULL AFTER `complete_at`;
+-- ALTER TABLE `customer_orders` ADD COLUMN `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP;
+-- ALTER TABLE `customer_orders` ADD COLUMN `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+-- ALTER TABLE `customer_orders` ADD COLUMN `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+-- ALTER TABLE `customer_orders` ADD COLUMN `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+-- UPDATE `customer_orders` SET `payment_channel` = COALESCE(NULLIF(`payment_method_code`, ''), 'third-party');
+-- UPDATE `customer_orders` SET `complete_at` = `pay_time` WHERE `complete_at` IS NULL;
+-- UPDATE `customer_orders` SET `expired_at` = DATE_ADD(`created_at`, INTERVAL 30 MINUTE) WHERE `status` = 0 AND `expired_at` IS NULL;
+-- ALTER TABLE `customer_orders` DROP COLUMN `target_id`, DROP COLUMN `target_type`,
+--   DROP COLUMN `payment_method_code`, DROP COLUMN `payment_method_type`,
+--   DROP COLUMN `trade_status`, DROP COLUMN `pay_url`, DROP COLUMN `pay_time`;
 
 -- MySQL dump 10.13  Distrib 8.0.19, for Win64 (x86_64)
 --
@@ -1229,4 +1249,5 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-04-01 13:04:16
+
 

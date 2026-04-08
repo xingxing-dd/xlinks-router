@@ -335,22 +335,19 @@ CREATE TABLE IF NOT EXISTS `third_party_pay_links` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. Third-party pay orders
-CREATE TABLE IF NOT EXISTS `third_party_pay_orders` (
+-- 15. Customer orders
+CREATE TABLE IF NOT EXISTS `customer_orders` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `order_no` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '平台订单号',
-  `third_party_order_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '三方订单号/交易号',
+  `ref_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '支付渠道关联订单号',
   `account_id` bigint(20) DEFAULT NULL COMMENT '下单用户 ID',
-  `target_id` bigint(20) NOT NULL COMMENT '目标ID（如 plan_id）',
-  `target_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '目标类型（如 plan）',
-  `payment_method_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '支付方式编码',
-  `payment_method_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '支付方式类型，如 alipay',
+  `order_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '订单类型（充值/提现/购买订阅等）',
   `order_title` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '订单标题',
-  `total_amount` decimal(12,2) NOT NULL COMMENT '订单总金额',
+  `order_info` json DEFAULT NULL COMMENT '订单详情快照(JSON)',
+  `payment_channel` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '支付通道',
+  `total_amount` decimal(12,2) NOT NULL COMMENT '订单金额',
   `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '状态：0待支付，1支付成功，2支付失败，3已关闭，4已退款',
-  `trade_status` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '渠道交易状态，如 TRADE_SUCCESS',
-  `pay_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '支付链接/收银台链接',
-  `pay_time` datetime DEFAULT NULL COMMENT '支付完成时间',
+  `complete_at` datetime DEFAULT NULL COMMENT '支付完成时间',
   `expired_at` datetime DEFAULT NULL COMMENT '支付过期时间',
   `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -359,11 +356,13 @@ CREATE TABLE IF NOT EXISTS `third_party_pay_orders` (
   `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no` (`order_no`),
-  UNIQUE KEY `uk_third_party_order_no` (`third_party_order_no`),
+  UNIQUE KEY `uk_ref_no` (`ref_no`),
   KEY `idx_account_id` (`account_id`),
+  KEY `idx_order_type` (`order_type`),
+  KEY `idx_payment_channel` (`payment_channel`),
   KEY `idx_status` (`status`),
-  KEY `idx_trade_status` (`trade_status`),
-  KEY `idx_pay_time` (`pay_time`)
+  KEY `idx_complete_at` (`complete_at`),
+  KEY `idx_expired_at` (`expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 16. Usage records
@@ -571,31 +570,31 @@ VALUES
 INSERT IGNORE INTO `promotion_rules`
   (`rule_code`, `rule_name`, `reward_type`, `reward_amount`, `reward_rate`, `settlement_day`, `description`, `icon_type`, `sort_order`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  ('invite_register', '??????', 1, 10.00, NULL, NULL, '????????????????? 10 ???', 'blue', 1, 1, '??????', 'system', 'system'),
-  ('first_recharge', '??????', 2, NULL, 10.00, NULL, '???????????????? 10% ???', 'green', 2, 1, '??????', 'system', 'system'),
-  ('consumption_rebate', '????', 3, NULL, 5.00, NULL, '???????????????? 5% ???', 'purple', 3, 1, '??????', 'system', 'system'),
-  ('settlement_cycle', '????', NULL, NULL, NULL, 1, '?? 1 ??????????????????', 'orange', 4, 1, '??????', 'system', 'system');
+  ('invite_register', '邀请注册奖励', 1, 10.00, NULL, NULL, '好友通过您的链接注册，您将获得 ￥10.00 奖励', 'blue', 1, 1, '默认推广规则', 'system', 'system'),
+  ('first_recharge', '首次充值奖励', 2, NULL, 10.00, NULL, '好友首次充值，您将获得充值金额 10% 的奖励', 'green', 2, 1, '默认推广规则', 'system', 'system'),
+  ('consumption_rebate', '持续返佣', 3, NULL, 5.00, NULL, '好友每次消费，您将获得消费金额 5% 的返佣', 'purple', 3, 1, '默认推广规则', 'system', 'system'),
+  ('settlement_cycle', '结算周期', NULL, NULL, NULL, 1, '每月 1 日自动结算上月收益，直接转入账户余额', 'orange', 4, 1, '默认推广规则', 'system', 'system');
 
 INSERT IGNORE INTO `plans`
   (`id`, `plan_name`, `price`, `duration_days`, `daily_quota`, `total_quota`, `allowed_models`, `status`, `visible`, `remark`, `create_by`, `update_by`)
 VALUES
-  (10001, '????', 19.90, 30, 10.00, 300.00, JSON_ARRAY('gpt-5.2', 'deepseek-chat'), 1, 1, '??????', 'system', 'system'),
-  (10002, '????', 59.90, 30, 30.00, 900.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'deepseek-chat'), 1, 1, '?????????', 'system', 'system'),
-  (10003, '????', 129.90, 30, 80.00, 2400.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'deepseek-v3'), 1, 1, '????????', 'system', 'system');
+  (10001, 'Codex小包套餐', 19.90, 30, 10.00, 300.00, JSON_ARRAY('gpt-5.2', 'deepseek-chat'), 1, 1, '仅可用基础模型', 'system', 'system'),
+  (10002, 'Codex中包套餐', 59.90, 30, 30.00, 900.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'deepseek-chat'), 1, 1, '支持进阶模型使用', 'system', 'system'),
+  (10003, 'Codex大包套餐', 129.90, 30, 80.00, 2400.00, JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4', 'deepseek-v3'), 1, 1, '全量模型可用', 'system', 'system');
 
 INSERT IGNORE INTO `payment_methods`
   (`method_code`, `method_name`, `method_type`, `icon_url`, `sort`, `status`, `config_json`, `remark`, `create_by`, `update_by`)
 VALUES
-  ('alipay_official', '???????', 'alipay', NULL, 10, 1, '{"appId":"demo-alipay-app","merchantId":"2088100000000000","notifyUrl":"https://example.com/pay/notify/alipay"}', '???????', 'system', 'system'),
-  ('wechat_native', '????', 'wechat', NULL, 20, 1, '{"appId":"wx-demo-app","merchantId":"1900000109","apiV3Key":"demo-key","notifyUrl":"https://example.com/pay/notify/wechat"}', '????????', 'system', 'system'),
-  ('local_gateway', '??????', 'local', NULL, 30, 0, '{"gatewayUrl":"https://pay.example.local/submit","merchantNo":"LOCAL10001","signKey":"demo-sign-key"}', '??????????', 'system', 'system');
+  ('alipay_official', '支付宝官方收款', 'alipay', NULL, 10, 1, '{"appId":"demo-alipay-app","merchantId":"2088100000000000","notifyUrl":"https://example.com/pay/notify/alipay"}', '默认支付宝配置', 'system', 'system'),
+  ('wechat_native', '微信支付', 'wechat', NULL, 20, 1, '{"appId":"wx-demo-app","merchantId":"1900000109","apiV3Key":"demo-key","notifyUrl":"https://example.com/pay/notify/wechat"}', '默认微信支付配置', 'system', 'system'),
+  ('local_gateway', '本地网关支付', 'local', NULL, 30, 0, '{"gatewayUrl":"https://pay.example.local/submit","merchantNo":"LOCAL10001","signKey":"demo-sign-key"}', '本地支付网关占位配置', 'system', 'system');
 
 INSERT IGNORE INTO `third_party_pay_links`
   (`target_id`, `target_type`, `pay_url`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (10001, 'plan', 'https://dwz.cn/KT1tozGu', 1, '????????', 'system', 'system'),
-  (10002, 'plan', 'https://dwz.cn/0Nj6pooi', 1, '????????', 'system', 'system'),
-  (10003, 'plan', 'https://dwz.cn/qCXw5k5E', 1, '????????', 'system', 'system');
+  (10001, 'plan', 'https://dwz.cn/KT1tozGu', 1, '小包套餐支付链接', 'system', 'system'),
+  (10002, 'plan', 'https://dwz.cn/0Nj6pooi', 1, '中包套餐支付链接', 'system', 'system'),
+  (10003, 'plan', 'https://dwz.cn/qCXw5k5E', 1, '大包套餐支付链接', 'system', 'system');
 
 INSERT IGNORE INTO `customer_tokens`
   (`account_id`, `customer_name`, `token_name`, `token_value`, `status`, `allowed_models`, `remark`, `create_by`, `update_by`)

@@ -114,11 +114,12 @@ public class PlanController {
 
     @PostMapping("/orders")
     public Result<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        var paymentResult = planOrderService.createOrder(request.getPlanId(), request.getPaymentMethod());
+        Long accountId = CustomerAccountContext.getAccountId();
+        var paymentResult = planOrderService.createOrder(request.getPlanId(), request.getPaymentMethod(), accountId);
         CreateOrderResponse response = new CreateOrderResponse();
         response.setOrderId(paymentResult.getOrderId());
         response.setPayUrl(paymentResult.getPayUrl());
-        response.setExpireTime(planOrderService.buildExpireTime());
+        response.setExpireTime(planOrderService.formatExpireTime(paymentResult.getExpiredAt()));
         return Result.success(response);
     }
 

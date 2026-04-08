@@ -128,3 +128,32 @@ The endpoint is inferred from the request protocol and filtered by provider capa
 - `docs/db-script.md`: core schema notes
 - `xlinks-router-admin/src/main/resources/db/init.sql`: bootstrap SQL
 - `docs/client-email.md`: client mail verification delivery and Mailtrap configuration
+
+## 8. Payment Order Model
+
+The payment module uses `customer_orders` as the unified order domain table.
+
+Core fields:
+
+- `order_no`: platform order id
+- `ref_no`: payment channel reference id (for example Alipay trade_no)
+- `account_id`: customer account id
+- `order_type`: business order type (`recharge` / `withdraw` / `subscription_purchase` ...)
+- `order_title`: order title
+- `order_info`: JSON snapshot of business context at order creation
+- `payment_channel`: channel code (`alipay` / `wechat` / `third-party` ...)
+- `total_amount`: order amount
+- `status`: `0 pending`, `1 paid`, `2 failed`, `3 closed`, `4 refunded`
+- `complete_at`: completed timestamp for paid/refunded lifecycle states
+- `expired_at`: payment expiration time, defaults to 30 minutes after order creation
+- `remark`: extended notes
+- `created_at`: audit create timestamp (common base field)
+- `updated_at`: audit update timestamp (common base field)
+- `create_by`: audit creator (common base field)
+- `update_by`: audit updater (common base field)
+
+Lifecycle rule:
+
+- pending orders (`status = 0`) are automatically closed (`status = 3`) after `expired_at`.
+- paid callback will trigger fulfillment by `order_type`; `subscription_purchase` creates `customer_plans` from `order_info` snapshot.
+

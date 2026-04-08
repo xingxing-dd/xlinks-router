@@ -2,278 +2,236 @@ package site.xlinks.ai.router.client.controller;
 
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
-import com.alipay.api.domain.AlipayTradePagePayModel;
 import com.alipay.api.domain.AlipayTradeQueryModel;
 import com.alipay.api.domain.AlipayTradeRefundModel;
-import com.alipay.api.request.AlipayTradePagePayRequest;
 import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.request.AlipayTradeRefundRequest;
-import com.alipay.api.response.AlipayTradePagePayResponse;
 import com.alipay.api.response.AlipayTradeQueryResponse;
 import com.alipay.api.response.AlipayTradeRefundResponse;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.client.config.AlipayConfig;
-import site.xlinks.ai.router.client.dto.AlipayPayRequest;
 import site.xlinks.ai.router.client.dto.AlipayQueryRequest;
 import site.xlinks.ai.router.client.dto.AlipayRefundRequest;
 import site.xlinks.ai.router.client.dto.ApiResponse;
 import site.xlinks.ai.router.client.payment.utils.AlipaySignatureUtil;
+import site.xlinks.ai.router.client.service.OrderFulfillmentService;
+import site.xlinks.ai.router.entity.CustomerOrder;
+import site.xlinks.ai.router.mapper.CustomerOrderMapper;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.io.PrintWriter;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 支付宝支付控制器
- * 
- * @author xlinks
+ * Alipay callback/query/refund controller.
  */
 @Slf4j
 @RestController
 @RequestMapping("/alipay")
 @RequiredArgsConstructor
-@Tag(name = "支付宝支付", description = "支付宝支付相关接口")
+@Tag(name = "Alipay", description = "Alipay integration endpoints")
 public class AlipayController {
 
-    @Autowired
-    private AlipayClient alipayClient;
+    private final AlipayClient alipayClient;
+    private final AlipayConfig alipayConfig;
+    private final CustomerOrderMapper customerOrderMapper;
+    private final OrderFulfillmentService orderFulfillmentService;
 
-    @Autowired
-    private AlipayConfig alipayConfig;
-
-    /**
-     * 支付同步回调
-     * 
-     * @param request HTTP请求
-     * @param response HTTP响应
-     */
     @GetMapping("/return")
-    @Operation(summary = "支付同步回调", description = "支付宝支付同步回调处理")
+    @Operation(summary = "Alipay return callback")
     public void returnUrl(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        log.info("收到支付宝同步回调");
-        
         try {
-            // 获取回调参数
             Map<String, String> params = getCallbackParams(request);
-            log.info("支付宝同步通知完整参数: {}", params);
-
-            // 验证签名
-            boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, 
-                getAlipayPublicKey(), "UTF-8", "RSA2");
-            
-            if (signVerified) {
-                log.info("支付宝同步回调签名验证成功");
-                
-                // 处理业务逻辑
-                String outTradeNo = params.get("out_trade_no");
-                String tradeNo = params.get("trade_no");
-                String tradeStatus = params.get("trade_status");
-                
-                log.info("订单信息: outTradeNo={}, tradeNo={}, tradeStatus={}", 
-                    outTradeNo, tradeNo, tradeStatus);
-                
-                // 处理业务逻辑：根据支付状态进行相应处理
-                if ("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus)) {
-                    // 支付成功，可以进行页面跳转前的业务处理
-                    log.info("用户支付完成，跳转到成功页面: {}", outTradeNo);
-                    // TODO: 可以在这里进行一些同步的业务处理
-                    // 注意：重要的业务逻辑应该在异步通知中处理，避免用户关闭页面导致处理中断
-                } else if ("WAIT_BUYER_PAY".equals(tradeStatus)) {
-                    // 等待付款
-                    log.info("订单等待付款: {}", outTradeNo);
-                } else {
-                    // 其他状态
-                    log.info("订单状态: {}, 订单号: {}", tradeStatus, outTradeNo);
-                }
-                
-                // 通过后端同步回调统一跳转到前端支付结果页。
-                response.sendRedirect(alipayConfig.getPaymentSuccessUrl() + "?orderNo=" + encode(outTradeNo));
-                
-            } else {
-                log.error("支付宝同步回调签名验证失败");
-                response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("签名验证失败"));
+            boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, getAlipayPublicKey(), "UTF-8", "RSA2");
+            if (!signVerified) {
+                response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("signature verify failed"));
+                return;
             }
-            
+
+            String outTradeNo = params.get("out_trade_no");
+            String tradeNo = params.get("trade_no");
+            String tradeStatus = params.get("trade_status");
+            updateOrderByChannelStatus(outTradeNo, tradeNo, tradeStatus);
+            response.sendRedirect(alipayConfig.getPaymentSuccessUrl() + "?orderNo=" + encode(outTradeNo));
         } catch (Exception e) {
-            log.error("支付宝同步回调处理异常", e);
-            response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("回调处理异常"));
+            log.error("Failed to process Alipay return callback", e);
+            response.sendRedirect(alipayConfig.getPaymentErrorUrl() + "?msg=" + encode("callback failed"));
         }
+    }
+
+    @PostMapping("/notify")
+    @Operation(summary = "Alipay async notify callback")
+    public void notifyUrl(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        try {
+            Map<String, String> params = getCallbackParams(request);
+            boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, getAlipayPublicKey(), "UTF-8", "RSA2");
+
+            PrintWriter out = response.getWriter();
+            if (!signVerified) {
+                out.println("fail");
+                return;
+            }
+
+            String outTradeNo = params.get("out_trade_no");
+            String tradeNo = params.get("trade_no");
+            String tradeStatus = params.get("trade_status");
+            updateOrderByChannelStatus(outTradeNo, tradeNo, tradeStatus);
+            out.println("success");
+        } catch (Exception e) {
+            log.error("Failed to process Alipay notify callback", e);
+            response.getWriter().println("fail");
+        }
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "Query Alipay order status")
+    public ResponseEntity<ApiResponse<AlipayTradeQueryResponse>> queryOrder(@RequestBody AlipayQueryRequest request) {
+        try {
+            AlipayTradeQueryRequest alipayRequest = new AlipayTradeQueryRequest();
+            AlipayTradeQueryModel model = new AlipayTradeQueryModel();
+            model.setOutTradeNo(request.getOutTradeNo());
+            if (request.getTradeNo() != null) {
+                model.setTradeNo(request.getTradeNo());
+            }
+            alipayRequest.setBizModel(model);
+
+            AlipayTradeQueryResponse response = alipayClient.execute(alipayRequest);
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(ApiResponse.success(response));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Order query failed: " + response.getSubMsg()));
+        } catch (AlipayApiException e) {
+            log.error("Alipay order query failed", e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Order query exception: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/refund")
+    @Operation(summary = "Refund Alipay order")
+    public ResponseEntity<ApiResponse<AlipayTradeRefundResponse>> refundOrder(@RequestBody AlipayRefundRequest request) {
+        try {
+            AlipayTradeRefundRequest alipayRequest = new AlipayTradeRefundRequest();
+            AlipayTradeRefundModel model = new AlipayTradeRefundModel();
+            model.setOutTradeNo(request.getOutTradeNo());
+            model.setRefundAmount(request.getRefundAmount().toString());
+            model.setRefundReason(request.getRefundReason());
+            model.setOutRequestNo(request.getOutRequestNo());
+            alipayRequest.setBizModel(model);
+
+            AlipayTradeRefundResponse response = alipayClient.execute(alipayRequest);
+            if (response.isSuccess()) {
+                markOrderRefunded(request.getOutTradeNo(), response.getTradeNo());
+                return ResponseEntity.ok(ApiResponse.success(response));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Refund failed: " + response.getSubMsg()));
+        } catch (AlipayApiException e) {
+            log.error("Alipay refund failed", e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Refund exception: " + e.getMessage()));
+        }
+    }
+
+    private void updateOrderByChannelStatus(String orderNo,
+                                            String refNo,
+                                            String tradeStatus) {
+        if (orderNo == null || orderNo.isBlank()) {
+            return;
+        }
+
+        CustomerOrder currentOrder = customerOrderMapper.selectOne(
+                new LambdaQueryWrapper<CustomerOrder>()
+                        .eq(CustomerOrder::getOrderNo, orderNo)
+                        .last("limit 1")
+        );
+        if (currentOrder == null) {
+            return;
+        }
+        Integer targetStatus = resolveOrderStatus(tradeStatus);
+        Integer currentStatus = currentOrder.getStatus() == null ? 0 : currentOrder.getStatus();
+        if (currentStatus != 0) {
+            if (currentStatus == 1 && targetStatus != null && targetStatus == 1) {
+                orderFulfillmentService.handlePaidOrder(orderNo);
+            }
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (currentOrder.getExpiredAt() != null && !currentOrder.getExpiredAt().isAfter(now)) {
+            closeExpiredPendingOrder(orderNo, now);
+            return;
+        }
+
+        CustomerOrder update = new CustomerOrder();
+        update.setRefNo(refNo);
+        update.setStatus(targetStatus);
+        if (update.getStatus() != null && (update.getStatus() == 1 || update.getStatus() == 4)) {
+            update.setCompleteAt(now);
+        }
+
+        int affected = customerOrderMapper.update(update, new LambdaUpdateWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getOrderNo, orderNo)
+                .eq(CustomerOrder::getStatus, 0));
+        if (affected > 0 && targetStatus != null && targetStatus == 1) {
+            orderFulfillmentService.handlePaidOrder(orderNo);
+        }
+    }
+
+    private void markOrderRefunded(String orderNo, String refNo) {
+        if (orderNo == null || orderNo.isBlank()) {
+            return;
+        }
+        CustomerOrder update = new CustomerOrder();
+        update.setRefNo(refNo);
+        update.setStatus(4);
+        update.setCompleteAt(LocalDateTime.now());
+        customerOrderMapper.update(update, new LambdaUpdateWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getOrderNo, orderNo));
+    }
+
+    private Integer resolveOrderStatus(String tradeStatus) {
+        if ("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus)) {
+            return 1;
+        }
+        if ("TRADE_CLOSED".equals(tradeStatus)) {
+            return 3;
+        }
+        return 2;
+    }
+
+    private void closeExpiredPendingOrder(String orderNo, LocalDateTime now) {
+        CustomerOrder update = new CustomerOrder();
+        update.setStatus(3);
+        update.setRemark("订单已过期自动关闭");
+        update.setUpdatedAt(now);
+        customerOrderMapper.update(update, new LambdaUpdateWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getOrderNo, orderNo)
+                .eq(CustomerOrder::getStatus, 0));
     }
 
     private String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
-    /**
-     * 支付异步通知
-     * 
-     * @param request HTTP请求
-     * @param response HTTP响应
-     */
-    @PostMapping("/notify")
-    @Operation(summary = "支付异步通知", description = "支付宝支付异步通知处理")
-    public void notifyUrl(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        log.info("收到支付宝异步通知");
-        
-        try {
-            // 获取通知参数
-            Map<String, String> params = getCallbackParams(request);
-            log.info("支付宝异步通知完整参数: {}", params);
-            
-            // 验证签名
-            boolean signVerified = AlipaySignatureUtil.rsaCheckV1(params, 
-                getAlipayPublicKey(), "UTF-8", "RSA2");
-            
-            PrintWriter out = response.getWriter();
-            
-            if (signVerified) {
-                log.info("支付宝异步通知签名验证成功");
-                
-                // 处理业务逻辑
-                String outTradeNo = params.get("out_trade_no");
-                String tradeNo = params.get("trade_no");
-                String tradeStatus = params.get("trade_status");
-                String totalAmount = params.get("total_amount");
-                
-                log.info("异步通知订单信息: outTradeNo={}, tradeNo={}, tradeStatus={}, totalAmount={}", 
-                    outTradeNo, tradeNo, tradeStatus, totalAmount);
-                
-                // 处理业务逻辑：更新订单状态
-                if ("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus)) {
-                    // 支付成功，更新订单状态
-                    log.info("订单支付成功，更新订单状态: {}", outTradeNo);
-                    // TODO: 调用订单服务更新订单状态
-                    // orderService.updateOrderStatus(outTradeNo, "PAID", tradeNo);
-                    
-                    // TODO: 其他业务逻辑，如发货、增加积分等
-                    // shipmentService.createShipment(outTradeNo);
-                    // pointsService.addPoints(userId, totalAmount);
-                } else if ("TRADE_CLOSED".equals(tradeStatus)) {
-                    // 交易关闭
-                    log.info("订单交易关闭: {}", outTradeNo);
-                    // TODO: 更新订单状态为已关闭
-                    // orderService.updateOrderStatus(outTradeNo, "CLOSED", tradeNo);
-                }
-                
-                // 返回成功响应
-                out.println("success");
-                
-            } else {
-                log.error("支付宝异步通知签名验证失败");
-                out.println("fail");
-            }
-            
-        } catch (Exception e) {
-            log.error("支付宝异步通知处理异常", e);
-            response.getWriter().println("fail");
-        }
-    }
-
-    /**
-     * 订单查询
-     * 
-     * @param request 查询请求参数
-     * @return 查询结果
-     */
-    @PostMapping("/query")
-    @Operation(summary = "订单查询", description = "查询支付宝订单状态")
-    public ResponseEntity<ApiResponse<AlipayTradeQueryResponse>> queryOrder(@RequestBody AlipayQueryRequest request) {
-        try {
-            log.info("开始查询支付宝订单: {}", request.getOutTradeNo());
-
-            // 创建查询请求
-            AlipayTradeQueryRequest alipayRequest = new AlipayTradeQueryRequest();
-            
-            // 设置业务参数
-            AlipayTradeQueryModel model = new AlipayTradeQueryModel();
-            model.setOutTradeNo(request.getOutTradeNo());
-            // 如果有支付宝交易号，也可以使用
-            if (request.getTradeNo() != null) {
-                model.setTradeNo(request.getTradeNo());
-            }
-            
-            alipayRequest.setBizModel(model);
-
-            // 调用支付宝API
-            AlipayTradeQueryResponse response = alipayClient.execute(alipayRequest);
-            
-            if (response.isSuccess()) {
-                log.info("支付宝订单查询成功: {}", response.getTradeStatus());
-                return ResponseEntity.ok(ApiResponse.success(response));
-            } else {
-                log.error("支付宝订单查询失败: {}", response.getSubMsg());
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("订单查询失败: " + response.getSubMsg()));
-            }
-
-        } catch (AlipayApiException e) {
-            log.error("支付宝订单查询异常", e);
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("订单查询异常: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * 订单退款
-     * 
-     * @param request 退款请求参数
-     * @return 退款结果
-     */
-    @PostMapping("/refund")
-    @Operation(summary = "订单退款", description = "申请支付宝订单退款")
-    public ResponseEntity<ApiResponse<AlipayTradeRefundResponse>> refundOrder(@RequestBody AlipayRefundRequest request) {
-        try {
-            log.info("开始申请支付宝退款: outTradeNo={}, refundAmount={}", 
-                request.getOutTradeNo(), request.getRefundAmount());
-
-            // 创建退款请求
-            AlipayTradeRefundRequest alipayRequest = new AlipayTradeRefundRequest();
-            
-            // 设置业务参数
-            AlipayTradeRefundModel model = new AlipayTradeRefundModel();
-            model.setOutTradeNo(request.getOutTradeNo());
-            model.setRefundAmount(request.getRefundAmount().toString());
-            model.setRefundReason(request.getRefundReason());
-            model.setOutRequestNo(request.getOutRequestNo());
-            
-            alipayRequest.setBizModel(model);
-
-            // 调用支付宝API
-            AlipayTradeRefundResponse response = alipayClient.execute(alipayRequest);
-            
-            if (response.isSuccess()) {
-                log.info("支付宝退款申请成功: {}", response.getRefundFee());
-                return ResponseEntity.ok(ApiResponse.success(response));
-            } else {
-                log.error("支付宝退款申请失败: {}", response.getSubMsg());
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("退款申请失败: " + response.getSubMsg()));
-            }
-
-        } catch (AlipayApiException e) {
-            log.error("支付宝退款申请异常", e);
-            return ResponseEntity.internalServerError()
-                .body(ApiResponse.error("退款申请异常: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * 获取回调参数
-     * 
-     * @param request HTTP请求
-     * @return 参数Map
-     */
     private Map<String, String> getCallbackParams(HttpServletRequest request) {
         Map<String, String> params = new HashMap<>();
         request.getParameterMap().forEach((key, values) -> {
@@ -284,17 +242,12 @@ public class AlipayController {
         return params;
     }
 
-    /**
-     * 获取支付宝公钥
-     * 
-     * @return 支付宝公钥
-     */
     private String getAlipayPublicKey() {
         Object config = alipayConfig.getCurrentConfig();
-        if (config instanceof AlipayConfig.SandboxConfig) {
-            return ((AlipayConfig.SandboxConfig) config).getAlipayPublicKey();
-        } else {
-            return ((AlipayConfig.ProductionConfig) config).getAlipayPublicKey();
+        if (config instanceof AlipayConfig.SandboxConfig sandboxConfig) {
+            return sandboxConfig.getAlipayPublicKey();
         }
+        return ((AlipayConfig.ProductionConfig) config).getAlipayPublicKey();
     }
 }
+

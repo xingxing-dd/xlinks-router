@@ -6,28 +6,31 @@ import com.alipay.api.domain.AlipayTradePagePayModel;
 import com.alipay.api.request.AlipayTradePagePayRequest;
 import com.alipay.api.response.AlipayTradePagePayResponse;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.client.config.AlipayConfig;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.entity.ThirdPartyPayOrder;
-import site.xlinks.ai.router.mapper.ThirdPartyPayOrderMapper;
+import site.xlinks.ai.router.entity.CustomerOrder;
+import site.xlinks.ai.router.mapper.CustomerOrderMapper;
 
-import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
- * 支付宝支付策略。
+ * Alipay payment strategy.
  */
 @Component
 @RequiredArgsConstructor
 public class AlipayPaymentStrategy implements PaymentStrategy {
 
-    private static final String TARGET_TYPE_PLAN = "plan";
+    private static final String ORDER_TYPE_SUBSCRIPTION_PURCHASE = "subscription_purchase";
 
     private final AlipayClient alipayClient;
     private final AlipayConfig alipayConfig;
-    private final ThirdPartyPayOrderMapper thirdPartyPayOrderMapper;
+    private final CustomerOrderMapper customerOrderMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     public String getMethod() {
@@ -38,7 +41,8 @@ public class AlipayPaymentStrategy implements PaymentStrategy {
     public PaymentResult pay(PaymentRequest request) {
         try {
             ensureOrderNotExists(request.getOrderId());
-            saveThirdPartyPayOrder(request);
+            saveCustomerOrder(request);
+
             AlipayTradePagePayRequest alipayRequest = new AlipayTradePagePayRequest();
             alipayRequest.setReturnUrl(alipayConfig.getReturnUrl());
             alipayRequest.setNotifyUrl(alipayConfig.getNotifyUrl());
@@ -53,36 +57,56 @@ public class AlipayPaymentStrategy implements PaymentStrategy {
 
             AlipayTradePagePayResponse response = alipayClient.pageExecute(alipayRequest);
             if (!response.isSuccess()) {
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付宝下单失败: " + response.getSubMsg());
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR,
+                        "Alipay order creation failed: " + response.getSubMsg());
             }
 
-            return new PaymentResult(request.getOrderId(), response.getBody());
+            return new PaymentResult(request.getOrderId(), response.getBody(), request.getExpiredAt());
         } catch (AlipayApiException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付宝下单异常: " + e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,
+                    "Alipay order creation exception: " + e.getMessage());
         }
     }
 
     private void ensureOrderNotExists(String orderNo) {
-        Long count = thirdPartyPayOrderMapper.selectCount(
-            new LambdaQueryWrapper<ThirdPartyPayOrder>()
-                .eq(ThirdPartyPayOrder::getOrderNo, orderNo)
+        Long count = customerOrderMapper.selectCount(
+                new LambdaQueryWrapper<CustomerOrder>()
+                        .eq(CustomerOrder::getOrderNo, orderNo)
         );
         if (count != null && count > 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单已存在: " + orderNo);
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Order already exists: " + orderNo);
         }
     }
 
-    private void saveThirdPartyPayOrder(PaymentRequest request) {
-        ThirdPartyPayOrder order = new ThirdPartyPayOrder();
+    private void saveCustomerOrder(PaymentRequest request) {
+        CustomerOrder order = new CustomerOrder();
         order.setOrderNo(request.getOrderId());
-        order.setTargetId(request.getPlan().getId());
-        order.setTargetType(TARGET_TYPE_PLAN);
-        order.setPaymentMethodCode(request.getPaymentMethod());
+        order.setAccountId(request.getAccountId());
+        order.setOrderType(ORDER_TYPE_SUBSCRIPTION_PURCHASE);
         order.setOrderTitle(request.getPlan().getPlanName());
+        order.setOrderInfo(buildOrderInfo(request));
+        order.setPaymentChannel(request.getPaymentMethod());
         order.setTotalAmount(request.getAmount());
         order.setStatus(0);
-        order.setExpiredAt(LocalDateTime.now().plusMinutes(30));
-        order.setRemark("支付宝下单创建");
-        thirdPartyPayOrderMapper.insert(order);
+        order.setExpiredAt(request.getExpiredAt());
+        order.setRemark("Alipay order created");
+        customerOrderMapper.insert(order);
+    }
+
+    private String buildOrderInfo(PaymentRequest request) {
+        try {
+            Map<String, Object> snapshot = new LinkedHashMap<>();
+            snapshot.put("planId", request.getPlan().getId());
+            snapshot.put("planName", request.getPlan().getPlanName());
+            snapshot.put("durationDays", request.getPlan().getDurationDays());
+            snapshot.put("dailyQuota", request.getPlan().getDailyQuota());
+            snapshot.put("totalQuota", request.getPlan().getTotalQuota());
+            snapshot.put("paymentMethod", request.getPaymentMethod());
+            snapshot.put("expiredAt", request.getExpiredAt() == null ? null : request.getExpiredAt().toString());
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (Exception ignored) {
+            return "{}";
+        }
     }
 }
+

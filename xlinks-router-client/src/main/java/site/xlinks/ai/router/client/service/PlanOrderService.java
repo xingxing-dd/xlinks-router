@@ -23,12 +23,13 @@ import java.time.format.DateTimeFormatter;
 @Slf4j
 public class PlanOrderService {
 
+    public static final int DEFAULT_ORDER_EXPIRE_MINUTES = 30;
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final PlanMapper planMapper;
     private final PaymentStrategyFactory paymentStrategyFactory;
 
-    public PaymentResult createOrder(String planId, String paymentMethod) {
+    public PaymentResult createOrder(String planId, String paymentMethod, Long accountId) {
         Plan plan = planMapper.selectById(planId);
         if (plan == null || plan.getStatus() == null || plan.getStatus() == 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "套餐不存在或已下架");
@@ -41,12 +42,16 @@ public class PlanOrderService {
 
         String orderId = generateOrderId(plan.getId());
         log.info("购买套餐 orderId,{}", orderId);
-        PaymentRequest request = new PaymentRequest(orderId, plan, plan.getPrice(), paymentMethod);
+        LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(DEFAULT_ORDER_EXPIRE_MINUTES);
+        PaymentRequest request = new PaymentRequest(orderId, accountId, plan, plan.getPrice(), paymentMethod, expiredAt);
         return strategy.pay(request);
     }
 
-    public String buildExpireTime() {
-        return LocalDateTime.now().plusMinutes(30).format(DATETIME_FORMATTER);
+    public String formatExpireTime(LocalDateTime expiredAt) {
+        if (expiredAt == null) {
+            return null;
+        }
+        return expiredAt.format(DATETIME_FORMATTER);
     }
 
     private String generateOrderId(Long planId) {

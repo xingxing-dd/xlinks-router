@@ -127,3 +127,52 @@ SELECT * FROM provider_models WHERE model_id = ? AND status = 1;
 
 -- 4) select available provider_token under selected provider
 ```
+
+## 9. customer_orders (order domain)
+
+Order table stores unified business orders (recharge/withdraw/subscription purchase) and channel references.
+
+```sql
+CREATE TABLE `customer_orders` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `order_no` VARCHAR(64) NOT NULL,
+  `ref_no` VARCHAR(128) DEFAULT NULL,
+  `account_id` BIGINT DEFAULT NULL,
+  `order_type` VARCHAR(50) NOT NULL,
+  `order_title` VARCHAR(200) NOT NULL,
+  `order_info` JSON DEFAULT NULL,
+  `payment_channel` VARCHAR(50) NOT NULL,
+  `total_amount` DECIMAL(12, 2) NOT NULL,
+  `status` TINYINT NOT NULL DEFAULT 0,
+  `complete_at` DATETIME DEFAULT NULL,
+  `expired_at` DATETIME DEFAULT NULL,
+  `remark` VARCHAR(500) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` VARCHAR(50) DEFAULT NULL,
+  `update_by` VARCHAR(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  UNIQUE KEY `uk_ref_no` (`ref_no`),
+  KEY `idx_account_id` (`account_id`),
+  KEY `idx_order_type` (`order_type`),
+  KEY `idx_payment_channel` (`payment_channel`),
+  KEY `idx_status` (`status`),
+  KEY `idx_complete_at` (`complete_at`),
+  KEY `idx_expired_at` (`expired_at`)
+);
+```
+
+Status definition:
+
+- `0`: pending
+- `1`: paid
+- `2`: failed
+- `3`: closed
+- `4`: refunded
+
+Expire rule:
+
+- `expired_at` defaults to 30 minutes after order creation in application logic.
+- if `status = 0` and current time is greater than `expired_at`, order will be auto-closed (`status = 3`).
+
