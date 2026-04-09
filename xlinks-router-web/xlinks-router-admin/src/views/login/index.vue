@@ -14,7 +14,7 @@ const authStore = useAuthStore()
 const toastStore = useToastStore()
 
 const account = ref('admin')
-const password = ref('admin123')
+const password = ref('')
 const remember = ref(true)
 const loading = ref(false)
 
@@ -62,7 +62,6 @@ const handleLogin = async () => {
           <h2 class="text-lg font-semibold text-slate-800">当前后台能力</h2>
           <p class="text-sm text-slate-600">- 管理服务商、服务商 Token、标准端点、标准模型和上游模型映射。</p>
           <p class="text-sm text-slate-600">- 维护客户 Token、套餐配置、第三方支付链接与激活码库存。</p>
-          <p class="text-sm text-slate-600">- 首次启动若无管理员账号，后端会自动初始化 `admin / admin123`。</p>
         </div>
       </div>
 
@@ -72,11 +71,11 @@ const handleLogin = async () => {
         <div class="mt-6 space-y-4">
           <div>
             <label class="text-sm text-slate-500">{{ t('login.account') }}</label>
-            <input v-model.trim="account" class="input mt-2" placeholder="admin" />
+            <input v-model.trim="account" class="input mt-2" />
           </div>
           <div>
             <label class="text-sm text-slate-500">{{ t('login.password') }}</label>
-            <input v-model.trim="password" type="password" class="input mt-2" placeholder="admin123" />
+            <input v-model.trim="password" type="password" class="input mt-2"  />
           </div>
           <label class="flex items-center gap-2 text-sm text-slate-500">
             <input v-model="remember" type="checkbox" class="accent-primary" />
