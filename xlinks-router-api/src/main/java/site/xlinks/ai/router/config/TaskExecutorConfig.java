@@ -1,0 +1,65 @@
+package site.xlinks.ai.router.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
+
+/**
+ * Dedicated executors for SSE forwarding and async persistence.
+ */
+@Configuration
+public class TaskExecutorConfig implements AsyncConfigurer {
+
+    @Value("${xlinks.router.async.usage.core-size:4}")
+    private int usageCoreSize;
+
+    @Value("${xlinks.router.async.usage.max-size:16}")
+    private int usageMaxSize;
+
+    @Value("${xlinks.router.async.usage.queue-capacity:1000}")
+    private int usageQueueCapacity;
+
+    @Value("${xlinks.router.async.sse.core-size:8}")
+    private int sseCoreSize;
+
+    @Value("${xlinks.router.async.sse.max-size:64}")
+    private int sseMaxSize;
+
+    @Value("${xlinks.router.async.sse.queue-capacity:2000}")
+    private int sseQueueCapacity;
+
+    @Bean("usageTaskExecutor")
+    public ThreadPoolTaskExecutor usageTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(usageCoreSize);
+        executor.setMaxPoolSize(usageMaxSize);
+        executor.setQueueCapacity(usageQueueCapacity);
+        executor.setThreadNamePrefix("usage-async-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean("sseTaskExecutor")
+    public TaskExecutor sseTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(sseCoreSize);
+        executor.setMaxPoolSize(sseMaxSize);
+        executor.setQueueCapacity(sseQueueCapacity);
+        executor.setThreadNamePrefix("sse-forward-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    @Override
+    public Executor getAsyncExecutor() {
+        return usageTaskExecutor();
+    }
+}

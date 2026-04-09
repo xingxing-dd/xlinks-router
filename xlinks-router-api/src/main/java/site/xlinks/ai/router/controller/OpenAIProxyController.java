@@ -5,9 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,13 +30,23 @@ import site.xlinks.ai.router.service.OpenAIProxyService;
 @Slf4j
 @RestController
 @RequestMapping("/v1")
-@RequiredArgsConstructor
 @Tag(name = "OpenAI Proxy API", description = "OpenAI-compatible chat, responses, and models APIs")
 public class OpenAIProxyController {
 
     private final OpenAIProxyService openAIProxyService;
     private final ObjectMapper objectMapper;
     private final TaskExecutor taskExecutor;
+
+    @Value("${xlinks.router.sse.timeout-ms:900000}")
+    private long sseTimeoutMs;
+
+    public OpenAIProxyController(OpenAIProxyService openAIProxyService,
+                                 ObjectMapper objectMapper,
+                                 @Qualifier("sseTaskExecutor") TaskExecutor taskExecutor) {
+        this.openAIProxyService = openAIProxyService;
+        this.objectMapper = objectMapper;
+        this.taskExecutor = taskExecutor;
+    }
 
     @PostMapping("/chat/completions")
     @Operation(summary = "Chat Completions",
@@ -75,7 +86,7 @@ public class OpenAIProxyController {
         OpenAIProxyRequest request = parseRequest(protocol, requestBody);
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
-        log.info("Received {} request, endpointCode={}, model={}, stream={}",
+        log.debug("Received {} request, endpointCode={}, model={}, stream={}",
                 protocol, protocol.getCode(), request.getModel(), request.isStream());
 
         if (!request.isStream()) {
@@ -93,6 +104,7 @@ public class OpenAIProxyController {
                     .protocol(protocol)
                     .model(modelNode.isMissingNode() || modelNode.isNull() ? null : modelNode.asText())
                     .stream(streamNode == null || streamNode.isNull() ? null : streamNode.asBoolean())
+                    .payload(payload)
                     .requestBody(requestBody)
                     .build();
         } catch (Exception e) {
@@ -101,17 +113,21 @@ public class OpenAIProxyController {
     }
 
     private SseEmitter stream(String token, OpenAIProxyRequest request) {
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(sseTimeoutMs);
         emitter.onCompletion(() -> log.debug("SSE completed for endpointCode={}, protocol={}",
                 request.getProtocol().getCode(), request.getProtocol()));
-        emitter.onTimeout(() -> log.warn("SSE timeout for endpointCode={}, protocol={}",
-                request.getProtocol().getCode(), request.getProtocol()));
+        emitter.onTimeout(() -> {
+            log.warn("SSE timeout for endpointCode={}, protocol={}",
+                    request.getProtocol().getCode(), request.getProtocol());
+            emitter.complete();
+        });
 
         taskExecutor.execute(() -> {
             try {
                 openAIProxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
             } catch (Exception e) {
+                sendErrorEventQuietly(emitter, e);
                 emitter.completeWithError(e);
             }
         });
@@ -148,6 +164,16 @@ public class OpenAIProxyController {
             emitter.send(builder);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to write SSE event", e);
+        }
+    }
+
+    private void sendErrorEventQuietly(SseEmitter emitter, Exception e) {
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("error")
+                    .data(e.getMessage() == null ? "SSE stream failed" : e.getMessage()));
+        } catch (Exception ignore) {
+            // Ignore write failures on broken connections.
         }
     }
 }

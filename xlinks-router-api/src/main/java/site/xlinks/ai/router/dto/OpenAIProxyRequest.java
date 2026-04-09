@@ -1,5 +1,6 @@
 package site.xlinks.ai.router.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,6 +16,8 @@ public class OpenAIProxyRequest {
     private String model;
 
     private Boolean stream;
+
+    private JsonNode payload;
 
     private String requestBody;
 

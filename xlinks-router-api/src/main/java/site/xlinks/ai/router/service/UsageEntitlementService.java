@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -68,22 +67,26 @@ public class UsageEntitlementService {
         if (accountId == null) {
             return null;
         }
-        List<CustomerPlan> plans = customerPlanMapper.selectList(
-                new LambdaQueryWrapper<CustomerPlan>()
-                        .eq(CustomerPlan::getAccountId, accountId)
-                        .eq(CustomerPlan::getStatus, 1)
-                        .orderByAsc(CustomerPlan::getPlanExpireTime)
-        );
-        if (plans == null || plans.isEmpty()) {
-            return null;
-        }
         LocalDate today = LocalDate.now();
-        for (CustomerPlan plan : plans) {
-            if (isPlanAvailable(plan, today)) {
-                return plan;
-            }
-        }
-        return null;
+        CustomerPlan available = customerPlanMapper.selectFirstAvailablePlan(accountId, today);
+        log.info("获取到当前用户{}的可用套餐:{}", accountId, available);
+//
+//        // Fallback for old rows where used_quota may be null and cannot satisfy SQL predicate.
+//        List<CustomerPlan> plans = customerPlanMapper.selectList(
+//                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerPlan>()
+//                        .eq(CustomerPlan::getAccountId, accountId)
+//                        .eq(CustomerPlan::getStatus, 1)
+//                        .orderByAsc(CustomerPlan::getPlanExpireTime)
+//        );
+//        if (plans == null || plans.isEmpty()) {
+//            return null;
+//        }
+//        for (CustomerPlan plan : plans) {
+//            if (isPlanAvailable(plan, today)) {
+//                return plan;
+//            }
+//        }
+        return available;
     }
 
     private boolean isPlanAvailable(CustomerPlan plan, LocalDate today) {
@@ -95,14 +98,18 @@ public class UsageEntitlementService {
         if (dailyQuota == null || usedQuota == null) {
             return false;
         }
-        if (usedQuota.compareTo(dailyQuota) >= 0) {
+        if (dailyQuota.compareTo(java.math.BigDecimal.ZERO) <= 0) {
             return false;
+        }
+        if (usedQuota.compareTo(dailyQuota) < 0) {
+            return true;
         }
         LocalDateTime refreshTime = plan.getQuotaRefreshTime();
         if (refreshTime == null) {
+            // 兼容历史脏数据：未记录刷新时间时，允许本次请求进入消费逻辑完成刷新判断。
             return true;
         }
-        return usedQuota.compareTo(dailyQuota) < 0 || !refreshTime.toLocalDate().isEqual(today);
+        return !refreshTime.toLocalDate().isEqual(today);
     }
 
     /**

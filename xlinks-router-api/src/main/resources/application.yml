@@ -23,13 +23,12 @@ mybatis-plus:
   type-aliases-package: site.xlinks.ai.router.entity
   configuration:
     map-underscore-to-camel-case: true
-    # 禁用 MyBatis 控制台 SQL 输出（避免 StdOutImpl 打印 SQL）
+    # Disable MyBatis SQL stdout logging.
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       id-type: auto
 
-# 应用配置
 app:
   security:
     token-encrypt-key: ${TOKEN_ENCRYPT_KEY:}
@@ -37,7 +36,6 @@ app:
     timeout: 30000
     retry-count: 3
 
-# SpringDoc OpenAPI 配置
 springdoc:
   api-docs:
     enabled: false
@@ -46,10 +44,38 @@ springdoc:
     enabled: false
     path: /swagger-ui.html
 
-# 日志配置
 logging:
   level:
     site.xlinks.ai.router: DEBUG
     org.springframework: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+xlinks:
+  router:
+    sse:
+      timeout-ms: 900000
+    cache:
+      refresh-interval-ms: 300000
+    quota-reset:
+      cron: "0 0 0 * * ?"
+      zone: "Asia/Shanghai"
+    auth:
+      token-cache-ttl-seconds: 15
+    async:
+      usage:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 1000
+      sse:
+        core-size: 8
+        max-size: 64
+        queue-capacity: 2000
+    okhttp:
+      connect-timeout-seconds: 10
+      read-timeout-seconds: 120
+      write-timeout-seconds: 120
+      max-idle-connections: 64
+      keep-alive-minutes: 5
+      max-requests: 512
+      max-requests-per-host: 128

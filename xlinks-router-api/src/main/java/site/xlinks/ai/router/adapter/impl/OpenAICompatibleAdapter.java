@@ -22,6 +22,7 @@ import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -93,8 +94,11 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                         break;
                     }
                     if (line.isEmpty()) {
-                        emitEvent(frameLines, onEvent);
-                        if (isDoneFrame(frameLines)) {
+                        OpenAIStreamEvent event = parseEvent(frameLines);
+                        if (event != null) {
+                            onEvent.accept(event);
+                        }
+                        if (event != null && event.isDoneSignal()) {
                             break;
                         }
                         frameLines.clear();
@@ -104,7 +108,10 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                 }
 
                 if (!frameLines.isEmpty()) {
-                    emitEvent(frameLines, onEvent);
+                    OpenAIStreamEvent event = parseEvent(frameLines);
+                    if (event != null) {
+                        onEvent.accept(event);
+                    }
                 }
             }
         } catch (IOException e) {
@@ -125,6 +132,20 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
     }
 
     String rewriteRequestBody(OpenAIProxyRequest request, ProviderInvokeContext context) {
+        JsonNode payload = request == null ? null : request.getPayload();
+        if (payload instanceof ObjectNode payloadObject) {
+            try {
+                ObjectNode objectNode = payloadObject.deepCopy();
+                if (context.getProviderModel() != null && !context.getProviderModel().isBlank()) {
+                    objectNode.put("model", context.getProviderModel());
+                }
+                objectNode.put("stream", request != null && request.isStream());
+                return objectMapper.writeValueAsString(objectNode);
+            } catch (Exception e) {
+                log.warn("Failed to serialize rewritten payload, fallback to raw body: {}", e.getMessage());
+            }
+        }
+
         String requestBody = request == null ? null : request.getRequestBody();
         if (requestBody == null || requestBody.isBlank()) {
             return requestBody;
@@ -161,18 +182,6 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
             return parseSseResponseBody(request, responseBody);
         }
         return objectMapper.readTree(responseBody);
-    }
-
-    private void emitEvent(List<String> frameLines, Consumer<OpenAIStreamEvent> onEvent) {
-        OpenAIStreamEvent event = parseEvent(frameLines);
-        if (event != null) {
-            onEvent.accept(event);
-        }
-    }
-
-    private boolean isDoneFrame(List<String> frameLines) {
-        OpenAIStreamEvent event = parseEvent(frameLines);
-        return event != null && event.isDoneSignal();
     }
 
     private OpenAIStreamEvent parseEvent(List<String> frameLines) {
@@ -308,6 +317,6 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                 events.add(event);
             }
         }
-        return events;
+        return events.isEmpty() ? Collections.emptyList() : events;
     }
 }

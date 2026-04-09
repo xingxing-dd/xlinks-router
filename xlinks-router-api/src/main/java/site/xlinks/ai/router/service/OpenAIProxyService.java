@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,6 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
-import site.xlinks.ai.router.mapper.ModelMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -41,7 +39,6 @@ public class OpenAIProxyService {
     private final ProviderTokenSelectService providerTokenSelectService;
     private final OpenAIProviderAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
-    private final ModelMapper modelMapper;
     private final UsageRecordService usageRecordService;
     private final UsageEntitlementService usageEntitlementService;
     private final OpenAIUsageExtractor openAIUsageExtractor;
@@ -94,15 +91,15 @@ public class OpenAIProxyService {
 
     public Object listModels(String token) {
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-
-        List<Model> models = modelMapper.selectList(new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1));
+        long createdEpoch = System.currentTimeMillis() / 1000;
+        List<Model> models = routeCacheService.listModels();
         List<Object> modelList = models.stream()
                 .filter(model -> model.getModelCode() != null && !model.getModelCode().isBlank())
                 .filter(model -> customerTokenAuthService.hasPermissionForModel(customerToken, model.getModelCode()))
                 .map(model -> Map.of(
                         "id", model.getModelCode(),
                         "object", "model",
-                        "created", System.currentTimeMillis() / 1000,
+                        "created", createdEpoch,
                         "owned_by", "xlinks-router"
                 ))
                 .collect(Collectors.toList());

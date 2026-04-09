@@ -10,9 +10,7 @@ import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Selects available provider tokens under a provider.
@@ -25,7 +23,6 @@ public class ProviderTokenSelectService {
     private final ProviderTokenMapper providerTokenMapper;
     private final RouteCacheService routeCacheService;
 
-    @Transactional
     public ProviderToken selectToken(Long providerId) {
         ProviderToken selected = selectTokenOrNull(providerId);
         if (selected == null) {
@@ -34,41 +31,38 @@ public class ProviderTokenSelectService {
         return selected;
     }
 
-    @Transactional
     public ProviderToken selectTokenOrNull(Long providerId) {
+        if (providerId == null) {
+            return null;
+        }
         log.debug("Selecting token for provider: {}", providerId);
         List<ProviderToken> tokens = routeCacheService.getProviderTokens(providerId);
         if (tokens == null || tokens.isEmpty()) {
             return null;
         }
 
-        List<ProviderToken> availableTokens = tokens.stream()
-                .filter(this::isAvailable)
-                .collect(Collectors.toList());
-        if (availableTokens.isEmpty()) {
-            return null;
+        LocalDateTime now = LocalDateTime.now();
+        ProviderToken selected = null;
+        for (ProviderToken token : tokens) {
+            if (!isAvailable(token, now)) {
+                continue;
+            }
+            if (isBetterCandidate(token, selected)) {
+                selected = token;
+            }
         }
-
-        ProviderToken selected = availableTokens.stream()
-                .sorted(Comparator
-                        .comparingLong(this::remainingQuota).reversed()
-                        .thenComparing(ProviderToken::getLastUsedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
-                        .thenComparing(token -> token.getId() == null ? Long.MAX_VALUE : token.getId()))
-                .findFirst()
-                .orElse(null);
         if (selected == null) {
             return null;
         }
 
         // Keep routing hot path read-heavy: update in-memory last-used instead of DB per request.
-        LocalDateTime now = LocalDateTime.now();
         selected.setLastUsedAt(now);
         routeCacheService.touchProviderToken(selected.getId(), now);
         log.debug("Selected token: {} for provider: {}", selected.getId(), providerId);
         return selected;
     }
 
-    private boolean isAvailable(ProviderToken token) {
+    private boolean isAvailable(ProviderToken token, LocalDateTime now) {
         if (token == null) {
             return false;
         }
@@ -76,7 +70,7 @@ public class ProviderTokenSelectService {
             return false;
         }
         LocalDateTime expireTime = token.getExpireTime();
-        if (expireTime != null && LocalDateTime.now().isAfter(expireTime)) {
+        if (expireTime != null && now.isAfter(expireTime)) {
             return false;
         }
         Long quotaTotal = token.getQuotaTotal();
@@ -86,6 +80,9 @@ public class ProviderTokenSelectService {
 
     @Transactional
     public void updateQuotaUsed(Long tokenId, Long usedTokens) {
+        if (tokenId == null || usedTokens == null || usedTokens <= 0) {
+            return;
+        }
         ProviderToken token = providerTokenMapper.selectById(tokenId);
         if (token == null) {
             return;
@@ -109,5 +106,44 @@ public class ProviderTokenSelectService {
         }
         long used = token.getQuotaUsed() == null ? 0L : token.getQuotaUsed();
         return total - used;
+    }
+
+    private boolean isBetterCandidate(ProviderToken candidate, ProviderToken currentBest) {
+        if (candidate == null) {
+            return false;
+        }
+        if (currentBest == null) {
+            return true;
+        }
+
+        long candidateRemaining = remainingQuota(candidate);
+        long bestRemaining = remainingQuota(currentBest);
+        if (candidateRemaining != bestRemaining) {
+            return candidateRemaining > bestRemaining;
+        }
+
+        int lastUsedCompare = compareLastUsed(candidate.getLastUsedAt(), currentBest.getLastUsedAt());
+        if (lastUsedCompare != 0) {
+            return lastUsedCompare < 0;
+        }
+
+        return normalizeId(candidate.getId()) < normalizeId(currentBest.getId());
+    }
+
+    private int compareLastUsed(LocalDateTime candidate, LocalDateTime best) {
+        if (candidate == null && best == null) {
+            return 0;
+        }
+        if (candidate == null) {
+            return -1;
+        }
+        if (best == null) {
+            return 1;
+        }
+        return candidate.compareTo(best);
+    }
+
+    private long normalizeId(Long id) {
+        return id == null ? Long.MAX_VALUE : id;
     }
 }

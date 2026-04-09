@@ -40,6 +40,55 @@ const handleCopy = async (text, section) => {
 }
 
 const baseUrl = 'https://ai.xlinks.site/v1/'
+
+const pythonCode = `from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_API_KEY",
+    base_url="${baseUrl}"
+)
+
+response = client.chat.completions.create(
+    model="gpt-5.2",
+    messages=[
+        {"role": "user", "content": "你好，请介绍一下你自己"}
+    ]
+)
+
+print(response.choices[0].message.content)`
+
+const nodejsCode = `import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'YOUR_API_KEY',
+  baseURL: '${baseUrl}'
+});
+
+async function main() {
+  const response = await client.chat.completions.create({
+    model: 'gpt-5.2',
+    messages: [
+      { role: 'user', content: '你好，请介绍一下你自己' }
+    ]
+  });
+  
+  console.log(response.choices[0].message.content);
+}
+
+main();`
+
+const curlCode = `curl ${baseUrl}chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "model": "gpt-5.2",
+    "messages": [
+      {
+        "role": "user",
+        "content": "你好，请介绍一下你自己"
+      }
+    ]
+  }'`
 </script>
 
 <template>
@@ -146,7 +195,7 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)</pre>
             <button
-              @click="handleCopy(`from openai import OpenAI\n\nclient = OpenAI(\n    api_key='YOUR_API_KEY',\n    base_url='${baseUrl}'\n)\n\nresponse = client.chat.completions.create(\n    model='claude-sonnet-4-5',\n    messages=[\n        {'role': 'user', 'content': '你好，请介绍一下你自己'}\n    ]\n)\n\nprint(response.choices[0].message.content)`, 'python')"
+              @click="handleCopy(pythonCode, 'python')"
               class="absolute top-3 right-3 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Check v-if="copiedSection === 'python'" class="w-4 h-4 text-green-400" />
@@ -182,7 +231,7 @@ async function main() {
 
 main();</pre>
             <button
-              @click="handleCopy(`import OpenAI from 'openai';\n\nconst client = new OpenAI({\n  apiKey: 'YOUR_API_KEY',\n  baseURL: '${baseUrl}'\n});\n\nasync function main() {\n  const response = await client.chat.completions.create({\n    model: 'claude-sonnet-4-5',\n    messages: [\n      { role: 'user', content: '你好，请介绍一下你自己' }\n    ]\n  });\n  \n  console.log(response.choices[0].message.content);\n}\n\nmain();`, 'nodejs')"
+              @click="handleCopy(nodejsCode, 'nodejs')"
               class="absolute top-3 right-3 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Check v-if="copiedSection === 'nodejs'" class="w-4 h-4 text-green-400" />
@@ -211,7 +260,7 @@ main();</pre>
     ]
   }'</pre>
             <button
-              @click="handleCopy(`curl ${baseUrl}chat/completions \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -d '{\n    \"model\": \"claude-sonnet-4-5\",\n    \"messages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"你好，请介绍一下你自己\"\n      }\n    ]\n  }'`, 'curl')"
+              @click="handleCopy(curlCode, 'curl')"
               class="absolute top-3 right-3 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Check v-if="copiedSection === 'curl'" class="w-4 h-4 text-green-400" />

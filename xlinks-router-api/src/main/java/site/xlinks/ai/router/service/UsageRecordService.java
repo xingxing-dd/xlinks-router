@@ -45,7 +45,7 @@ public class UsageRecordService {
         }
     }
 
-    @Async
+    @Async("usageTaskExecutor")
     public void recordAsync(ProviderInvokeContext context,
                             UsageMetrics usageMetrics,
                             long latencyMs,
