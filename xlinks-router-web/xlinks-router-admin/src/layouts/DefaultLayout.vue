@@ -70,6 +70,7 @@ const navGroups = computed(() => [
       { path: '/subscriptions', label: t('nav.subscriptions'), icon: ReceiptText },
       { path: '/activation-codes', label: t('nav.activationCodes'), icon: Ticket },
       { path: '/activation-usage', label: t('nav.activationUsage'), icon: History },
+      { path: '/usage-records', label: 'Token使用记录', icon: History },
     ],
   },
   {

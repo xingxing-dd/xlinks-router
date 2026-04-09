@@ -10,6 +10,7 @@ import Plans from '../views/plans/index.vue'
 import Subscriptions from '../views/subscriptions/index.vue'
 import ActivationCodes from '../views/activation-codes/index.vue'
 import ActivationUsage from '../views/activation-usage/index.vue'
+import UsageRecords from '../views/usage-records/index.vue'
 import PaymentMethods from '../views/payment-methods/index.vue'
 import PayLinks from '../views/pay-links/index.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
@@ -32,6 +33,7 @@ const routes = [
       { path: 'subscriptions', name: 'Subscriptions', component: Subscriptions },
       { path: 'activation-codes', name: 'ActivationCodes', component: ActivationCodes },
       { path: 'activation-usage', name: 'ActivationUsage', component: ActivationUsage },
+      { path: 'usage-records', name: 'UsageRecords', component: UsageRecords },
       { path: 'payment-methods', name: 'PaymentMethods', component: PaymentMethods },
       { path: 'pay-links', name: 'PayLinks', component: PayLinks },
       { path: 'tokens', redirect: '/customer-tokens' },

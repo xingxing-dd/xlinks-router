@@ -276,6 +276,10 @@ export default {
     features: {
       defaultModel: 'Codex',
       allowedModels: 'Available models: {models}',
+      allowedModelsOverflow: 'Available models: {models} and {count} total',
+      viewModelsDetail: 'View details',
+      modelsDetailTitle: 'Available Models',
+      modelsDetailTip: 'Click a model name to copy',
       totalQuota: 'Total quota: ${quota}',
       dailyQuota: 'Daily quota: ${quota}',
       dailyQuotaCarryOver: 'Daily quota: ${quota} + yesterday carry-over',

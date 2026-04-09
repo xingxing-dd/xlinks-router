@@ -1,9 +1,10 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, Box, CreditCard, Calendar, Clock, ChevronDown, Ticket, History, Eye } from 'lucide-vue-next'
 import { usePlans } from '@/composables/usePlans'
 import { formatCurrency } from '@/utils/formatters'
+import { toast } from '@/utils/toast'
 
 const { t } = useI18n()
 
@@ -34,8 +35,59 @@ const {
 const paymentMethods = [
   { id: 'alipay', name: t('plans.alipay'), icon: '💳', isDefault: true },
   { id: 'wechat', name: t('plans.wechat'), icon: '💚', enabled: false, isDefault: false },
-  { id: 'third-party', name: t('plans.thirdParty'), icon: '🌐', enabled: true, isDefault: true },
+  //{ id: 'third-party', name: t('plans.thirdParty'), icon: '🌐', enabled: true, isDefault: false },
 ]
+
+const MAX_ALLOWED_MODELS_PREVIEW = 3
+const isModelsDetailModalOpen = ref(false)
+const selectedModelsPlan = ref(null)
+
+const getAllowedModels = (plan) => {
+  if (!Array.isArray(plan?.allowedModels)) {
+    return []
+  }
+  return plan.allowedModels
+}
+
+const hasMoreAllowedModels = (plan) => getAllowedModels(plan).length > MAX_ALLOWED_MODELS_PREVIEW
+
+const getAllowedModelsPreview = (plan) => getAllowedModels(plan).slice(0, MAX_ALLOWED_MODELS_PREVIEW)
+
+const getAllowedModelsSummaryText = (plan) => {
+  const models = getAllowedModels(plan)
+  if (models.length === 0) {
+    return t('plans.features.allowedModels', { models: t('plans.features.defaultModel') })
+  }
+  if (models.length <= MAX_ALLOWED_MODELS_PREVIEW) {
+    return t('plans.features.allowedModels', { models: models.join('、') })
+  }
+  return t('plans.features.allowedModelsOverflow', {
+    models: getAllowedModelsPreview(plan).join('、'),
+    count: models.length,
+  })
+}
+
+const openModelsDetail = (plan) => {
+  selectedModelsPlan.value = plan
+  isModelsDetailModalOpen.value = true
+}
+
+const closeModelsDetail = () => {
+  isModelsDetailModalOpen.value = false
+  selectedModelsPlan.value = null
+}
+
+const copyModelName = async (modelName) => {
+  try {
+    if (!modelName) {
+      return
+    }
+    await navigator.clipboard.writeText(modelName)
+    toast.success(t('models.copySuccess'), modelName)
+  } catch (error) {
+    toast.error(t('models.copyFailed'), error?.message)
+  }
+}
 
 const isPaymentMethodEnabled = (method) => {
   if (method.id === 'alipay') {
@@ -259,6 +311,22 @@ onMounted(loadPlans)
 
         <div class="p-6">
           <ul class="space-y-3 mb-6">
+            <li class="flex items-start gap-2">
+              <div class="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Check class="w-3 h-3 text-green-600" />
+              </div>
+              <div class="text-sm text-slate-700">
+                <span>{{ getAllowedModelsSummaryText(plan) }}</span>
+                <button
+                  v-if="hasMoreAllowedModels(plan)"
+                  type="button"
+                  class="ml-2 text-primary hover:text-primary/80 underline underline-offset-2"
+                  @click.stop="openModelsDetail(plan)"
+                >
+                  {{ t('plans.features.viewModelsDetail') }}
+                </button>
+              </div>
+            </li>
             <li v-for="(feature, idx) in plan.features" :key="idx" class="flex items-start gap-2">
               <div class="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Check class="w-3 h-3 text-green-600" />
@@ -607,6 +675,49 @@ onMounted(loadPlans)
           <button
             @click="isHistoryDetailModalOpen = false"
             class="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+          >
+            {{ t('plans.close') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 可用模型详情模态框 -->
+    <div v-if="isModelsDetailModalOpen && selectedModelsPlan" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+      <div class="bg-white rounded-3xl max-w-xl w-full p-8 shadow-2xl">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-12 h-12 bg-gradient-icon rounded-2xl flex items-center justify-center shadow-lg">
+            <Box class="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-slate-900">{{ t('plans.features.modelsDetailTitle') }}</h2>
+            <p class="text-sm text-slate-500">{{ selectedModelsPlan.name }}</p>
+          </div>
+        </div>
+
+        <div class="mb-4 text-sm text-slate-600">
+          {{ t('plans.features.modelsDetailTip') }}
+        </div>
+
+        <div class="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 p-4 mb-6">
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="modelName in getAllowedModels(selectedModelsPlan)"
+              :key="modelName"
+              type="button"
+              class="px-3 py-1.5 rounded-full border border-slate-300 bg-white text-slate-700 text-sm hover:border-primary hover:text-primary transition-colors"
+              @click="copyModelName(modelName)"
+            >
+              {{ modelName }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <button
+            type="button"
+            class="px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+            @click="closeModelsDetail"
           >
             {{ t('plans.close') }}
           </button>

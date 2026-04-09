@@ -278,6 +278,10 @@
     features: {
       defaultModel: 'Codex',
       allowedModels: '仅可用 {models}',
+      allowedModelsOverflow: '仅可用{models}等{count}个模型',
+      viewModelsDetail: '查看详情',
+      modelsDetailTitle: '可用模型详情',
+      modelsDetailTip: '点击模型名称可复制',
       totalQuota: '总共可用 ${quota} 额度',
       dailyQuota: '每日可用 ${quota} 额度',
       dailyQuotaCarryOver: '每日可用 ${quota} + 昨日未用完额度',

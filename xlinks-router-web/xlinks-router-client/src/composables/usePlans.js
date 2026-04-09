@@ -39,26 +39,11 @@ const DEFAULT_PLANS = [
   },
 ]
 
-const ALIPAY_ENABLED_PLAN_IDS = new Set(['10005'])
-
 export function usePlans() {
   const { t } = useI18n()
 
-  const formatAllowedModels = (models) => {
-    if (!Array.isArray(models) || models.length === 0) {
-      return t('plans.features.defaultModel')
-    }
-    return models.join(', ')
-  }
-
   const buildPlanFeatures = (plan) => {
     const features = []
-
-    features.push(
-      t('plans.features.allowedModels', {
-        models: formatAllowedModels(plan.allowedModels),
-      }),
-    )
 
     features.push(
       t('plans.features.totalQuota', {
@@ -133,7 +118,7 @@ export function usePlans() {
 
   const currentSubscription = computed(() => activeSubscriptions.value[currentSubscriptionIndex.value] || emptySubscription)
   const selectedPlanData = computed(() => codexPlans.value.find((p) => p.id === selectedPlan.value))
-  const isAlipayAvailableForSelectedPlan = computed(() => ALIPAY_ENABLED_PLAN_IDS.has(String(selectedPlan.value)))
+  const isAlipayAvailableForSelectedPlan = computed(() => true)
 
   const loadPlans = async () => {
     loading.value = true
@@ -171,9 +156,7 @@ export function usePlans() {
 
   const handlePurchasePlan = (planId) => {
     selectedPlan.value = planId
-    if (!ALIPAY_ENABLED_PLAN_IDS.has(String(planId)) && selectedPayment.value === 'alipay') {
-      selectedPayment.value = 'third-party'
-    }
+    selectedPayment.value = 'alipay'
     isCheckoutModalOpen.value = true
   }
 

@@ -78,6 +78,14 @@ const parseAllowedModels = (value) => {
   }
 }
 
+const selectAllModels = () => {
+  form.selectedModels = Array.from(new Set(modelOptions.value.map((item) => item.modelCode).filter(Boolean)))
+}
+
+const clearSelectedModels = () => {
+  form.selectedModels = []
+}
+
 const loadPlans = async () => {
   loading.value = true
   try {
@@ -420,6 +428,10 @@ onMounted(async () => {
           <div class="md:col-span-2">
             <label class="text-sm text-slate-500">可用模型范围</label>
             <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div v-if="modelOptions.length" class="mb-3 flex items-center justify-end gap-2">
+                <button type="button" class="btn-outline" @click="selectAllModels">全选</button>
+                <button type="button" class="btn-outline" @click="clearSelectedModels">全不选</button>
+              </div>
               <div v-if="modelOptions.length" class="grid gap-3 md:grid-cols-3">
                 <label
                   v-for="model in modelOptions"

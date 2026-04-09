@@ -198,7 +198,7 @@ main();</pre>
             直接 HTTP 请求
           </h3>
           <div class="relative bg-slate-900 rounded-xl p-4 font-mono text-sm overflow-x-auto">
-            <pre class="text-slate-300">curl {{ baseUrl }}/chat/completions \
+            <pre class="text-slate-300">curl {{ baseUrl }}chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -211,7 +211,7 @@ main();</pre>
     ]
   }'</pre>
             <button
-              @click="handleCopy(`curl ${baseUrl}/chat/completions \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -d '{\n    'model': 'claude-sonnet-4-5',\n    'messages': [\n      {\n        'role': 'user',\n        'content': '你好，请介绍一下你自己'\n      }\n    ]\n  }'`, 'curl')"
+              @click="handleCopy(`curl ${baseUrl}chat/completions \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_API_KEY' \\\n  -d '{\n    \"model\": \"claude-sonnet-4-5\",\n    \"messages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"你好，请介绍一下你自己\"\n      }\n    ]\n  }'`, 'curl')"
               class="absolute top-3 right-3 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Check v-if="copiedSection === 'curl'" class="w-4 h-4 text-green-400" />

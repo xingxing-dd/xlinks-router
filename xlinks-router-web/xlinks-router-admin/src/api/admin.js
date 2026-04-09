@@ -70,3 +70,7 @@ export const getPayLinkDetail = (id) => request(`/api/pay-links/${id}`)
 export const updatePayLink = (id, body) => request(`/api/pay-links/${id}`, { method: 'PUT', body })
 export const updatePayLinkStatus = (id, status) => request(`/api/pay-links/${id}/status`, { method: 'PATCH', query: { status } })
 export const deletePayLink = (id) => request(`/api/pay-links/${id}`, { method: 'DELETE' })
+
+export const listUsageRecords = (params) => request('/api/usage-records', { query: params })
+export const getUsageAccountSummary = (params) => request('/api/usage-records/summary/account', { query: params })
+export const getUsageModelSummary = (params) => request('/api/usage-records/summary/model', { query: params })
