@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS `plans` (
   `duration_days` int(11) NOT NULL,
   `daily_quota` decimal(12,2) NOT NULL,
   `total_quota` decimal(12,2) NOT NULL,
+  `max_purchase_count` int(11) DEFAULT NULL COMMENT 'Maximum purchase count per account, NULL means unlimited',
   `allowed_models` json DEFAULT NULL,
   `status` tinyint(4) NOT NULL DEFAULT '1',
   `visible` tinyint(4) NOT NULL DEFAULT '1',
@@ -271,6 +272,7 @@ CREATE TABLE IF NOT EXISTS `customer_plans` (
   PRIMARY KEY (`id`),
   KEY `idx_account_id` (`account_id`),
   KEY `idx_plan_id` (`plan_id`),
+  KEY `idx_account_plan_source` (`account_id`,`plan_id`,`source`),
   KEY `idx_status` (`status`),
   KEY `idx_plan_expire_time` (`plan_expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

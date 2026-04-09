@@ -44,8 +44,9 @@ public class PlanController {
                                            @RequestParam(defaultValue = "10") Integer pageSize,
                                            @RequestParam(required = false) String planName,
                                            @RequestParam(required = false) Integer status,
-                                           @RequestParam(required = false) Integer visible) {
-        var pageResult = planService.pageQuery(page, pageSize, planName, status, visible);
+                                           @RequestParam(required = false) Integer visible,
+                                           @RequestParam(required = false) Long accountId) {
+        var pageResult = planService.pageQuery(page, pageSize, planName, status, visible, accountId);
         return Result.success(PageResult.of(
                 pageResult.getRecords(),
                 pageResult.getTotal(),

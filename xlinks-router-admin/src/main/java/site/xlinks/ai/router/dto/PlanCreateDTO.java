@@ -40,6 +40,10 @@ public class PlanCreateDTO {
     @DecimalMin(value = "0.00", message = "Total quota must not be negative")
     private BigDecimal totalQuota;
 
+    @Schema(description = "Max purchase count per account; null means unlimited")
+    @Min(value = 1, message = "Max purchase count must be at least 1")
+    private Integer maxPurchaseCount;
+
     @Schema(description = "Allowed model codes in JSON array format")
     private String allowedModels;
 

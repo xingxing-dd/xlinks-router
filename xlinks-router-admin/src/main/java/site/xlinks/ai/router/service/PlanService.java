@@ -53,12 +53,21 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
     private final ModelMapper modelMapper;
     private final ObjectMapper objectMapper;
 
-    public IPage<PlanVO> pageQuery(Integer page, Integer pageSize, String planName, Integer status, Integer visible) {
+    public IPage<PlanVO> pageQuery(Integer page,
+                                   Integer pageSize,
+                                   String planName,
+                                   Integer status,
+                                   Integer visible,
+                                   Long accountId) {
         LambdaQueryWrapper<Plan> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(planName), Plan::getPlanName, planName)
                 .eq(status != null, Plan::getStatus, status)
                 .eq(visible != null, Plan::getVisible, visible)
                 .orderByDesc(Plan::getCreatedAt);
+        if (accountId != null) {
+            List<Long> exceededPlanIds = baseMapper.selectExceededPlanIdsByAccount(accountId);
+            wrapper.notIn(exceededPlanIds != null && !exceededPlanIds.isEmpty(), Plan::getId, exceededPlanIds);
+        }
 
         Page<Plan> entityPage = this.page(new Page<>(page, pageSize), wrapper);
         List<PlanVO> records = enrich(entityPage.getRecords());
@@ -81,11 +90,13 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         plan.setDurationDays(dto.getDurationDays());
         plan.setDailyQuota(defaultDecimal(dto.getDailyQuota()));
         plan.setTotalQuota(defaultDecimal(dto.getTotalQuota()));
+        plan.setMaxPurchaseCount(dto.getMaxPurchaseCount());
         plan.setAllowedModels(normalizeAllowedModels(dto.getAllowedModels()));
         plan.setStatus(normalizeBinaryStatus(dto.getStatus(), "Plan status"));
         plan.setVisible(normalizeBinaryStatus(dto.getVisible(), "Plan visibility"));
         plan.setRemark(dto.getRemark());
         validateQuota(plan.getDailyQuota(), plan.getTotalQuota());
+        validateMaxPurchaseCount(plan.getMaxPurchaseCount());
         super.save(plan);
         syncPayLink(plan.getId(), dto.getPayUrl(), dto.getPayLinkStatus());
         return getDetail(plan.getId());
@@ -111,6 +122,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         if (dto.getTotalQuota() != null) {
             plan.setTotalQuota(defaultDecimal(dto.getTotalQuota()));
         }
+        // null means unlimited. update API uses full-form submission, so allow explicit clear.
+        plan.setMaxPurchaseCount(dto.getMaxPurchaseCount());
         if (dto.getAllowedModels() != null) {
             plan.setAllowedModels(normalizeAllowedModels(dto.getAllowedModels()));
         }
@@ -127,6 +140,7 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         BigDecimal dailyQuota = plan.getDailyQuota() != null ? plan.getDailyQuota() : existing.getDailyQuota();
         BigDecimal totalQuota = plan.getTotalQuota() != null ? plan.getTotalQuota() : existing.getTotalQuota();
         validateQuota(dailyQuota, totalQuota);
+        validateMaxPurchaseCount(plan.getMaxPurchaseCount());
         super.updateById(plan);
 
         if (dto.getPayUrl() != null || dto.getPayLinkStatus() != null) {
@@ -223,6 +237,15 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         }
         if (totalQuota.compareTo(dailyQuota) < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Total quota must be greater than or equal to daily quota");
+        }
+    }
+
+    private void validateMaxPurchaseCount(Integer maxPurchaseCount) {
+        if (maxPurchaseCount == null) {
+            return;
+        }
+        if (maxPurchaseCount < 1) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Max purchase count must be at least 1");
         }
     }
 

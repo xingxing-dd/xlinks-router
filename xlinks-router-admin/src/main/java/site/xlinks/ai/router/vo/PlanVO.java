@@ -25,6 +25,8 @@ public class PlanVO {
 
     private BigDecimal totalQuota;
 
+    private Integer maxPurchaseCount;
+
     private String allowedModels;
 
     private Integer status;

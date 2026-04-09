@@ -51,7 +51,8 @@ public class PlanController {
 
     @GetMapping("/plans")
     public Result<List<PlanItemResponse>> getPlans() {
-        List<Plan> plans = planService.listVisiblePlans();
+        Long accountId = CustomerAccountContext.getAccountId();
+        List<Plan> plans = planService.listVisiblePlans(accountId);
         List<PlanItemResponse> responses = plans.stream()
                 .map(this::toPlanResponse)
                 .toList();

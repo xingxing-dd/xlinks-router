@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * 套餐下单服务
+ * Plan order service.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,16 +32,17 @@ public class PlanOrderService {
     public PaymentResult createOrder(String planId, String paymentMethod, Long accountId) {
         Plan plan = planMapper.selectById(planId);
         if (plan == null || plan.getStatus() == null || plan.getStatus() == 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "套餐不存在或已下架");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Plan does not exist or is disabled");
         }
+        validatePurchaseLimit(plan, accountId);
 
         PaymentStrategy strategy = paymentStrategyFactory.getStrategy(paymentMethod);
         if (strategy == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "支付方式不支持");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Unsupported payment method");
         }
 
         String orderId = generateOrderId(plan.getId());
-        log.info("购买套餐 orderId,{}", orderId);
+        log.info("Create plan order, orderId={}", orderId);
         LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(DEFAULT_ORDER_EXPIRE_MINUTES);
         PaymentRequest request = new PaymentRequest(orderId, accountId, plan, plan.getPrice(), paymentMethod, expiredAt);
         return strategy.pay(request);
@@ -57,5 +58,15 @@ public class PlanOrderService {
     private String generateOrderId(Long planId) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         return "PLAN" + planId + timestamp;
+    }
+
+    private void validatePurchaseLimit(Plan plan, Long accountId) {
+        if (plan == null || plan.getMaxPurchaseCount() == null || accountId == null) {
+            return;
+        }
+        long purchaseCount = planMapper.selectPurchaseCountByAccountAndPlan(accountId, plan.getId());
+        if (purchaseCount >= plan.getMaxPurchaseCount()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Current account has reached the purchase limit for this plan");
+        }
     }
 }
