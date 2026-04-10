@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS `models` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `model_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `model_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model_provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Display vendor label, e.g. OPENAI / ANTHROPIC',
   `model_desc` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `input_price` decimal(12,2) DEFAULT NULL,
   `output_price` decimal(12,2) DEFAULT NULL,
@@ -156,6 +157,7 @@ CREATE TABLE IF NOT EXISTS `models` (
   `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_model_code` (`model_code`),
+  KEY `idx_model_provider` (`model_provider`),
   KEY `idx_status` (`status`),
   KEY `idx_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -547,13 +549,13 @@ VALUES
   (2, 'right-codex', 'Right Codex', 'chat/completions', 50, 'openai_cached_tokens', 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
 
 INSERT IGNORE INTO `models`
-  (`id`, `model_name`, `model_code`, `model_desc`, `input_price`, `output_price`, `cache_hit_price`, `context_size`, `status`, `remark`, `create_by`, `update_by`)
+  (`id`, `model_name`, `model_code`, `model_provider`, `model_desc`, `input_price`, `output_price`, `cache_hit_price`, `context_size`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (1, 'DeepSeek V3', 'deepseek-v3', 'DeepSeek V3 chat model', 0.27, 1.10, 0.27, 64000, 1, 'default chat model', 'system', 'system'),
-  (2, 'DeepSeek Chat', 'deepseek-chat', 'DeepSeek Chat model', 0.14, 0.28, 0.14, 32000, 1, 'chat model', 'system', 'system'),
-  (3, 'GPT-5.2', 'gpt-5.2', 'GPT-5.2 chat model', 2.00, 8.00, 0.50, 128000, 1, 'aggregated model', 'system', 'system'),
-  (4, 'GPT-5.3', 'gpt-5.3', 'GPT-5.3 chat model', 3.00, 15.00, 0.75, 128000, 1, 'aggregated model', 'system', 'system'),
-  (5, 'GPT-5.4', 'gpt-5.4', 'GPT-5.4 chat model', 5.00, 20.00, 1.25, 200000, 1, 'aggregated model', 'system', 'system');
+  (1, 'DeepSeek V3', 'deepseek-v3', 'DEEPSEEK', 'DeepSeek V3 chat model', 0.27, 1.10, 0.27, 64000, 1, 'default chat model', 'system', 'system'),
+  (2, 'DeepSeek Chat', 'deepseek-chat', 'DEEPSEEK', 'DeepSeek Chat model', 0.14, 0.28, 0.14, 32000, 1, 'chat model', 'system', 'system'),
+  (3, 'GPT-5.2', 'gpt-5.2', 'OPENAI', 'GPT-5.2 chat model', 2.00, 8.00, 0.50, 128000, 1, 'aggregated model', 'system', 'system'),
+  (4, 'GPT-5.3', 'gpt-5.3', 'OPENAI', 'GPT-5.3 chat model', 3.00, 15.00, 0.75, 128000, 1, 'aggregated model', 'system', 'system'),
+  (5, 'GPT-5.4', 'gpt-5.4', 'OPENAI', 'GPT-5.4 chat model', 5.00, 20.00, 1.25, 200000, 1, 'aggregated model', 'system', 'system');
 
 INSERT IGNORE INTO `provider_models`
   (`provider_id`, `model_id`, `provider_model_code`, `provider_model_name`, `status`, `remark`, `create_by`, `update_by`)

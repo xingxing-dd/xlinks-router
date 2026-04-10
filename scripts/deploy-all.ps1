@@ -3,6 +3,8 @@
     [string]$Scope = "all",
     [switch]$DryRun,
     [string]$MavenRepoLocal = "",
+    [string[]]$BackendApps = @(),
+    [string[]]$FrontendApps = @(),
     [switch]$SkipBackendBuild,
     [switch]$SkipBackendDeploy,
     [switch]$SkipFrontendBuild,
@@ -48,7 +50,7 @@ $BackendServices = @(
     }
 )
 
-$FrontendApps = @(
+$FrontendAppConfigs = @(
     @{
         Name = "client"
         AppDir = "xlinks-router-web/xlinks-router-client"
@@ -99,6 +101,56 @@ function Ensure-Command {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "Required command not found: $Name"
     }
+}
+
+function Normalize-NameList {
+    param([object[]]$Values)
+
+    $result = @()
+    if ($null -eq $Values) {
+        return $result
+    }
+
+    foreach ($value in $Values) {
+        if ($null -eq $value) {
+            continue
+        }
+
+        $parts = $value.ToString().Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)
+        foreach ($part in $parts) {
+            $name = $part.Trim().ToLowerInvariant()
+            if (-not [string]::IsNullOrWhiteSpace($name) -and ($result -notcontains $name)) {
+                $result += $name
+            }
+        }
+    }
+
+    return $result
+}
+
+function Select-ConfiguredItems {
+    param(
+        [object[]]$Items,
+        [string[]]$Names,
+        [string]$ItemType
+    )
+
+    if (-not $Items -or $Items.Count -eq 0) {
+        return @()
+    }
+
+    if (-not $Names -or $Names.Count -eq 0) {
+        return $Items
+    }
+
+    $availableNames = $Items | ForEach-Object { $_.Name.ToLowerInvariant() }
+    $unknown = @($Names | Where-Object { $availableNames -notcontains $_ })
+    if ($unknown.Count -gt 0) {
+        $expected = ($availableNames | Sort-Object) -join ", "
+        throw "Unknown ${ItemType}: $($unknown -join ', '). Available: $expected"
+    }
+
+    return @($Items | Where-Object { $Names -contains $_.Name.ToLowerInvariant() })
 }
 
 function Resolve-PuttyTool {
@@ -244,10 +296,16 @@ function Restart-RemoteCompose {
 function Run-BackendPipeline {
     param(
         [string]$PlinkPath,
-        [string]$PscpPath
+        [string]$PscpPath,
+        [object[]]$Services
     )
 
     Write-Step "Backend pipeline"
+
+    if (-not $Services -or $Services.Count -eq 0) {
+        Write-Host "No backend service selected. Skip backend pipeline." -ForegroundColor Yellow
+        return
+    }
 
     if (-not $SkipBackendBuild) {
         Write-Step "Install root parent pom"
@@ -257,7 +315,7 @@ function Run-BackendPipeline {
         $commonDir = Join-Path $RepoRoot "xlinks-router-common"
         Invoke-LocalCommand -FilePath "mvn" -Arguments @("clean", "install", "-Dmaven.repo.local=$MavenRepoLocal") -WorkingDirectory $commonDir
 
-        foreach ($svc in $BackendServices) {
+        foreach ($svc in $Services) {
             $modulePath = Join-Path $RepoRoot $svc.ModuleDir
             Write-Step "Build backend module: $($svc.Name)"
             Invoke-LocalCommand -FilePath "mvn" -Arguments @("clean", "package", "-Dmaven.repo.local=$MavenRepoLocal") -WorkingDirectory $modulePath
@@ -269,7 +327,7 @@ function Run-BackendPipeline {
         return
     }
 
-    foreach ($svc in $BackendServices) {
+    foreach ($svc in $Services) {
         $modulePath = Join-Path $RepoRoot $svc.ModuleDir
         $jarPath = Get-LatestJar -ModuleAbsolutePath $modulePath
 
@@ -284,12 +342,18 @@ function Run-BackendPipeline {
 function Run-FrontendPipeline {
     param(
         [string]$PlinkPath,
-        [string]$PscpPath
+        [string]$PscpPath,
+        [object[]]$Apps
     )
 
     Write-Step "Frontend pipeline"
 
-    foreach ($app in $FrontendApps) {
+    if (-not $Apps -or $Apps.Count -eq 0) {
+        Write-Host "No frontend app selected. Skip frontend pipeline." -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($app in $Apps) {
         $appPath = Join-Path $RepoRoot $app.AppDir
 
         if (-not $SkipFrontendBuild) {
@@ -331,8 +395,31 @@ try {
     Ensure-Command -Name "mvn"
     Ensure-Command -Name "npm.cmd"
 
-    $needBackendRemote = ($Scope -eq "all" -or $Scope -eq "backend") -and (-not $SkipBackendDeploy)
-    $needFrontendRemote = ($Scope -eq "all" -or $Scope -eq "frontend") -and (-not $SkipFrontendDeploy)
+    $selectedBackendNames = Normalize-NameList -Values $BackendApps
+    $selectedFrontendNames = Normalize-NameList -Values $FrontendApps
+
+    $selectedBackendServices = Select-ConfiguredItems -Items $BackendServices -Names $selectedBackendNames -ItemType "backend app"
+    $selectedFrontendApps = Select-ConfiguredItems -Items $FrontendAppConfigs -Names $selectedFrontendNames -ItemType "frontend app"
+
+    $runBackend = ($Scope -eq "all" -or $Scope -eq "backend") -and $selectedBackendServices.Count -gt 0
+    $runFrontend = ($Scope -eq "all" -or $Scope -eq "frontend") -and $selectedFrontendApps.Count -gt 0
+
+    if (-not $runBackend -and ($Scope -eq "all" -or $Scope -eq "backend")) {
+        Write-Host "No backend app selected under current scope, backend pipeline will be skipped." -ForegroundColor Yellow
+    }
+    if (-not $runFrontend -and ($Scope -eq "all" -or $Scope -eq "frontend")) {
+        Write-Host "No frontend app selected under current scope, frontend pipeline will be skipped." -ForegroundColor Yellow
+    }
+
+    if ($runBackend) {
+        Write-Host ("Selected backend apps : " + (($selectedBackendServices | ForEach-Object { $_.Name }) -join ", "))
+    }
+    if ($runFrontend) {
+        Write-Host ("Selected frontend apps: " + (($selectedFrontendApps | ForEach-Object { $_.Name }) -join ", "))
+    }
+
+    $needBackendRemote = $runBackend -and (-not $SkipBackendDeploy)
+    $needFrontendRemote = $runFrontend -and (-not $SkipFrontendDeploy)
     $needRemoteTools = $needBackendRemote -or $needFrontendRemote
 
     $plinkPath = $null
@@ -359,12 +446,12 @@ try {
         Write-Host "Using pscp : $pscpPath"
     }
 
-    if ($Scope -eq "all" -or $Scope -eq "backend") {
-        Run-BackendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath
+    if ($runBackend) {
+        Run-BackendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath -Services $selectedBackendServices
     }
 
-    if ($Scope -eq "all" -or $Scope -eq "frontend") {
-        Run-FrontendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath
+    if ($runFrontend) {
+        Run-FrontendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath -Apps $selectedFrontendApps
     }
 
     Write-Step "All done"

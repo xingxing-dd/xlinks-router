@@ -21,6 +21,10 @@ public class ModelCreateDTO {
     @NotBlank(message = "Model code must not be blank")
     private String modelCode;
 
+    @Schema(description = "Model vendor label for display, e.g. OPENAI / ANTHROPIC", required = true)
+    @NotBlank(message = "Model provider must not be blank")
+    private String modelProvider;
+
     @Schema(description = "Model description")
     private String modelDesc;
 

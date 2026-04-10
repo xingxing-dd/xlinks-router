@@ -38,6 +38,7 @@ public class ModelController {
         Model model = new Model();
         model.setModelName(dto.getModelName());
         model.setModelCode(dto.getModelCode());
+        model.setModelProvider(dto.getModelProvider());
         model.setModelDesc(dto.getModelDesc());
         model.setInputPrice(dto.getInputPrice());
         model.setOutputPrice(dto.getOutputPrice());
@@ -77,6 +78,9 @@ public class ModelController {
         model.setId(id);
         if (dto.getModelName() != null) {
             model.setModelName(dto.getModelName());
+        }
+        if (dto.getModelProvider() != null) {
+            model.setModelProvider(dto.getModelProvider());
         }
         if (dto.getModelDesc() != null) {
             model.setModelDesc(dto.getModelDesc());

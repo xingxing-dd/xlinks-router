@@ -15,6 +15,9 @@ public class ModelUpdateDTO {
     @Schema(description = "Model name")
     private String modelName;
 
+    @Schema(description = "Model vendor label for display, e.g. OPENAI / ANTHROPIC")
+    private String modelProvider;
+
     @Schema(description = "Model description")
     private String modelDesc;
 

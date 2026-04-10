@@ -17,10 +17,12 @@ import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatNullable, formatStatus } from '@/utils/format'
 
 const toastStore = useToastStore()
+
 const activeTab = ref('models')
 const pageSize = 50
 const providers = ref([])
 const modelOptions = ref([])
+const modelProviderOptions = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'DEEPSEEK', 'MISTRAL', 'META', 'QWEN', 'XAI', 'OTHER']
 
 const modelLoading = ref(false)
 const modelSubmitting = ref(false)
@@ -33,6 +35,7 @@ const currentModelId = ref(null)
 const modelForm = reactive({
   modelName: '',
   modelCode: '',
+  modelProvider: 'OPENAI',
   modelDesc: '',
   inputPrice: '',
   outputPrice: '',
@@ -87,7 +90,7 @@ const loadModels = async () => {
     modelRecords.value = data.records || []
     modelTotal.value = data.total || 0
   } catch (error) {
-    toastStore.push(error.message || '加载标准模型失败', 'error')
+    toastStore.push(error.message || '加载模型失败', 'error')
   } finally {
     modelLoading.value = false
   }
@@ -100,7 +103,7 @@ const loadMappings = async () => {
     mappingRecords.value = data.records || []
     mappingTotal.value = data.total || 0
   } catch (error) {
-    toastStore.push(error.message || '加载服务商映射失败', 'error')
+    toastStore.push(error.message || '加载服务商模型映射失败', 'error')
   } finally {
     mappingLoading.value = false
   }
@@ -109,6 +112,7 @@ const loadMappings = async () => {
 const resetModelForm = () => Object.assign(modelForm, {
   modelName: '',
   modelCode: '',
+  modelProvider: 'OPENAI',
   modelDesc: '',
   inputPrice: '',
   outputPrice: '',
@@ -140,6 +144,7 @@ const openModelEdit = (record) => {
   Object.assign(modelForm, {
     modelName: record.modelName || '',
     modelCode: record.modelCode || '',
+    modelProvider: record.modelProvider || 'OPENAI',
     modelDesc: record.modelDesc || '',
     inputPrice: record.inputPrice ?? '',
     outputPrice: record.outputPrice ?? '',
@@ -152,15 +157,16 @@ const openModelEdit = (record) => {
 }
 
 const submitModel = async () => {
-  if (!modelForm.modelName || (modelDialogMode.value === 'create' && !modelForm.modelCode)) {
-    toastStore.push('请完整填写模型名称和模型编码', 'warning')
+  if (!modelForm.modelName || (modelDialogMode.value === 'create' && !modelForm.modelCode) || !modelForm.modelProvider) {
+    toastStore.push('请完整填写模型名称、模型编码和模型服务商', 'warning')
     return
   }
   modelSubmitting.value = true
   try {
     const payload = {
-      modelName: modelForm.modelName,
-      modelCode: modelForm.modelCode,
+      modelName: modelForm.modelName.trim(),
+      modelCode: modelForm.modelCode.trim(),
+      modelProvider: modelForm.modelProvider,
       modelDesc: modelForm.modelDesc,
       inputPrice: modelForm.inputPrice === '' ? null : Number(modelForm.inputPrice),
       outputPrice: modelForm.outputPrice === '' ? null : Number(modelForm.outputPrice),
@@ -175,6 +181,7 @@ const submitModel = async () => {
     } else {
       await updateModel(currentModelId.value, {
         modelName: payload.modelName,
+        modelProvider: payload.modelProvider,
         modelDesc: payload.modelDesc,
         inputPrice: payload.inputPrice,
         outputPrice: payload.outputPrice,
@@ -318,7 +325,7 @@ onMounted(async () => {
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">模型管理</h1>
-        <p class="text-slate-500">维护标准模型与服务商映射，统一平台模型配置。</p>
+        <p class="text-slate-500">维护标准模型与服务商映射。</p>
       </div>
       <div class="section-tabs self-start lg:self-auto">
         <button class="tab-button" :class="activeTab === 'models' ? 'tab-button-active' : ''" @click="activeTab = 'models'">标准模型</button>
@@ -364,6 +371,7 @@ onMounted(async () => {
                 <tr>
                   <th>模型编码</th>
                   <th>模型名称</th>
+                  <th>模型服务商</th>
                   <th>价格</th>
                   <th>上下文</th>
                   <th>状态</th>
@@ -373,7 +381,7 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-if="!modelRecords.length && !modelLoading">
-                  <td colspan="7" class="empty-state">暂无标准模型数据</td>
+                  <td colspan="8" class="empty-state">暂无标准模型数据</td>
                 </tr>
                 <tr v-for="record in modelRecords" :key="record.id">
                   <td>{{ record.modelCode }}</td>
@@ -381,6 +389,7 @@ onMounted(async () => {
                     <div class="font-medium text-slate-800">{{ record.modelName }}</div>
                     <div class="text-xs text-slate-400 mt-1">{{ formatNullable(record.modelDesc) }}</div>
                   </td>
+                  <td>{{ record.modelProvider || '-' }}</td>
                   <td>输入 {{ record.inputPrice ?? '-' }} / 输出 {{ record.outputPrice ?? '-' }} / 缓存命中 {{ record.cacheHitPrice ?? '-' }}</td>
                   <td>{{ record.contextSize ?? '-' }}</td>
                   <td>
@@ -422,8 +431,8 @@ onMounted(async () => {
             </select>
           </div>
           <div>
-            <label class="text-sm text-slate-500">模型编码</label>
-            <input v-model.trim="mappingFilters.providerModelCode" class="input mt-2" placeholder="支持按映射编码搜索" />
+            <label class="text-sm text-slate-500">映射编码</label>
+            <input v-model.trim="mappingFilters.providerModelCode" class="input mt-2" placeholder="支持模糊搜索" />
           </div>
           <div>
             <label class="text-sm text-slate-500">状态</label>
@@ -456,8 +465,8 @@ onMounted(async () => {
                 <tr>
                   <th>服务商</th>
                   <th>标准模型</th>
-                  <th>模型编码</th>
-                  <th>模型名称</th>
+                  <th>映射编码</th>
+                  <th>映射名称</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th class="text-right">操作</th>
@@ -513,6 +522,12 @@ onMounted(async () => {
             <input v-model.trim="modelForm.modelCode" class="input mt-2" :disabled="modelDialogMode === 'edit'" placeholder="gpt-5.4" />
           </div>
           <div>
+            <label class="text-sm text-slate-500">模型服务商</label>
+            <select v-model="modelForm.modelProvider" class="input mt-2">
+              <option v-for="provider in modelProviderOptions" :key="provider" :value="provider">{{ provider }}</option>
+            </select>
+          </div>
+          <div>
             <label class="text-sm text-slate-500">上下文长度</label>
             <input v-model="modelForm.contextSize" type="number" class="input mt-2" placeholder="200000" />
           </div>
@@ -526,7 +541,7 @@ onMounted(async () => {
           </div>
           <div>
             <label class="text-sm text-slate-500">缓存命中价格</label>
-            <input v-model="modelForm.cacheHitPrice" type="number" step="0.01" class="input mt-2" placeholder="默认可与输入价格一致" />
+            <input v-model="modelForm.cacheHitPrice" type="number" step="0.01" class="input mt-2" placeholder="可选" />
           </div>
           <div v-if="modelDialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>
@@ -575,11 +590,11 @@ onMounted(async () => {
           </div>
           <div>
             <label class="text-sm text-slate-500">模型编码</label>
-            <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="默认带出标准模型名称，可自行修改" />
+            <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="上游模型编码" />
           </div>
           <div>
             <label class="text-sm text-slate-500">模型名称</label>
-            <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="默认带出标准模型名称，可自行修改" />
+            <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="上游模型展示名" />
           </div>
           <div v-if="mappingDialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>

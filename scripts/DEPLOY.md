@@ -29,6 +29,8 @@ scripts\deploy-all.bat
 
 ## Options
 - `-Scope all|backend|frontend` (default: `all`)
+- `-BackendApps <name[,name...]>` 指定后端应用（可选值：`api`,`client`,`admin`）
+- `-FrontendApps <name[,name...]>` 指定前端应用（可选值：`client`,`admin`）
 - `-DryRun` print commands only, do not execute
 - `-SkipBackendBuild`
 - `-SkipBackendDeploy`
@@ -44,6 +46,15 @@ powershell -File .\scripts\deploy-all.ps1 -DryRun
 
 # Deploy backend only
 powershell -File .\scripts\deploy-all.ps1 -Scope backend
+
+# Deploy only backend api + admin
+powershell -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api,admin
+
+# Deploy only frontend admin
+powershell -File .\scripts\deploy-all.ps1 -Scope frontend -FrontendApps admin
+
+# Deploy mixed target: backend api + frontend admin
+powershell -File .\scripts\deploy-all.ps1 -Scope all -BackendApps api -FrontendApps admin
 
 # Build frontend only, no deploy
 powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy

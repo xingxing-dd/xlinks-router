@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.client.dto.model.AvailableModelItemResponse;
 import site.xlinks.ai.router.client.dto.model.CustomerModelItemResponse;
 import site.xlinks.ai.router.client.dto.model.ModelDetailResponse;
@@ -71,11 +72,17 @@ public class ModelController {
                 .filter(id -> id != null && id > 0)
                 .collect(Collectors.toSet()));
 
+        Map<Long, List<ProviderModel>> availableRoutesByModelId = filterRoutesByActiveProviders(routesByModelId, providerMap.keySet());
+
         List<AvailableModelItemResponse> responses = models.stream()
+                .filter(model -> {
+                    List<ProviderModel> routes = availableRoutesByModelId.get(model.getId());
+                    return routes != null && !routes.isEmpty();
+                })
                 .map(model -> new AvailableModelItemResponse(
                         model.getId(),
                         model.getModelCode() == null ? model.getModelName() : model.getModelCode(),
-                        resolvePreferredProviderName(routesByModelId.get(model.getId()), providerMap),
+                        resolveModelProvider(model),
                         model.getModelDesc(),
                         formatPrice(model.getInputPrice()),
                         formatPrice(model.getOutputPrice()),
@@ -104,6 +111,7 @@ public class ModelController {
                 .collect(Collectors.toSet()));
 
         List<ModelRouteItemResponse> routes = providerModels.stream()
+                .filter(route -> providerMap.containsKey(route.getProviderId()))
                 .map(route -> new ModelRouteItemResponse(
                         route.getProviderId(),
                         resolveProviderName(providerMap.get(route.getProviderId())),
@@ -118,7 +126,7 @@ public class ModelController {
         ModelDetailResponse response = new ModelDetailResponse();
         response.setId(model.getId());
         response.setName(model.getModelCode() == null ? model.getModelName() : model.getModelCode());
-        response.setProvider(routes.isEmpty() ? "" : routes.get(0).getProviderName());
+        response.setProvider(resolveModelProvider(model));
         response.setDescription(model.getModelDesc());
         response.setInputPrice(formatPrice(model.getInputPrice()));
         response.setOutputPrice(formatPrice(model.getOutputPrice()));
@@ -150,7 +158,10 @@ public class ModelController {
         if (providerIds == null || providerIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<Provider> providers = providerMapper.selectBatchIds(providerIds);
+        List<Provider> providers = providerMapper.selectList(new LambdaQueryWrapper<Provider>()
+                .in(Provider::getId, providerIds)
+                .eq(Provider::getStatus, 1)
+                .eq(Provider::getDeleted, 0));
         if (providers == null || providers.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -175,6 +186,30 @@ public class ModelController {
             return "";
         }
         return resolveProviderName(providerMap.get(preferred.getProviderId()));
+    }
+
+    private Map<Long, List<ProviderModel>> filterRoutesByActiveProviders(Map<Long, List<ProviderModel>> routesByModelId,
+                                                                          Set<Long> activeProviderIds) {
+        if (routesByModelId == null || routesByModelId.isEmpty() || activeProviderIds == null || activeProviderIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, List<ProviderModel>> result = new HashMap<>();
+        for (Map.Entry<Long, List<ProviderModel>> entry : routesByModelId.entrySet()) {
+            List<ProviderModel> filteredRoutes = entry.getValue().stream()
+                    .filter(route -> route.getProviderId() != null && activeProviderIds.contains(route.getProviderId()))
+                    .collect(Collectors.toList());
+            if (!filteredRoutes.isEmpty()) {
+                result.put(entry.getKey(), filteredRoutes);
+            }
+        }
+        return result;
+    }
+
+    private String resolveModelProvider(Model model) {
+        if (model == null || !StringUtils.hasText(model.getModelProvider())) {
+            return "";
+        }
+        return model.getModelProvider().trim();
     }
 
     private String resolveProviderName(Provider provider) {

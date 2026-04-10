@@ -24,6 +24,11 @@ public class Model extends BaseEntity {
 
     private String modelCode;
 
+    /**
+     * Display vendor label of the model, e.g. OPENAI / ANTHROPIC.
+     */
+    private String modelProvider;
+
     private String modelDesc;
 
     private BigDecimal inputPrice;

@@ -35,6 +35,7 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
 
     public boolean save(Model model) {
         validateUnique(model.getModelCode(), null);
+        normalizeModelProvider(model, true);
         if (model.getCacheHitPrice() == null) {
             model.setCacheHitPrice(model.getInputPrice());
         }
@@ -45,6 +46,7 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         Model existing = getById(model.getId());
         String modelCode = StringUtils.hasText(model.getModelCode()) ? model.getModelCode() : existing.getModelCode();
         validateUnique(modelCode, model.getId());
+        normalizeModelProvider(model, false);
         if (model.getCacheHitPrice() == null && existing.getCacheHitPrice() == null && model.getInputPrice() != null) {
             model.setCacheHitPrice(model.getInputPrice());
         }
@@ -75,6 +77,25 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         }
         if (this.count(wrapper) > 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Model code already exists under this endpoint");
+        }
+    }
+
+    private void normalizeModelProvider(Model model, boolean required) {
+        if (model == null) {
+            return;
+        }
+        if (required) {
+            if (!StringUtils.hasText(model.getModelProvider())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "Model provider must not be blank");
+            }
+            model.setModelProvider(model.getModelProvider().trim());
+            return;
+        }
+        if (model.getModelProvider() != null) {
+            if (!StringUtils.hasText(model.getModelProvider())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "Model provider must not be blank");
+            }
+            model.setModelProvider(model.getModelProvider().trim());
         }
     }
 }
