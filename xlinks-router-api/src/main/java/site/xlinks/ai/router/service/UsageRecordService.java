@@ -28,12 +28,22 @@ public class UsageRecordService {
                        long latencyMs,
                        String errorCode,
                        String errorMessage) {
+        record(context, usageMetrics, latencyMs, normalizeDurationMs(latencyMs), errorCode, errorMessage);
+    }
+
+    public void record(ProviderInvokeContext context,
+                       UsageMetrics usageMetrics,
+                       long latencyMs,
+                       Integer responseMs,
+                       String errorCode,
+                       String errorMessage) {
         if (context == null) {
             return;
         }
         UsageRecord record = buildRecord(context, usageMetrics);
         record.setResponseStatus(errorCode == null ? 200 : 500);
-        record.setLatencyMs((int) latencyMs);
+        record.setLatencyMs(normalizeDurationMs(latencyMs));
+        record.setResponseMs(responseMs == null ? null : normalizeDurationMs(responseMs.longValue()));
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
         try {
@@ -51,7 +61,17 @@ public class UsageRecordService {
                             long latencyMs,
                             String errorCode,
                             String errorMessage) {
-        record(context, usageMetrics, latencyMs, errorCode, errorMessage);
+        record(context, usageMetrics, latencyMs, normalizeDurationMs(latencyMs), errorCode, errorMessage);
+    }
+
+    @Async("usageTaskExecutor")
+    public void recordAsync(ProviderInvokeContext context,
+                            UsageMetrics usageMetrics,
+                            long latencyMs,
+                            Integer responseMs,
+                            String errorCode,
+                            String errorMessage) {
+        record(context, usageMetrics, latencyMs, responseMs, errorCode, errorMessage);
     }
 
     public void recordError(ProviderInvokeContext context,
@@ -64,7 +84,8 @@ public class UsageRecordService {
         }
         UsageRecord record = buildRecord(context, null);
         record.setResponseStatus(responseStatus);
-        record.setLatencyMs((int) latencyMs);
+        record.setLatencyMs(normalizeDurationMs(latencyMs));
+        record.setResponseMs(null);
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
         try {
@@ -179,5 +200,15 @@ public class UsageRecordService {
         return pricePerMillion
                 .multiply(BigDecimal.valueOf(tokens))
                 .divide(BigDecimal.valueOf(1_000_000), 6, RoundingMode.HALF_UP);
+    }
+
+    private int normalizeDurationMs(long durationMs) {
+        if (durationMs <= 0) {
+            return 0;
+        }
+        if (durationMs > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) durationMs;
     }
 }

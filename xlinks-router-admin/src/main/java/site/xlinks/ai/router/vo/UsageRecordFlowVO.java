@@ -36,6 +36,7 @@ public class UsageRecordFlowVO {
     private BigDecimal cacheHitCost;
     private BigDecimal completionCost;
     private BigDecimal totalCost;
+    private Integer responseMs;
     private Integer latencyMs;
     private String errorCode;
     private String errorMessage;

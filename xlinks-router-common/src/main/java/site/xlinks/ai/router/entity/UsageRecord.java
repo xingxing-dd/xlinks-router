@@ -78,6 +78,12 @@ public class UsageRecord extends BaseEntity {
 
     private BigDecimal totalCost;
 
+    /**
+     * Time to first response data in milliseconds.
+     * Non-streaming requests should use the same value as latencyMs.
+     */
+    private Integer responseMs;
+
     private Integer latencyMs;
 
     private String errorCode;

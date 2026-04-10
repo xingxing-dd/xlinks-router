@@ -72,15 +72,28 @@ public class OpenAIProxyService {
             context = buildContext(token, request, requestId);
             OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
+            AtomicReference<Integer> responseMsRef = new AtomicReference<>();
             String cacheHitStrategy = context.getCacheHitStrategy();
             adapter.forwardStream(request, context, event -> {
+                if (isFirstResponseDataEvent(event)) {
+                    long firstResponseMs = System.currentTimeMillis() - startAt;
+                    int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
+                    responseMsRef.compareAndSet(null, normalized);
+                }
                 UsageMetrics usageMetrics = openAIUsageExtractor.extract(event, cacheHitStrategy);
                 if (usageMetrics != null) {
                     usageMetricsRef.set(usageMetrics);
                 }
                 onEvent.accept(event);
             });
-            usageRecordService.recordAsync(context, usageMetricsRef.get(), System.currentTimeMillis() - startAt, null, null);
+            usageRecordService.recordAsync(
+                    context,
+                    usageMetricsRef.get(),
+                    System.currentTimeMillis() - startAt,
+                    responseMsRef.get(),
+                    null,
+                    null
+            );
         } catch (BusinessException e) {
             recordBusinessError(context, e, startAt);
             throw e;
@@ -253,5 +266,16 @@ public class OpenAIProxyService {
             return 500;
         }
         return 400;
+    }
+
+    private boolean isFirstResponseDataEvent(OpenAIStreamEvent event) {
+        if (event == null || !event.hasData()) {
+            return false;
+        }
+        String data = event.joinedData();
+        if (data == null || data.isBlank()) {
+            return false;
+        }
+        return !event.isDoneSignal();
     }
 }

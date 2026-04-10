@@ -394,6 +394,7 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   `cache_hit_cost` decimal(12,6) DEFAULT '0.000000',
   `completion_cost` decimal(12,6) DEFAULT '0.000000',
   `total_cost` decimal(12,6) DEFAULT '0.000000',
+  `response_ms` int(11) DEFAULT NULL COMMENT 'Time to first response data in milliseconds',
   `latency_ms` int(11) DEFAULT '0',
   `error_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `error_message` text COLLATE utf8mb4_unicode_ci,
