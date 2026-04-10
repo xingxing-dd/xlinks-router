@@ -55,7 +55,7 @@ public class CustomerTokenController {
     @PostMapping
     public Result<CreateCustomerTokenResponse> createToken(@Valid @RequestBody CreateCustomerTokenRequest request) {
         CustomerAccount account = CustomerAccountContext.getAccount();
-        CustomerToken token = customerTokenService.createToken(account.getId(), account.getEmail(), request, account.getUsername());
+        CustomerToken token = customerTokenService.createToken(account.getId(), account.getUsername(), request, account.getUsername());
 
         CreateCustomerTokenResponse response = new CreateCustomerTokenResponse();
         response.setId(String.valueOf(token.getId()));
