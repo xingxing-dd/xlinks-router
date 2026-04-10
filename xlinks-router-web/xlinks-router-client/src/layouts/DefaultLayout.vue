@@ -12,7 +12,7 @@ import {
   LogOut,
   Menu,
   X,
-  Gift,
+  // Gift,
   MessageCircle,
   BookOpen,
   User,
@@ -32,7 +32,7 @@ const navItems = computed(() => [
   { path: '/tokens', label: t('tokens.title'), icon: Key },
   { path: '/models', label: t('models.title'), icon: Layers },
   { path: '/plans', label: t('plans.title'), icon: CreditCard },
-  { path: '/promotion', label: t('promotion.title'), icon: Gift },
+  // { path: '/promotion', label: t('promotion.title'), icon: Gift },
   { path: '/contact', label: t('contact.title'), icon: MessageCircle },
   { path: '/docs', label: t('docs.title'), icon: BookOpen },
 ])
