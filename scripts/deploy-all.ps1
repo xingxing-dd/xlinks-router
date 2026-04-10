@@ -15,9 +15,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-if ([string]::IsNullOrWhiteSpace($MavenRepoLocal)) {
-    $MavenRepoLocal = Join-Path $RepoRoot ".m2repo"
-}
 
 # Deployment configuration
 $BackendServices = @(
@@ -308,17 +305,33 @@ function Run-BackendPipeline {
     }
 
     if (-not $SkipBackendBuild) {
+        if ([string]::IsNullOrWhiteSpace($MavenRepoLocal)) {
+            Write-Host "Use Maven default local repository (from Maven settings)." -ForegroundColor DarkGray
+        } else {
+            Write-Host "Use custom Maven local repository: $MavenRepoLocal" -ForegroundColor DarkGray
+        }
+
+        $parentPomArgs = @("-N", "install")
+        $commonBuildArgs = @("clean", "install")
+        $moduleBuildArgs = @("clean", "package")
+        if (-not [string]::IsNullOrWhiteSpace($MavenRepoLocal)) {
+            $repoArg = "-Dmaven.repo.local=$MavenRepoLocal"
+            $parentPomArgs += $repoArg
+            $commonBuildArgs += $repoArg
+            $moduleBuildArgs += $repoArg
+        }
+
         Write-Step "Install root parent pom"
-        Invoke-LocalCommand -FilePath "mvn" -Arguments @("-N", "install", "-Dmaven.repo.local=$MavenRepoLocal") -WorkingDirectory $RepoRoot
+        Invoke-LocalCommand -FilePath "mvn" -Arguments $parentPomArgs -WorkingDirectory $RepoRoot
 
         Write-Step "Build xlinks-router-common"
         $commonDir = Join-Path $RepoRoot "xlinks-router-common"
-        Invoke-LocalCommand -FilePath "mvn" -Arguments @("clean", "install", "-Dmaven.repo.local=$MavenRepoLocal") -WorkingDirectory $commonDir
+        Invoke-LocalCommand -FilePath "mvn" -Arguments $commonBuildArgs -WorkingDirectory $commonDir
 
         foreach ($svc in $Services) {
             $modulePath = Join-Path $RepoRoot $svc.ModuleDir
             Write-Step "Build backend module: $($svc.Name)"
-            Invoke-LocalCommand -FilePath "mvn" -Arguments @("clean", "package", "-Dmaven.repo.local=$MavenRepoLocal") -WorkingDirectory $modulePath
+            Invoke-LocalCommand -FilePath "mvn" -Arguments $moduleBuildArgs -WorkingDirectory $modulePath
         }
     }
 

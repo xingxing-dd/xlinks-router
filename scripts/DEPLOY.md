@@ -36,7 +36,7 @@ scripts\deploy-all.bat
 - `-SkipBackendDeploy`
 - `-SkipFrontendBuild`
 - `-SkipFrontendDeploy`
-- `-MavenRepoLocal <path>` (optional, default: `.\.m2repo`)
+- `-MavenRepoLocal <path>` (optional, default: use Maven's own local repository from your Maven settings)
 
 Examples:
 
@@ -62,7 +62,7 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
 
 ## Notes
 - Backend deploy uploads the newest runnable jar in each module `target` directory.
-- Backend build installs root parent POM first (`mvn -N install`) and uses local repo path `.\.m2repo` by default.
+- Backend build installs root parent POM first (`mvn -N install`) and by default uses Maven's configured local repository.
 - Frontend client deploy removes remote `dist` first, then uploads local `dist`.
 - Frontend deploy targets:
   - client -> `101.35.218.196:/app/simple-nginx/docker`
