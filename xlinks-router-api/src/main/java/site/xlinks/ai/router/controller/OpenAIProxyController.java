@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,7 +24,10 @@ import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.dto.OpenAIProxyRequest;
 import site.xlinks.ai.router.dto.OpenAIStreamEvent;
 import site.xlinks.ai.router.interceptor.BearerTokenInterceptor;
+import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
 import site.xlinks.ai.router.service.OpenAIProxyService;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * HTTP entrypoint for OpenAI-compatible proxy APIs.
@@ -52,16 +57,18 @@ public class OpenAIProxyController {
     @Operation(summary = "Chat Completions",
             description = "Forward OpenAI-compatible chat/completions requests.")
     public Object chatCompletions(HttpServletRequest servletRequest,
+                                  HttpServletResponse servletResponse,
                                   @RequestBody String requestBody) {
-        return handleRequest(servletRequest, requestBody, OpenAIProtocol.CHAT_COMPLETIONS);
+        return handleRequest(servletRequest, servletResponse, requestBody, OpenAIProtocol.CHAT_COMPLETIONS);
     }
 
     @PostMapping("/responses")
     @Operation(summary = "Responses",
             description = "Forward OpenAI-compatible responses requests.")
     public Object responses(HttpServletRequest servletRequest,
+                            HttpServletResponse servletResponse,
                             @RequestBody String requestBody) {
-        return handleRequest(servletRequest, requestBody, OpenAIProtocol.RESPONSES);
+        return handleRequest(servletRequest, servletResponse, requestBody, OpenAIProtocol.RESPONSES);
     }
 
     @GetMapping("/models")
@@ -81,6 +88,7 @@ public class OpenAIProxyController {
     }
 
     private Object handleRequest(HttpServletRequest servletRequest,
+                                 HttpServletResponse servletResponse,
                                  String requestBody,
                                  OpenAIProtocol protocol) {
         OpenAIProxyRequest request = parseRequest(protocol, requestBody);
@@ -92,7 +100,7 @@ public class OpenAIProxyController {
         if (!request.isStream()) {
             return openAIProxyService.forward(token, request);
         }
-        return stream(token, request);
+        return stream(token, request, servletResponse);
     }
 
     private OpenAIProxyRequest parseRequest(OpenAIProtocol protocol, String requestBody) {
@@ -112,7 +120,8 @@ public class OpenAIProxyController {
         }
     }
 
-    private SseEmitter stream(String token, OpenAIProxyRequest request) {
+    private SseEmitter stream(String token, OpenAIProxyRequest request, HttpServletResponse servletResponse) {
+        prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
         emitter.onCompletion(() -> log.debug("SSE completed for endpointCode={}, protocol={}",
                 request.getProtocol().getCode(), request.getProtocol()));
@@ -127,11 +136,26 @@ public class OpenAIProxyController {
                 openAIProxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
             } catch (Exception e) {
-                sendErrorEventQuietly(emitter, e);
-                emitter.completeWithError(e);
+                log.warn("SSE forwarding failed for endpointCode={}, protocol={}: {}",
+                        request.getProtocol().getCode(), request.getProtocol(), e.getMessage(), e);
+                sendStreamErrorQuietly(emitter, request.getProtocol(), e);
+                if (request.getProtocol() == OpenAIProtocol.CHAT_COMPLETIONS) {
+                    sendDoneEventQuietly(emitter);
+                }
+                emitter.complete();
             }
         });
         return emitter;
+    }
+
+    private void prepareSseResponseHeaders(HttpServletResponse servletResponse) {
+        if (servletResponse == null) {
+            return;
+        }
+        servletResponse.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        servletResponse.setHeader(HttpHeaders.CONTENT_TYPE, "text/event-stream;charset=UTF-8");
+        servletResponse.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform");
+        servletResponse.setHeader("X-Accel-Buffering", "no");
     }
 
     private void sendEvent(SseEmitter emitter, OpenAIStreamEvent event) {
@@ -167,13 +191,55 @@ public class OpenAIProxyController {
         }
     }
 
-    private void sendErrorEventQuietly(SseEmitter emitter, Exception e) {
+    private void sendStreamErrorQuietly(SseEmitter emitter, OpenAIProtocol protocol, Exception e) {
         try {
-            emitter.send(SseEmitter.event()
-                    .name("error")
-                    .data(e.getMessage() == null ? "SSE stream failed" : e.getMessage()));
+            OpenAIErrorResponse errorResponse = resolveStreamError(e);
+            if (protocol == OpenAIProtocol.RESPONSES) {
+                emitter.send(SseEmitter.event()
+                        .name("error")
+                        .data(buildResponsesErrorEvent(errorResponse)));
+                return;
+            }
+            emitter.send(SseEmitter.event().data(errorResponse.toJson()));
         } catch (Exception ignore) {
             // Ignore write failures on broken connections.
+        }
+    }
+
+    private void sendDoneEventQuietly(SseEmitter emitter) {
+        try {
+            emitter.send(SseEmitter.event().data("[DONE]"));
+        } catch (Exception ignore) {
+            // Ignore write failures on broken connections.
+        }
+    }
+
+    private OpenAIErrorResponse resolveStreamError(Exception e) {
+        String message = (e == null || e.getMessage() == null || e.getMessage().isBlank())
+                ? "SSE stream failed"
+                : e.getMessage();
+        if (!(e instanceof BusinessException businessException)) {
+            return OpenAIErrorResponse.internalError(message);
+        }
+        int code = businessException.getCode();
+        if (code == ErrorCode.UNAUTHORIZED.getCode()) {
+            return OpenAIErrorResponse.unauthorized(message);
+        }
+        if (code >= 5000) {
+            return OpenAIErrorResponse.internalError(message);
+        }
+        return OpenAIErrorResponse.invalidRequest(message);
+    }
+
+    private String buildResponsesErrorEvent(OpenAIErrorResponse errorResponse) {
+        try {
+            JsonNode errorNode = objectMapper.readTree(errorResponse.toJson()).path("error");
+            com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
+            eventNode.put("type", "error");
+            eventNode.set("error", errorNode.isMissingNode() ? objectMapper.createObjectNode() : errorNode);
+            return objectMapper.writeValueAsString(eventNode);
+        } catch (Exception ex) {
+            return "{\"type\":\"error\",\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\",\"code\":\"internal_error\"}}";
         }
     }
 }

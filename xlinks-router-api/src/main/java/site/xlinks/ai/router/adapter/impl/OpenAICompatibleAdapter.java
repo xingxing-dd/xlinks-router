@@ -2,6 +2,7 @@ package site.xlinks.ai.router.adapter.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.dto.OpenAIProxyRequest;
 import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -36,6 +38,7 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String EVENT_STREAM_CONTENT_TYPE = "text/event-stream";
+    private static final int MAX_FALLBACK_STREAM_PAYLOAD_CHARS = 200_000;
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -86,17 +89,22 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                     throw new RuntimeException("Empty response from provider");
                 }
 
+                String contentType = response.header("Content-Type", "");
                 BufferedSource source = body.source();
                 List<String> frameLines = new ArrayList<>();
+                List<String> rawLines = new ArrayList<>();
+                boolean emittedAnyEvent = false;
                 while (!source.exhausted()) {
                     String line = source.readUtf8Line();
                     if (line == null) {
                         break;
                     }
+                    rawLines.add(line);
                     if (line.isEmpty()) {
                         OpenAIStreamEvent event = parseEvent(frameLines);
                         if (event != null) {
                             onEvent.accept(event);
+                            emittedAnyEvent = true;
                         }
                         if (event != null && event.isDoneSignal()) {
                             break;
@@ -111,6 +119,37 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                     OpenAIStreamEvent event = parseEvent(frameLines);
                     if (event != null) {
                         onEvent.accept(event);
+                        emittedAnyEvent = true;
+                    }
+                }
+
+                if (!emittedAnyEvent) {
+                    String rawPayload = String.join("\n", rawLines).trim();
+                    if (!rawPayload.isEmpty()) {
+                        if (rawPayload.length() > MAX_FALLBACK_STREAM_PAYLOAD_CHARS) {
+                            log.warn("Fallback stream payload too large, protocol={}, size={}",
+                                    request == null ? null : request.getProtocol(), rawPayload.length());
+                            emitFallbackErrorEvent(request, onEvent, "Upstream payload too large in stream mode");
+                            return;
+                        }
+                        log.warn("Upstream returned non-SSE payload in stream mode. protocol={}, contentType={}, bodyPreview={}",
+                                request == null ? null : request.getProtocol(),
+                                contentType,
+                                abbreviate(rawPayload, 600));
+                        String fallbackData = buildFallbackStreamData(request, rawPayload);
+                        OpenAIProtocol protocol = request == null ? null : request.getProtocol();
+                        if (protocol == OpenAIProtocol.RESPONSES) {
+                            String eventName = extractResponsesEventName(fallbackData);
+                            OpenAIStreamEvent.OpenAIStreamEventBuilder builder = OpenAIStreamEvent.builder()
+                                    .dataLine(fallbackData);
+                            if (eventName != null && !eventName.isBlank()) {
+                                builder.event(eventName);
+                            }
+                            onEvent.accept(builder.build());
+                            return;
+                        }
+                        onEvent.accept(OpenAIStreamEvent.builder().dataLine(fallbackData).build());
+                        onEvent.accept(OpenAIStreamEvent.builder().dataLine("[DONE]").build());
                     }
                 }
             }
@@ -318,5 +357,219 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
             }
         }
         return events.isEmpty() ? Collections.emptyList() : events;
+    }
+
+    private String abbreviate(String value, int maxLen) {
+        if (value == null) {
+            return null;
+        }
+        if (maxLen <= 3 || value.length() <= maxLen) {
+            return value;
+        }
+        return value.substring(0, maxLen - 3) + "...";
+    }
+
+    private String buildFallbackStreamData(OpenAIProxyRequest request, String rawPayload) {
+        if (rawPayload == null || rawPayload.isBlank()) {
+            return rawPayload;
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(rawPayload);
+            if (request != null && request.getProtocol() == OpenAIProtocol.RESPONSES) {
+                return buildResponsesFallbackData(payload);
+            }
+            if (request != null && request.getProtocol() == OpenAIProtocol.CHAT_COMPLETIONS) {
+                return buildChatCompletionsFallbackData(request, payload);
+            }
+            return rawPayload;
+        } catch (Exception e) {
+            return rawPayload;
+        }
+    }
+
+    private String buildResponsesFallbackData(JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return "{}";
+        }
+        String type = payload.path("type").asText();
+        if (type != null && !type.isBlank()) {
+            return writeJson(payload);
+        }
+        if (payload.has("response")) {
+            return writeJson(payload);
+        }
+        ObjectNode wrapper = objectMapper.createObjectNode();
+        wrapper.put("type", "response.completed");
+        wrapper.set("response", payload);
+        return writeJson(wrapper);
+    }
+
+    private String buildChatCompletionsFallbackData(OpenAIProxyRequest request, JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return "{}";
+        }
+        String object = payload.path("object").asText();
+        if ("chat.completion.chunk".equals(object)) {
+            return writeJson(payload);
+        }
+        if (!"chat.completion".equals(object)) {
+            return writeJson(payload);
+        }
+
+        ObjectNode chunk = objectMapper.createObjectNode();
+        chunk.put("id", textOrDefault(payload, "id", "chatcmpl-fallback"));
+        chunk.put("object", "chat.completion.chunk");
+        long created = payload.path("created").isNumber() ? payload.path("created").asLong() : System.currentTimeMillis() / 1000;
+        chunk.put("created", created);
+
+        String model = textOrDefault(payload, "model", request == null ? null : request.getModel());
+        if (model != null && !model.isBlank()) {
+            chunk.put("model", model);
+        }
+
+        ArrayNode choices = chunk.putArray("choices");
+        ObjectNode choice = choices.addObject();
+        choice.put("index", firstChoiceIndex(payload));
+        ObjectNode delta = choice.putObject("delta");
+
+        JsonNode firstChoice = firstChoice(payload);
+        String role = "assistant";
+        String content = null;
+        String finishReason = "stop";
+        if (firstChoice != null) {
+            JsonNode messageNode = firstChoice.path("message");
+            if (messageNode.isObject()) {
+                String parsedRole = messageNode.path("role").asText();
+                if (parsedRole != null && !parsedRole.isBlank()) {
+                    role = parsedRole;
+                }
+                JsonNode contentNode = messageNode.get("content");
+                if (contentNode != null && !contentNode.isNull()) {
+                    content = contentNode.asText();
+                }
+            }
+
+            JsonNode deltaNode = firstChoice.path("delta");
+            if ((content == null || content.isBlank()) && deltaNode.isObject()) {
+                JsonNode contentNode = deltaNode.get("content");
+                if (contentNode != null && !contentNode.isNull()) {
+                    content = contentNode.asText();
+                }
+            }
+            if (deltaNode.isObject()) {
+                String parsedRole = deltaNode.path("role").asText();
+                if (parsedRole != null && !parsedRole.isBlank()) {
+                    role = parsedRole;
+                }
+            }
+
+            String parsedFinishReason = firstChoice.path("finish_reason").asText();
+            if (parsedFinishReason != null && !parsedFinishReason.isBlank()) {
+                finishReason = parsedFinishReason;
+            }
+        }
+        delta.put("role", role);
+        if (content != null) {
+            delta.put("content", content);
+        }
+        choice.put("finish_reason", finishReason);
+
+        if (payload.has("usage")) {
+            chunk.set("usage", payload.get("usage"));
+        }
+        return writeJson(chunk);
+    }
+
+    private JsonNode firstChoice(JsonNode payload) {
+        JsonNode choices = payload.path("choices");
+        if (!choices.isArray() || choices.size() == 0) {
+            return null;
+        }
+        return choices.get(0);
+    }
+
+    private int firstChoiceIndex(JsonNode payload) {
+        JsonNode first = firstChoice(payload);
+        if (first != null && first.path("index").canConvertToInt()) {
+            return first.path("index").asInt();
+        }
+        return 0;
+    }
+
+    private String textOrDefault(JsonNode payload, String fieldName, String fallback) {
+        if (payload == null || fieldName == null) {
+            return fallback;
+        }
+        String value = payload.path(fieldName).asText();
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value;
+    }
+
+    private String writeJson(JsonNode payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            return payload == null ? "{}" : payload.toString();
+        }
+    }
+
+    private String buildFallbackErrorJson(String message) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode error = root.putObject("error");
+        error.put("message", message == null || message.isBlank() ? "stream fallback error" : message);
+        error.put("type", "server_error");
+        error.putNull("param");
+        error.put("code", "stream_fallback_error");
+        return writeJson(root);
+    }
+
+    private String buildResponsesFallbackErrorEventJson(String message) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("type", "error");
+        ObjectNode error = root.putObject("error");
+        error.put("message", message == null || message.isBlank() ? "stream fallback error" : message);
+        error.put("type", "server_error");
+        error.putNull("param");
+        error.put("code", "stream_fallback_error");
+        return writeJson(root);
+    }
+
+    private void emitFallbackErrorEvent(OpenAIProxyRequest request,
+                                        Consumer<OpenAIStreamEvent> onEvent,
+                                        String message) {
+        OpenAIProtocol protocol = request == null ? null : request.getProtocol();
+        if (protocol == OpenAIProtocol.RESPONSES) {
+            onEvent.accept(OpenAIStreamEvent.builder()
+                    .event("error")
+                    .dataLine(buildResponsesFallbackErrorEventJson(message))
+                    .build());
+            return;
+        }
+        String errorJson;
+        try {
+            errorJson = OpenAIErrorResponse.internalError(message).toJson();
+        } catch (Exception ex) {
+            errorJson = buildFallbackErrorJson(message);
+        }
+        onEvent.accept(OpenAIStreamEvent.builder().dataLine(errorJson).build());
+        onEvent.accept(OpenAIStreamEvent.builder().dataLine("[DONE]").build());
+    }
+
+    private String extractResponsesEventName(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(payload);
+            String type = node.path("type").asText();
+            if (type == null || type.isBlank()) {
+                return null;
+            }
+            return type;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

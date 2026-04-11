@@ -6,12 +6,19 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.OpenAIProtocol;
 import site.xlinks.ai.router.dto.OpenAIProxyRequest;
+import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAICompatibleAdapterTest {
@@ -96,6 +103,106 @@ class OpenAICompatibleAdapterTest {
 
         assertTrue(response.has("id"));
         assertEquals("resp_json", response.path("id").asText());
+    }
+
+    @Test
+    void shouldWrapResponsesFallbackPayloadToResponseCompletedWhenNoType() throws Exception {
+        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
+                .protocol(OpenAIProtocol.RESPONSES)
+                .stream(true)
+                .model("gpt-5.4")
+                .build();
+
+        String rawPayload = """
+                {"id":"resp_abc","object":"response","usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}
+                """;
+
+        String fallbackData = ReflectionTestUtils.invokeMethod(adapter, "buildFallbackStreamData", request, rawPayload);
+        JsonNode payload = objectMapper.readTree(fallbackData);
+        assertEquals("response.completed", payload.path("type").asText());
+        assertEquals("resp_abc", payload.path("response").path("id").asText());
+
+        String eventName = ReflectionTestUtils.invokeMethod(adapter, "extractResponsesEventName", fallbackData);
+        assertEquals("response.completed", eventName);
+    }
+
+    @Test
+    void shouldKeepResponsesTypeWhenPayloadAlreadyHasType() throws Exception {
+        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
+                .protocol(OpenAIProtocol.RESPONSES)
+                .stream(true)
+                .build();
+
+        String rawPayload = """
+                {"type":"response.output_text.delta","delta":"hello"}
+                """;
+        String fallbackData = ReflectionTestUtils.invokeMethod(adapter, "buildFallbackStreamData", request, rawPayload);
+        JsonNode payload = objectMapper.readTree(fallbackData);
+
+        assertEquals("response.output_text.delta", payload.path("type").asText());
+        assertEquals("hello", payload.path("delta").asText());
+    }
+
+    @Test
+    void shouldConvertChatCompletionToChatChunkForFallback() throws Exception {
+        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
+                .protocol(OpenAIProtocol.CHAT_COMPLETIONS)
+                .stream(true)
+                .model("gpt-5.4")
+                .build();
+
+        String rawPayload = """
+                {"id":"chatcmpl_123","object":"chat.completion","created":1234567890,"model":"gpt-5.4","choices":[{"index":0,"message":{"role":"assistant","content":"Hi there"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}
+                """;
+
+        String fallbackData = ReflectionTestUtils.invokeMethod(adapter, "buildFallbackStreamData", request, rawPayload);
+        JsonNode payload = objectMapper.readTree(fallbackData);
+
+        assertEquals("chat.completion.chunk", payload.path("object").asText());
+        assertEquals("gpt-5.4", payload.path("model").asText());
+        assertEquals("assistant", payload.path("choices").get(0).path("delta").path("role").asText());
+        assertEquals("Hi there", payload.path("choices").get(0).path("delta").path("content").asText());
+        assertEquals("stop", payload.path("choices").get(0).path("finish_reason").asText());
+    }
+
+    @Test
+    void shouldEmitResponsesFallbackErrorAsSingleErrorEvent() throws Exception {
+        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
+                .protocol(OpenAIProtocol.RESPONSES)
+                .stream(true)
+                .build();
+
+        List<OpenAIStreamEvent> events = new ArrayList<>();
+        Consumer<OpenAIStreamEvent> collector = events::add;
+
+        ReflectionTestUtils.invokeMethod(adapter, "emitFallbackErrorEvent", request, collector, "fallback failed");
+
+        assertEquals(1, events.size());
+        OpenAIStreamEvent event = events.get(0);
+        assertEquals("error", event.getEvent());
+        JsonNode payload = objectMapper.readTree(event.joinedData());
+        assertEquals("error", payload.path("type").asText());
+        assertEquals("stream_fallback_error", payload.path("error").path("code").asText());
+    }
+
+    @Test
+    void shouldEmitChatFallbackErrorThenDone() throws Exception {
+        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
+                .protocol(OpenAIProtocol.CHAT_COMPLETIONS)
+                .stream(true)
+                .build();
+
+        List<OpenAIStreamEvent> events = new ArrayList<>();
+        Consumer<OpenAIStreamEvent> collector = events::add;
+
+        ReflectionTestUtils.invokeMethod(adapter, "emitFallbackErrorEvent", request, collector, "fallback failed");
+
+        assertEquals(2, events.size());
+        OpenAIStreamEvent first = events.get(0);
+        assertNull(first.getEvent());
+        JsonNode payload = objectMapper.readTree(first.joinedData());
+        assertEquals("internal_error", payload.path("error").path("code").asText());
+        assertEquals("[DONE]", events.get(1).joinedData());
     }
 
     private ProviderInvokeContext context() {
