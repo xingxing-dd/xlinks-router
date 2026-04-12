@@ -6,51 +6,51 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 权益判定结果
- * 用于判断当前请求应该使用套餐还是余额
+ * 鏉冪泭鍒ゅ畾缁撴灉
+ * 鐢ㄤ簬鍒ゆ柇褰撳墠璇锋眰搴旇浣跨敤濂楅杩樻槸浣欓
  */
 @Data
 @Builder
 public class UsageDecision {
 
     /**
-     * 客户 Token ID
+     * 瀹㈡埛 Token ID
      */
     private Long customerTokenId;
 
     /**
-     * 客户名称
+     * 瀹㈡埛鍚嶇О
      */
     private String customerName;
 
     /**
-     * 可用套餐 ID
+     * 鍙敤濂楅 ID
      */
     private Long planId;
 
     /**
-     * 套餐是否启用
+     * 濂楅鏄惁鍚敤
      */
     private boolean packageEnabled;
 
     /**
-     * 余额是否启用
+     * 浣欓鏄惁鍚敤
      */
     private boolean balanceEnabled;
 
     /**
-     * 当前使用类型：0-不限制，1-仅套餐，2-仅余额
-     * 根据套餐和余额的状态综合计算
+     * 褰撳墠浣跨敤绫诲瀷锛?-涓嶉檺鍒讹紝1-浠呭椁愶紝2-浠呬綑棰?
+     * 鏍规嵁濂楅鍜屼綑棰濈殑鐘舵€佺患鍚堣绠?
      */
     private Integer currentUsageType;
 
     /**
-     * 套餐允许的模型列表（JSON格式）
+     * 濂楅鍏佽鐨勬ā鍨嬪垪琛紙JSON鏍煎紡锛?
      */
     private List<String> packageAllowedModels;
 
     /**
-     * 是否无限权限（mock模式）
+     * 鏄惁鏃犻檺鏉冮檺锛坢ock妯″紡锛?
      */
     private boolean unlimited;
 }

@@ -1,17 +1,21 @@
 package site.xlinks.ai.router.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import site.xlinks.ai.router.dto.OpenAIProtocol;
+import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.entity.Model;
+import site.xlinks.ai.router.entity.Plan;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ModelMapper;
+import site.xlinks.ai.router.mapper.PlanMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
 import site.xlinks.ai.router.mapper.ProviderModelMapper;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
@@ -38,9 +42,11 @@ import java.util.stream.Collectors;
 public class RouteCacheService {
 
     private final ModelMapper modelMapper;
+    private final PlanMapper planMapper;
     private final ProviderMapper providerMapper;
     private final ProviderModelMapper providerModelMapper;
     private final ProviderTokenMapper providerTokenMapper;
+    private final ObjectMapper objectMapper;
 
     private volatile Map<String, Model> modelCache = Collections.emptyMap();
     private volatile Map<Long, Provider> providerCache = Collections.emptyMap();
@@ -49,6 +55,7 @@ public class RouteCacheService {
     private volatile Map<Long, ProviderToken> providerTokenByIdCache = Collections.emptyMap();
     private volatile Map<Long, ProviderProtocolMatcher> providerProtocolCache = Collections.emptyMap();
     private volatile Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache = Collections.emptyMap();
+    private volatile Map<Long, PlanModelMatcher> planModelCache = Collections.emptyMap();
     private volatile List<Model> modelListCache = Collections.emptyList();
 
     @PostConstruct
@@ -68,6 +75,9 @@ public class RouteCacheService {
         List<Model> models = modelMapper.selectList(
                 new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1)
         );
+        List<Plan> plans = planMapper.selectList(
+                new LambdaQueryWrapper<Plan>().select(Plan::getId, Plan::getAllowedModels)
+        );
         List<ProviderModel> providerModels = providerModelMapper.selectList(
                 new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
         );
@@ -79,6 +89,7 @@ public class RouteCacheService {
         Map<Long, Provider> nextProviderCache = buildProviderCache(providers);
         Map<Long, ProviderProtocolMatcher> nextProtocolCache = buildProviderProtocolCache(providers);
         Map<Long, List<ProviderModel>> nextProviderModelCache = buildProviderModelCache(providerModels);
+        Map<Long, PlanModelMatcher> nextPlanModelCache = buildPlanModelCache(plans);
         Map<String, List<ProviderModel>> nextRoutingIndex = buildRoutingIndex(
                 nextProviderModelCache,
                 nextProviderCache,
@@ -93,15 +104,17 @@ public class RouteCacheService {
         providerCache = nextProviderCache;
         providerProtocolCache = nextProtocolCache;
         providerModelCache = nextProviderModelCache;
+        planModelCache = nextPlanModelCache;
         providerModelByModelAndProtocolCache = nextRoutingIndex;
         providerTokenCache = nextProviderTokenCache;
         providerTokenByIdCache = nextProviderTokenByIdCache;
 
         log.info(
-                "Route cache refreshed: models={}, providers={}, modelMappings={}, routingKeys={}, providerTokens={}",
+                "Route cache refreshed: models={}, providers={}, modelMappings={}, planRules={}, routingKeys={}, providerTokens={}",
                 modelCache.size(),
                 providerCache.size(),
                 providerModelCache.size(),
+                planModelCache.size(),
                 providerModelByModelAndProtocolCache.size(),
                 providerTokenByIdCache.size()
         );
@@ -120,6 +133,10 @@ public class RouteCacheService {
     }
 
     public void refreshProviderTokens() {
+        refreshAll();
+    }
+
+    public void refreshPlans() {
         refreshAll();
     }
 
@@ -146,13 +163,24 @@ public class RouteCacheService {
         return model;
     }
 
-    public ProviderModel selectProviderModel(Long modelId, OpenAIProtocol protocol) {
+    public ProviderModel selectProviderModel(Long modelId, ProxyProtocol protocol) {
         return listProviderModelsByPriority(modelId, protocol).stream()
                 .findFirst()
                 .orElse(null);
     }
 
-    public List<ProviderModel> listProviderModelsByPriority(Long modelId, OpenAIProtocol protocol) {
+    public boolean isModelSupportedByPlan(Long planId, String modelCode) {
+        if (planId == null || modelCode == null || modelCode.isBlank()) {
+            return false;
+        }
+        PlanModelMatcher matcher = planModelCache.get(planId);
+        if (matcher == null) {
+            return false;
+        }
+        return matcher.matches(modelCode);
+    }
+
+    public List<ProviderModel> listProviderModelsByPriority(Long modelId, ProxyProtocol protocol) {
         if (modelId == null || protocol == null) {
             return Collections.emptyList();
         }
@@ -341,6 +369,52 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(immutable);
     }
 
+    private Map<Long, PlanModelMatcher> buildPlanModelCache(List<Plan> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, PlanModelMatcher> map = new HashMap<>();
+        for (Plan plan : plans) {
+            if (plan == null || plan.getId() == null) {
+                continue;
+            }
+            map.put(plan.getId(), parsePlanModelMatcher(plan.getAllowedModels()));
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
+    private PlanModelMatcher parsePlanModelMatcher(String rawAllowedModels) {
+        if (rawAllowedModels == null || rawAllowedModels.isBlank()) {
+            return new PlanModelMatcher(true, Collections.emptySet());
+        }
+        String trimmed = rawAllowedModels.trim();
+        try {
+            Set<String> values;
+            if (trimmed.startsWith("[")) {
+                List<String> models = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {
+                });
+                values = models == null
+                        ? Collections.emptySet()
+                        : models.stream()
+                        .filter(item -> item != null && !item.isBlank())
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+            } else {
+                values = Arrays.stream(trimmed.split("[,;，]"))
+                        .map(item -> item == null ? "" : item.trim())
+                        .filter(item -> !item.isBlank())
+                        .collect(Collectors.toSet());
+            }
+            if (values.isEmpty()) {
+                return new PlanModelMatcher(true, Collections.emptySet());
+            }
+            return new PlanModelMatcher(false, Collections.unmodifiableSet(values));
+        } catch (Exception ex) {
+            log.warn("Failed to parse plan allowed models: {}", rawAllowedModels, ex);
+            return new PlanModelMatcher(true, Collections.emptySet());
+        }
+    }
+
     private Map<String, List<ProviderModel>> buildRoutingIndex(Map<Long, List<ProviderModel>> providerModelsByModel,
                                                                Map<Long, Provider> providers,
                                                                Map<Long, ProviderProtocolMatcher> protocolMatchers) {
@@ -356,7 +430,7 @@ public class RouteCacheService {
                 continue;
             }
 
-            for (OpenAIProtocol protocol : OpenAIProtocol.values()) {
+            for (ProxyProtocol protocol : ProxyProtocol.values()) {
                 List<ProviderModel> sorted = mappings.stream()
                         .filter(mapping -> mapping.getProviderId() != null)
                         .filter(mapping -> {
@@ -409,11 +483,11 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(map);
     }
 
-    private String buildRoutingIndexKey(Long modelId, OpenAIProtocol protocol) {
+    private String buildRoutingIndexKey(Long modelId, ProxyProtocol protocol) {
         return modelId + "#" + protocol.getCode();
     }
 
-    private boolean supportsProtocol(Provider provider, OpenAIProtocol protocol) {
+    private boolean supportsProtocol(Provider provider, ProxyProtocol protocol) {
         if (provider == null) {
             return false;
         }
@@ -423,6 +497,21 @@ public class RouteCacheService {
 
     private int resolvePriority(Provider provider) {
         return provider == null || provider.getPriority() == null ? 0 : provider.getPriority();
+    }
+
+    private record PlanModelMatcher(boolean allowAll, Set<String> allowedModels) {
+        boolean matches(String modelCode) {
+            if (modelCode == null || modelCode.isBlank()) {
+                return false;
+            }
+            if (allowAll) {
+                return true;
+            }
+            if (allowedModels == null || allowedModels.isEmpty()) {
+                return true;
+            }
+            return allowedModels.contains(modelCode.trim());
+        }
     }
 
     private record ProviderProtocolMatcher(boolean allowAll, Set<String> normalizedProtocols) {
@@ -441,7 +530,7 @@ public class RouteCacheService {
             return new ProviderProtocolMatcher(false, values);
         }
 
-        boolean matches(OpenAIProtocol protocol) {
+        boolean matches(ProxyProtocol protocol) {
             if (protocol == null) {
                 return false;
             }
@@ -468,3 +557,4 @@ public class RouteCacheService {
         }
     }
 }
+

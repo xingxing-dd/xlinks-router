@@ -45,7 +45,7 @@ public class CustomerTokenAuthService {
      */
     public CustomerToken validateToken(String token) {
         if (token == null || token.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 不能为空");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Missing bearer token");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -58,13 +58,13 @@ public class CustomerTokenAuthService {
                 new LambdaQueryWrapper<CustomerToken>().eq(CustomerToken::getTokenValue, token)
         );
         if (customerToken == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "无效的 Token");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Invalid token");
         }
         if (customerToken.getStatus() == null || customerToken.getStatus() != 1) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 已禁用");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token is disabled");
         }
         if (customerToken.getExpireTime() != null && now.isAfter(customerToken.getExpireTime())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token 已过期");
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token has expired");
         }
 
         cacheValidatedToken(token, customerToken, now);

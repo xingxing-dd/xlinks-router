@@ -7,19 +7,25 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
+import site.xlinks.ai.router.controller.OpenAIProxyController;
 
 /**
  * Convert internal exceptions to OpenAI-compatible error payloads for /v1 APIs.
  */
 @Slf4j
-@RestControllerAdvice(basePackages = "site.xlinks.ai.router.controller")
+@RestControllerAdvice(assignableTypes = OpenAIProxyController.class)
 public class OpenAIExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<OpenAIErrorResponse> handleBusiness(BusinessException e) {
         log.warn("BusinessException: code={}, msg={}", e.getCode(), e.getMessage());
-        return ResponseEntity.status(resolveHttpStatus(e.getCode()))
-                .body(OpenAIErrorResponse.invalidRequest(e.getMessage()));
+        HttpStatus status = resolveHttpStatus(e.getCode());
+        OpenAIErrorResponse body = switch (status) {
+            case UNAUTHORIZED -> OpenAIErrorResponse.unauthorized(e.getMessage());
+            case INTERNAL_SERVER_ERROR -> OpenAIErrorResponse.internalError(e.getMessage());
+            default -> OpenAIErrorResponse.invalidRequest(e.getMessage());
+        };
+        return ResponseEntity.status(status).body(body);
     }
 
     @ExceptionHandler(Exception.class)

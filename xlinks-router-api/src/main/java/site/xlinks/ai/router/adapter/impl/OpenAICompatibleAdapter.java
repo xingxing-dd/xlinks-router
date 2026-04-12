@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -12,51 +11,45 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import okio.BufferedSource;
 import org.springframework.stereotype.Component;
-import site.xlinks.ai.router.adapter.OpenAIProviderAdapter;
+import site.xlinks.ai.router.adapter.ProviderProtocolAdapter;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
-import site.xlinks.ai.router.dto.OpenAIProtocol;
-import site.xlinks.ai.router.dto.OpenAIProxyRequest;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.ProxyProtocol;
+import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
 
 import java.io.IOException;
-import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Adapter for providers exposing OpenAI-compatible HTTP APIs.
+ * Adapter for providers exposing OpenAI-compatible chat/responses APIs.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
+public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements ProviderProtocolAdapter {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final String EVENT_STREAM_CONTENT_TYPE = "text/event-stream";
     private static final int MAX_FALLBACK_STREAM_PAYLOAD_CHARS = 200_000;
 
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
-
-    @Override
-    public boolean supports(OpenAIProtocol protocol) {
-        return protocol != null;
+    public OpenAICompatibleAdapter(OkHttpClient httpClient, ObjectMapper objectMapper) {
+        super(httpClient, objectMapper);
     }
 
     @Override
-    public JsonNode forward(OpenAIProxyRequest request, ProviderInvokeContext context) {
+    public boolean supports(ProxyProtocol protocol) {
+        return protocol == ProxyProtocol.CHAT_COMPLETIONS
+                || protocol == ProxyProtocol.RESPONSES;
+    }
+
+    @Override
+    public JsonNode forward(ProxyRequest request, ProviderInvokeContext context) {
         try {
             Request httpRequest = buildRequest(request, context);
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response);
                 }
-
                 ResponseBody body = response.body();
                 if (body == null) {
                     throw new RuntimeException("Empty response from provider");
@@ -74,9 +67,9 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
     }
 
     @Override
-    public void forwardStream(OpenAIProxyRequest request,
+    public void forwardStream(ProxyRequest request,
                               ProviderInvokeContext context,
-                              Consumer<OpenAIStreamEvent> onEvent) {
+                              Consumer<StreamEvent> onEvent) {
         try {
             Request httpRequest = buildRequest(request, context);
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -90,68 +83,41 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                 }
 
                 String contentType = response.header("Content-Type", "");
-                BufferedSource source = body.source();
-                List<String> frameLines = new ArrayList<>();
-                List<String> rawLines = new ArrayList<>();
-                boolean emittedAnyEvent = false;
-                while (!source.exhausted()) {
-                    String line = source.readUtf8Line();
-                    if (line == null) {
-                        break;
-                    }
-                    rawLines.add(line);
-                    if (line.isEmpty()) {
-                        OpenAIStreamEvent event = parseEvent(frameLines);
-                        if (event != null) {
-                            onEvent.accept(event);
-                            emittedAnyEvent = true;
-                        }
-                        if (event != null && event.isDoneSignal()) {
-                            break;
-                        }
-                        frameLines.clear();
-                        continue;
-                    }
-                    frameLines.add(line);
+                StreamReadResult readResult = readSseFrames(body, onEvent);
+                if (readResult.emittedAnyEvent()) {
+                    return;
                 }
 
-                if (!frameLines.isEmpty()) {
-                    OpenAIStreamEvent event = parseEvent(frameLines);
-                    if (event != null) {
-                        onEvent.accept(event);
-                        emittedAnyEvent = true;
-                    }
+                String rawPayload = readResult.rawPayload();
+                if (rawPayload == null || rawPayload.isEmpty()) {
+                    return;
+                }
+                if (rawPayload.length() > MAX_FALLBACK_STREAM_PAYLOAD_CHARS) {
+                    log.warn("Fallback stream payload too large, protocol={}, size={}",
+                            request == null ? null : request.getProtocol(), rawPayload.length());
+                    emitFallbackErrorEvent(request, onEvent, "Upstream payload too large in stream mode");
+                    return;
                 }
 
-                if (!emittedAnyEvent) {
-                    String rawPayload = String.join("\n", rawLines).trim();
-                    if (!rawPayload.isEmpty()) {
-                        if (rawPayload.length() > MAX_FALLBACK_STREAM_PAYLOAD_CHARS) {
-                            log.warn("Fallback stream payload too large, protocol={}, size={}",
-                                    request == null ? null : request.getProtocol(), rawPayload.length());
-                            emitFallbackErrorEvent(request, onEvent, "Upstream payload too large in stream mode");
-                            return;
-                        }
-                        log.warn("Upstream returned non-SSE payload in stream mode. protocol={}, contentType={}, bodyPreview={}",
-                                request == null ? null : request.getProtocol(),
-                                contentType,
-                                abbreviate(rawPayload, 600));
-                        String fallbackData = buildFallbackStreamData(request, rawPayload);
-                        OpenAIProtocol protocol = request == null ? null : request.getProtocol();
-                        if (protocol == OpenAIProtocol.RESPONSES) {
-                            String eventName = extractResponsesEventName(fallbackData);
-                            OpenAIStreamEvent.OpenAIStreamEventBuilder builder = OpenAIStreamEvent.builder()
-                                    .dataLine(fallbackData);
-                            if (eventName != null && !eventName.isBlank()) {
-                                builder.event(eventName);
-                            }
-                            onEvent.accept(builder.build());
-                            return;
-                        }
-                        onEvent.accept(OpenAIStreamEvent.builder().dataLine(fallbackData).build());
-                        onEvent.accept(OpenAIStreamEvent.builder().dataLine("[DONE]").build());
+                log.warn("Upstream returned non-SSE payload in stream mode. protocol={}, contentType={}, bodyPreview={}",
+                        request == null ? null : request.getProtocol(),
+                        contentType,
+                        abbreviate(rawPayload, 600));
+                String fallbackData = buildFallbackStreamData(request, rawPayload);
+                ProxyProtocol protocol = request == null ? null : request.getProtocol();
+                if (protocol == ProxyProtocol.RESPONSES) {
+                    String eventName = extractResponsesEventName(fallbackData);
+                    StreamEvent.StreamEventBuilder builder = StreamEvent.builder()
+                            .dataLine(fallbackData);
+                    if (eventName != null && !eventName.isBlank()) {
+                        builder.event(eventName);
                     }
+                    onEvent.accept(builder.build());
+                    return;
                 }
+
+                onEvent.accept(StreamEvent.builder().dataLine(fallbackData).build());
+                onEvent.accept(StreamEvent.builder().dataLine("[DONE]").build());
             }
         } catch (IOException e) {
             log.error("Error calling provider API", e);
@@ -159,7 +125,7 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         }
     }
 
-    Request buildRequest(OpenAIProxyRequest request, ProviderInvokeContext context) {
+    Request buildRequest(ProxyRequest request, ProviderInvokeContext context) {
         String url = context.getBaseUrl() + request.getProtocol().getProviderPath();
         return new Request.Builder()
                 .url(url)
@@ -170,39 +136,8 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                 .build();
     }
 
-    String rewriteRequestBody(OpenAIProxyRequest request, ProviderInvokeContext context) {
-        JsonNode payload = request == null ? null : request.getPayload();
-        if (payload instanceof ObjectNode payloadObject) {
-            try {
-                ObjectNode objectNode = payloadObject.deepCopy();
-                if (context.getProviderModel() != null && !context.getProviderModel().isBlank()) {
-                    objectNode.put("model", context.getProviderModel());
-                }
-                objectNode.put("stream", request != null && request.isStream());
-                return objectMapper.writeValueAsString(objectNode);
-            } catch (Exception e) {
-                log.warn("Failed to serialize rewritten payload, fallback to raw body: {}", e.getMessage());
-            }
-        }
-
-        String requestBody = request == null ? null : request.getRequestBody();
-        if (requestBody == null || requestBody.isBlank()) {
-            return requestBody;
-        }
-        try {
-            JsonNode root = objectMapper.readTree(requestBody);
-            if (!(root instanceof ObjectNode objectNode)) {
-                return requestBody;
-            }
-            if (context.getProviderModel() != null && !context.getProviderModel().isBlank()) {
-                objectNode.put("model", context.getProviderModel());
-            }
-            objectNode.put("stream", request != null && request.isStream());
-            return objectMapper.writeValueAsString(objectNode);
-        } catch (Exception e) {
-            log.warn("Failed to rewrite request model for provider, fallback to original body: {}", e.getMessage());
-            return requestBody;
-        }
+    String rewriteRequestBody(ProxyRequest request, ProviderInvokeContext context) {
+        return rewriteModelAndStream(request, context);
     }
 
     private RuntimeException buildProviderFailure(Response response) throws IOException {
@@ -211,7 +146,7 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         return new RuntimeException("Provider API call failed: " + response.code());
     }
 
-    JsonNode parseResponseBody(OpenAIProxyRequest request,
+    JsonNode parseResponseBody(ProxyRequest request,
                                String responseBody,
                                String contentType) throws IOException {
         if (responseBody == null || responseBody.isBlank()) {
@@ -223,90 +158,9 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         return objectMapper.readTree(responseBody);
     }
 
-    private OpenAIStreamEvent parseEvent(List<String> frameLines) {
-        if (frameLines == null || frameLines.isEmpty()) {
-            return null;
-        }
-
-        OpenAIStreamEvent.OpenAIStreamEventBuilder builder = OpenAIStreamEvent.builder();
-        boolean hasAnyField = false;
-        for (String line : frameLines) {
-            if (line == null) {
-                continue;
-            }
-            if (line.startsWith(":")) {
-                builder.comment(line.substring(1));
-                hasAnyField = true;
-                continue;
-            }
-
-            int separatorIndex = line.indexOf(':');
-            String fieldName;
-            String fieldValue;
-            if (separatorIndex < 0) {
-                fieldName = line;
-                fieldValue = "";
-            } else {
-                fieldName = line.substring(0, separatorIndex);
-                fieldValue = line.substring(separatorIndex + 1);
-                if (fieldValue.startsWith(" ")) {
-                    fieldValue = fieldValue.substring(1);
-                }
-            }
-
-            switch (fieldName) {
-                case "event" -> {
-                    builder.event(fieldValue);
-                    hasAnyField = true;
-                }
-                case "data" -> {
-                    builder.dataLine(fieldValue);
-                    hasAnyField = true;
-                }
-                case "id" -> {
-                    builder.id(fieldValue);
-                    hasAnyField = true;
-                }
-                case "retry" -> {
-                    try {
-                        builder.retry(Long.parseLong(fieldValue));
-                        hasAnyField = true;
-                    } catch (NumberFormatException e) {
-                        log.debug("Ignoring invalid SSE retry value: {}", fieldValue);
-                    }
-                }
-                default -> {
-                    // Ignore unsupported SSE fields.
-                }
-            }
-        }
-        return hasAnyField ? builder.build() : null;
-    }
-
-    private boolean isEventStream(String contentType) {
-        return contentType != null && contentType.toLowerCase().contains(EVENT_STREAM_CONTENT_TYPE);
-    }
-
-    private boolean looksLikeSse(String responseBody) {
-        try (StringReader reader = new StringReader(responseBody)) {
-            StringBuilder firstLine = new StringBuilder();
-            int ch;
-            while ((ch = reader.read()) != -1) {
-                if (ch == '\n' || ch == '\r') {
-                    break;
-                }
-                firstLine.append((char) ch);
-            }
-            String line = firstLine.toString().trim();
-            return line.startsWith("event:") || line.startsWith("data:") || line.startsWith(":");
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private JsonNode parseSseResponseBody(OpenAIProxyRequest request, String responseBody) throws IOException {
+    private JsonNode parseSseResponseBody(ProxyRequest request, String responseBody) throws IOException {
         JsonNode fallbackPayload = null;
-        for (OpenAIStreamEvent event : parseEvents(responseBody)) {
+        for (StreamEvent event : parseEvents(responseBody)) {
             if (!event.hasData()) {
                 continue;
             }
@@ -315,7 +169,7 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
                 continue;
             }
             JsonNode payload = objectMapper.readTree(data);
-            if (request != null && request.getProtocol() == OpenAIProtocol.RESPONSES) {
+            if (request != null && request.getProtocol() == ProxyProtocol.RESPONSES) {
                 JsonNode responseNode = payload.get("response");
                 String eventType = event.getEvent();
                 if ((eventType != null && "response.completed".equals(eventType))
@@ -335,50 +189,16 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         throw new IOException("Upstream returned SSE payload without JSON data");
     }
 
-    private List<OpenAIStreamEvent> parseEvents(String responseBody) {
-        List<OpenAIStreamEvent> events = new ArrayList<>();
-        List<String> frameLines = new ArrayList<>();
-        String[] lines = responseBody.split("\\R", -1);
-        for (String line : lines) {
-            if (line.isEmpty()) {
-                OpenAIStreamEvent event = parseEvent(frameLines);
-                if (event != null) {
-                    events.add(event);
-                }
-                frameLines.clear();
-                continue;
-            }
-            frameLines.add(line);
-        }
-        if (!frameLines.isEmpty()) {
-            OpenAIStreamEvent event = parseEvent(frameLines);
-            if (event != null) {
-                events.add(event);
-            }
-        }
-        return events.isEmpty() ? Collections.emptyList() : events;
-    }
-
-    private String abbreviate(String value, int maxLen) {
-        if (value == null) {
-            return null;
-        }
-        if (maxLen <= 3 || value.length() <= maxLen) {
-            return value;
-        }
-        return value.substring(0, maxLen - 3) + "...";
-    }
-
-    private String buildFallbackStreamData(OpenAIProxyRequest request, String rawPayload) {
+    private String buildFallbackStreamData(ProxyRequest request, String rawPayload) {
         if (rawPayload == null || rawPayload.isBlank()) {
             return rawPayload;
         }
         try {
             JsonNode payload = objectMapper.readTree(rawPayload);
-            if (request != null && request.getProtocol() == OpenAIProtocol.RESPONSES) {
+            if (request != null && request.getProtocol() == ProxyProtocol.RESPONSES) {
                 return buildResponsesFallbackData(payload);
             }
-            if (request != null && request.getProtocol() == OpenAIProtocol.CHAT_COMPLETIONS) {
+            if (request != null && request.getProtocol() == ProxyProtocol.CHAT_COMPLETIONS) {
                 return buildChatCompletionsFallbackData(request, payload);
             }
             return rawPayload;
@@ -404,7 +224,7 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         return writeJson(wrapper);
     }
 
-    private String buildChatCompletionsFallbackData(OpenAIProxyRequest request, JsonNode payload) {
+    private String buildChatCompletionsFallbackData(ProxyRequest request, JsonNode payload) {
         if (payload == null || payload.isNull()) {
             return "{}";
         }
@@ -536,12 +356,12 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         return writeJson(root);
     }
 
-    private void emitFallbackErrorEvent(OpenAIProxyRequest request,
-                                        Consumer<OpenAIStreamEvent> onEvent,
+    private void emitFallbackErrorEvent(ProxyRequest request,
+                                        Consumer<StreamEvent> onEvent,
                                         String message) {
-        OpenAIProtocol protocol = request == null ? null : request.getProtocol();
-        if (protocol == OpenAIProtocol.RESPONSES) {
-            onEvent.accept(OpenAIStreamEvent.builder()
+        ProxyProtocol protocol = request == null ? null : request.getProtocol();
+        if (protocol == ProxyProtocol.RESPONSES) {
+            onEvent.accept(StreamEvent.builder()
                     .event("error")
                     .dataLine(buildResponsesFallbackErrorEventJson(message))
                     .build());
@@ -553,8 +373,8 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         } catch (Exception ex) {
             errorJson = buildFallbackErrorJson(message);
         }
-        onEvent.accept(OpenAIStreamEvent.builder().dataLine(errorJson).build());
-        onEvent.accept(OpenAIStreamEvent.builder().dataLine("[DONE]").build());
+        onEvent.accept(StreamEvent.builder().dataLine(errorJson).build());
+        onEvent.accept(StreamEvent.builder().dataLine("[DONE]").build());
     }
 
     private String extractResponsesEventName(String payload) {
@@ -573,3 +393,4 @@ public class OpenAICompatibleAdapter implements OpenAIProviderAdapter {
         }
     }
 }
+

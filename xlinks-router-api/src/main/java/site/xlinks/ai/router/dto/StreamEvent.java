@@ -11,7 +11,7 @@ import java.util.List;
  */
 @Value
 @Builder
-public class OpenAIStreamEvent {
+public class StreamEvent {
 
     String event;
 
@@ -40,3 +40,4 @@ public class OpenAIStreamEvent {
         return "[DONE]".equals(joinedData());
     }
 }
+

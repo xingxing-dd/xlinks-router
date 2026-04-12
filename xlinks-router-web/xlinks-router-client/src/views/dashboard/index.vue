@@ -308,10 +308,10 @@ onMounted(loadDashboard)
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[180px]">{{ t('dashboard.usageTable.token') }}</th>
                   <!-- <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.channel') }}</th> -->
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[140px]">{{ t('dashboard.usageTable.model') }}</th>
-                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.inputTokens') }}</th>
-                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.cacheHitTokens') }}</th>
-                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.outputTokens') }}</th>
-                  <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.totalTokens') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.inputTokens') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.cacheHitTokens') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.outputTokens') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.totalTokens') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700 w-[120px]">{{ t('dashboard.usageTable.cost') }}</th>
                 </tr>
               </thead>
@@ -333,10 +333,10 @@ onMounted(loadDashboard)
                       <span class="font-medium text-slate-900">{{ record.model }}</span>
                     </div>
                   </td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
                   <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</td>
                 </tr>
               </tbody>

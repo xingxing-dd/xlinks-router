@@ -1,12 +1,14 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { listPlans, listSubscriptions } from '@/api/admin'
+import { createSubscription, listPlans, listSubscriptions } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatStatus } from '@/utils/format'
 
 const toastStore = useToastStore()
 
 const loading = ref(false)
+const grantDialogVisible = ref(false)
+const grantSubmitting = ref(false)
 const records = ref([])
 const planOptions = ref([])
 
@@ -23,9 +25,14 @@ const page = reactive({
   total: 0,
 })
 
+const grantForm = reactive({
+  accountId: '',
+  planId: '',
+})
+
 const SOURCE_OPTIONS = [
   { label: '激活码兑换', value: 'activation_code' },
-  { label: '人工发放', value: 'admin' },
+  { label: '后台发放', value: 'admin' },
   { label: '直接购买', value: 'purchase' },
   { label: '赠送', value: 'grant' },
 ]
@@ -38,7 +45,6 @@ const summary = computed(() => {
   const activeCount = records.value.filter((item) => Number(item.status) === 1).length
   return {
     activeCount,
-    pageTotal: records.value.length,
     totalDaily: totalDaily.toFixed(2),
     totalRemaining: totalRemaining.toFixed(2),
   }
@@ -95,6 +101,48 @@ const changePage = async (nextPage) => {
 const resolveSourceLabel = (value) => {
   const match = SOURCE_OPTIONS.find((item) => item.value === value)
   return match ? match.label : (value || '-')
+}
+
+const openGrantDialog = () => {
+  grantForm.accountId = ''
+  grantForm.planId = ''
+  grantDialogVisible.value = true
+}
+
+const closeGrantDialog = () => {
+  if (grantSubmitting.value) {
+    return
+  }
+  grantDialogVisible.value = false
+}
+
+const handleGrantSubscription = async () => {
+  const accountId = Number(grantForm.accountId)
+  const planId = Number(grantForm.planId)
+  if (!accountId || accountId <= 0) {
+    toastStore.push('请填写有效的商户 ID', 'warning')
+    return
+  }
+  if (!planId || planId <= 0) {
+    toastStore.push('请选择套餐', 'warning')
+    return
+  }
+
+  grantSubmitting.value = true
+  try {
+    await createSubscription({
+      accountId,
+      planId,
+    })
+    toastStore.push('后台发放订阅成功', 'success')
+    grantDialogVisible.value = false
+    page.page = 1
+    await loadSubscriptions()
+  } catch (error) {
+    toastStore.push(error.message || '后台发放订阅失败', 'error')
+  } finally {
+    grantSubmitting.value = false
+  }
 }
 
 onMounted(async () => {
@@ -166,7 +214,10 @@ onMounted(async () => {
           <h2 class="card-title">订阅列表</h2>
           <p class="text-sm text-slate-400 mt-1">共 {{ page.total }} 条记录</p>
         </div>
-        <button class="btn-outline" :disabled="loading" @click="loadSubscriptions">{{ loading ? '刷新中...' : '刷新' }}</button>
+        <div class="flex items-center gap-2">
+          <button class="btn-primary" @click="openGrantDialog">后台发放订阅</button>
+          <button class="btn-outline" :disabled="loading" @click="loadSubscriptions">{{ loading ? '刷新中...' : '刷新' }}</button>
+        </div>
       </div>
       <div class="card-body">
         <div class="table-wrap">
@@ -226,6 +277,44 @@ onMounted(async () => {
             <button class="btn-outline" :disabled="page.page <= 1" @click="changePage(page.page - 1)">上一页</button>
             <button class="btn-outline" :disabled="page.page >= pageCount" @click="changePage(page.page + 1)">下一页</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="grantDialogVisible" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div class="absolute inset-0 bg-slate-900/50" @click="closeGrantDialog"></div>
+      <div class="modal-panel max-w-xl">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800">后台发放订阅</h3>
+            <p class="text-sm text-slate-400 mt-1">为指定商户直接创建订阅记录</p>
+          </div>
+          <button class="btn-text" @click="closeGrantDialog">关闭</button>
+        </div>
+
+        <div class="mt-6 grid gap-4 md:grid-cols-2">
+          <div>
+            <label class="text-sm text-slate-500">商户 ID</label>
+            <input v-model.trim="grantForm.accountId" class="input mt-2" placeholder="请输入商户 ID" />
+          </div>
+          <div>
+            <label class="text-sm text-slate-500">套餐</label>
+            <select v-model="grantForm.planId" class="input mt-2">
+              <option value="">请选择套餐</option>
+              <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.planName }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          备注将自动写入：后台发放的订阅
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <button class="btn-outline" @click="closeGrantDialog">取消</button>
+          <button class="btn-primary" :disabled="grantSubmitting" @click="handleGrantSubscription">
+            {{ grantSubmitting ? '提交中...' : '确认发放' }}
+          </button>
         </div>
       </div>
     </div>

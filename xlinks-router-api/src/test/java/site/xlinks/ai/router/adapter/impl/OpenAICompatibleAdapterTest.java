@@ -8,9 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
-import site.xlinks.ai.router.dto.OpenAIProtocol;
-import site.xlinks.ai.router.dto.OpenAIProxyRequest;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.ProxyProtocol;
+import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.dto.StreamEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +34,8 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldForceNonStreamRequestsToJsonModeAndRewriteModel() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .model("gpt-5.2-codex")
                 .requestBody("{\"model\":\"gpt-5.2-codex\",\"input\":\"hello\"}")
                 .build();
@@ -49,13 +49,13 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldSetAcceptHeaderByRequestMode() {
-        Request streamingRequest = adapter.buildRequest(OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        Request streamingRequest = adapter.buildRequest(ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(true)
                 .requestBody("{\"model\":\"gpt-5.2-codex\",\"input\":\"hello\",\"stream\":true}")
                 .build(), context());
-        Request nonStreamingRequest = adapter.buildRequest(OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        Request nonStreamingRequest = adapter.buildRequest(ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(false)
                 .requestBody("{\"model\":\"gpt-5.2-codex\",\"input\":\"hello\",\"stream\":false}")
                 .build(), context());
@@ -64,10 +64,11 @@ class OpenAICompatibleAdapterTest {
         assertEquals("application/json", nonStreamingRequest.header("Accept"));
     }
 
+
     @Test
     void shouldUnwrapResponsesCompletedSsePayloadForNonStreamForward() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(false)
                 .requestBody("{\"model\":\"gpt-5.2-codex\",\"input\":\"hello\",\"stream\":false}")
                 .build();
@@ -89,8 +90,8 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldParseRegularJsonResponseBody() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(false)
                 .requestBody("{\"model\":\"gpt-5.2-codex\",\"input\":\"hello\",\"stream\":false}")
                 .build();
@@ -107,8 +108,8 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldWrapResponsesFallbackPayloadToResponseCompletedWhenNoType() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(true)
                 .model("gpt-5.4")
                 .build();
@@ -128,8 +129,8 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldKeepResponsesTypeWhenPayloadAlreadyHasType() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(true)
                 .build();
 
@@ -145,8 +146,8 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldConvertChatCompletionToChatChunkForFallback() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.CHAT_COMPLETIONS)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.CHAT_COMPLETIONS)
                 .stream(true)
                 .model("gpt-5.4")
                 .build();
@@ -167,18 +168,18 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldEmitResponsesFallbackErrorAsSingleErrorEvent() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.RESPONSES)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.RESPONSES)
                 .stream(true)
                 .build();
 
-        List<OpenAIStreamEvent> events = new ArrayList<>();
-        Consumer<OpenAIStreamEvent> collector = events::add;
+        List<StreamEvent> events = new ArrayList<>();
+        Consumer<StreamEvent> collector = events::add;
 
         ReflectionTestUtils.invokeMethod(adapter, "emitFallbackErrorEvent", request, collector, "fallback failed");
 
         assertEquals(1, events.size());
-        OpenAIStreamEvent event = events.get(0);
+        StreamEvent event = events.get(0);
         assertEquals("error", event.getEvent());
         JsonNode payload = objectMapper.readTree(event.joinedData());
         assertEquals("error", payload.path("type").asText());
@@ -187,18 +188,18 @@ class OpenAICompatibleAdapterTest {
 
     @Test
     void shouldEmitChatFallbackErrorThenDone() throws Exception {
-        OpenAIProxyRequest request = OpenAIProxyRequest.builder()
-                .protocol(OpenAIProtocol.CHAT_COMPLETIONS)
+        ProxyRequest request = ProxyRequest.builder()
+                .protocol(ProxyProtocol.CHAT_COMPLETIONS)
                 .stream(true)
                 .build();
 
-        List<OpenAIStreamEvent> events = new ArrayList<>();
-        Consumer<OpenAIStreamEvent> collector = events::add;
+        List<StreamEvent> events = new ArrayList<>();
+        Consumer<StreamEvent> collector = events::add;
 
         ReflectionTestUtils.invokeMethod(adapter, "emitFallbackErrorEvent", request, collector, "fallback failed");
 
         assertEquals(2, events.size());
-        OpenAIStreamEvent first = events.get(0);
+        StreamEvent first = events.get(0);
         assertNull(first.getEvent());
         JsonNode payload = objectMapper.readTree(first.joinedData());
         assertEquals("internal_error", payload.path("error").path("code").asText());
@@ -213,3 +214,4 @@ class OpenAICompatibleAdapterTest {
                 .build();
     }
 }
+

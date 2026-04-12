@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.dto.UsageMetrics;
 
 /**
@@ -15,7 +15,7 @@ import site.xlinks.ai.router.dto.UsageMetrics;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OpenAIUsageExtractor {
+public class UsageExtractor {
 
     private final ObjectMapper objectMapper;
 
@@ -73,11 +73,11 @@ public class OpenAIUsageExtractor {
         }
     }
 
-    public UsageMetrics extract(OpenAIStreamEvent event) {
+    public UsageMetrics extract(StreamEvent event) {
         return extract(event, ProviderCacheHitStrategy.NONE.getCode());
     }
 
-    public UsageMetrics extract(OpenAIStreamEvent event, String cacheHitStrategyCode) {
+    public UsageMetrics extract(StreamEvent event, String cacheHitStrategyCode) {
         if (event == null || !event.hasData()) {
             return null;
         }
@@ -166,3 +166,4 @@ public class OpenAIUsageExtractor {
         return value == null ? 0 : value;
     }
 }
+

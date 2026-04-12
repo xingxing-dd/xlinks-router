@@ -4,15 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import site.xlinks.ai.router.adapter.OpenAIProviderAdapter;
-import site.xlinks.ai.router.adapter.OpenAIProviderAdapterFactory;
+import site.xlinks.ai.router.adapter.ProviderProtocolAdapter;
+import site.xlinks.ai.router.adapter.ProviderProtocolAdapterFactory;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.context.UsageDecision;
-import site.xlinks.ai.router.dto.OpenAIProtocol;
-import site.xlinks.ai.router.dto.OpenAIProxyRequest;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.ProxyProtocol;
+import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.Model;
@@ -33,44 +33,44 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OpenAIProxyService {
+public class ProtocolProxyService {
 
     private final CustomerTokenAuthService customerTokenAuthService;
     private final ProviderTokenSelectService providerTokenSelectService;
-    private final OpenAIProviderAdapterFactory adapterFactory;
+    private final ProviderProtocolAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
     private final UsageRecordService usageRecordService;
     private final UsageEntitlementService usageEntitlementService;
-    private final OpenAIUsageExtractor openAIUsageExtractor;
+    private final UsageExtractor usageExtractor;
 
-    public JsonNode forward(String token, OpenAIProxyRequest request) {
+    public JsonNode forward(String token, ProxyRequest request) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
         try {
             context = buildContext(token, request, requestId);
-            OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
+            ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             JsonNode response = adapter.forward(request, context);
-            UsageMetrics usageMetrics = openAIUsageExtractor.extract(response, context.getCacheHitStrategy());
+            UsageMetrics usageMetrics = usageExtractor.extract(response, context.getCacheHitStrategy());
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
             return response;
         } catch (BusinessException e) {
             recordBusinessError(context, e, startAt);
             throw e;
         } catch (Exception e) {
-            throw handleUnexpectedError("OpenAI proxy request failed", context, e, startAt);
+            throw handleUnexpectedError("Proxy request failed", context, e, startAt);
         }
     }
 
     public void forwardStream(String token,
-                              OpenAIProxyRequest request,
-                              Consumer<OpenAIStreamEvent> onEvent) {
+                              ProxyRequest request,
+                              Consumer<StreamEvent> onEvent) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
         try {
             context = buildContext(token, request, requestId);
-            OpenAIProviderAdapter adapter = resolveAdapter(request.getProtocol());
+            ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
             String cacheHitStrategy = context.getCacheHitStrategy();
@@ -80,7 +80,7 @@ public class OpenAIProxyService {
                     int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
                     responseMsRef.compareAndSet(null, normalized);
                 }
-                UsageMetrics usageMetrics = openAIUsageExtractor.extract(event, cacheHitStrategy);
+                UsageMetrics usageMetrics = usageExtractor.extract(event, cacheHitStrategy);
                 if (usageMetrics != null) {
                     usageMetricsRef.set(usageMetrics);
                 }
@@ -98,7 +98,7 @@ public class OpenAIProxyService {
             recordBusinessError(context, e, startAt);
             throw e;
         } catch (Exception e) {
-            throw handleUnexpectedError("OpenAI proxy stream failed", context, e, startAt);
+            throw handleUnexpectedError("Proxy stream failed", context, e, startAt);
         }
     }
 
@@ -123,7 +123,7 @@ public class OpenAIProxyService {
         );
     }
 
-    private void validateRequest(OpenAIProxyRequest request) {
+    private void validateRequest(ProxyRequest request) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Request must not be null");
         }
@@ -131,12 +131,12 @@ public class OpenAIProxyService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Model must not be blank");
         }
         if (request.getProtocol() == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Unsupported OpenAI protocol");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Unsupported protocol");
         }
     }
 
     private ProviderInvokeContext buildContext(String token,
-                                               OpenAIProxyRequest request,
+                                               ProxyRequest request,
                                                String requestId) {
         validateRequest(request);
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
@@ -213,15 +213,15 @@ public class OpenAIProxyService {
                 .build();
     }
 
-    private OpenAIProviderAdapter resolveAdapter(OpenAIProtocol protocol) {
-        OpenAIProviderAdapter adapter = adapterFactory.getAdapter(protocol);
+    private ProviderProtocolAdapter resolveAdapter(ProxyProtocol protocol) {
+        ProviderProtocolAdapter adapter = adapterFactory.getAdapter(protocol);
         if (adapter == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported OpenAI protocol: " + protocol);
+            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported protocol: " + protocol);
         }
         return adapter;
     }
 
-    private String buildRequestId(OpenAIProtocol protocol) {
+    private String buildRequestId(ProxyProtocol protocol) {
         return protocol.getRequestIdPrefix() + UUID.randomUUID().toString().substring(0, 8);
     }
 
@@ -268,7 +268,7 @@ public class OpenAIProxyService {
         return 400;
     }
 
-    private boolean isFirstResponseDataEvent(OpenAIStreamEvent event) {
+    private boolean isFirstResponseDataEvent(StreamEvent event) {
         if (event == null || !event.hasData()) {
             return false;
         }
@@ -279,3 +279,5 @@ public class OpenAIProxyService {
         return !event.isDoneSignal();
     }
 }
+
+

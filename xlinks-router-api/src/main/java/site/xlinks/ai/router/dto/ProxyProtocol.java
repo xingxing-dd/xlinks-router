@@ -5,16 +5,17 @@ import java.util.Locale;
 /**
  * Supported OpenAI-compatible upstream protocols.
  */
-public enum OpenAIProtocol {
+public enum ProxyProtocol {
 
     CHAT_COMPLETIONS("chat/completions", "/chat/completions", "chatcmpl-"),
-    RESPONSES("responses", "/responses", "resp_");
+    RESPONSES("responses", "/responses", "resp_"),
+    ANTHROPIC_MESSAGES("anthropic/messages", "/messages", "msg_");
 
     private final String code;
     private final String providerPath;
     private final String requestIdPrefix;
 
-    OpenAIProtocol(String code, String providerPath, String requestIdPrefix) {
+    ProxyProtocol(String code, String providerPath, String requestIdPrefix) {
         this.code = code;
         this.providerPath = providerPath;
         this.requestIdPrefix = requestIdPrefix;
@@ -50,3 +51,4 @@ public enum OpenAIProtocol {
         return normalized;
     }
 }
+

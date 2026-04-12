@@ -3,22 +3,22 @@ package site.xlinks.ai.router.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.dto.UsageMetrics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-class OpenAIUsageExtractorTest {
+class UsageExtractorTest {
 
-    private OpenAIUsageExtractor extractor;
+    private UsageExtractor extractor;
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        extractor = new OpenAIUsageExtractor(objectMapper);
+        extractor = new UsageExtractor(objectMapper);
     }
 
     @Test
@@ -118,7 +118,7 @@ class OpenAIUsageExtractorTest {
 
     @Test
     void shouldExtractUsageFromStructuredStreamEvent() {
-        OpenAIStreamEvent event = OpenAIStreamEvent.builder()
+        StreamEvent event = StreamEvent.builder()
                 .event("response.completed")
                 .dataLine("""
                         {"response":{"usage":{"input_tokens":9,"output_tokens":4,"total_tokens":13}}}
@@ -181,3 +181,4 @@ class OpenAIUsageExtractorTest {
         assertEquals(38, usage.getTotalTokens());
     }
 }
+

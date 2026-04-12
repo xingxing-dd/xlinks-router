@@ -20,12 +20,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.common.result.Result;
-import site.xlinks.ai.router.dto.OpenAIProtocol;
-import site.xlinks.ai.router.dto.OpenAIProxyRequest;
-import site.xlinks.ai.router.dto.OpenAIStreamEvent;
+import site.xlinks.ai.router.dto.ProxyProtocol;
+import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.interceptor.BearerTokenInterceptor;
 import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
-import site.xlinks.ai.router.service.OpenAIProxyService;
+import site.xlinks.ai.router.service.ProtocolProxyService;
 
 import java.nio.charset.StandardCharsets;
 
@@ -38,17 +38,17 @@ import java.nio.charset.StandardCharsets;
 @Tag(name = "OpenAI Proxy API", description = "OpenAI-compatible chat, responses, and models APIs")
 public class OpenAIProxyController {
 
-    private final OpenAIProxyService openAIProxyService;
+    private final ProtocolProxyService proxyService;
     private final ObjectMapper objectMapper;
     private final TaskExecutor taskExecutor;
 
     @Value("${xlinks.router.sse.timeout-ms:900000}")
     private long sseTimeoutMs;
 
-    public OpenAIProxyController(OpenAIProxyService openAIProxyService,
+    public OpenAIProxyController(ProtocolProxyService proxyService,
                                  ObjectMapper objectMapper,
                                  @Qualifier("sseTaskExecutor") TaskExecutor taskExecutor) {
-        this.openAIProxyService = openAIProxyService;
+        this.proxyService = proxyService;
         this.objectMapper = objectMapper;
         this.taskExecutor = taskExecutor;
     }
@@ -59,7 +59,7 @@ public class OpenAIProxyController {
     public Object chatCompletions(HttpServletRequest servletRequest,
                                   HttpServletResponse servletResponse,
                                   @RequestBody String requestBody) {
-        return handleRequest(servletRequest, servletResponse, requestBody, OpenAIProtocol.CHAT_COMPLETIONS);
+        return handleRequest(servletRequest, servletResponse, requestBody, ProxyProtocol.CHAT_COMPLETIONS);
     }
 
     @PostMapping("/responses")
@@ -68,7 +68,7 @@ public class OpenAIProxyController {
     public Object responses(HttpServletRequest servletRequest,
                             HttpServletResponse servletResponse,
                             @RequestBody String requestBody) {
-        return handleRequest(servletRequest, servletResponse, requestBody, OpenAIProtocol.RESPONSES);
+        return handleRequest(servletRequest, servletResponse, requestBody, ProxyProtocol.RESPONSES);
     }
 
     @GetMapping("/models")
@@ -77,38 +77,38 @@ public class OpenAIProxyController {
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
         try {
-            return Result.success(openAIProxyService.listModels(token));
+            return Result.success(proxyService.listModels(token));
         } catch (BusinessException e) {
             log.warn("Models list error: {}", e.getMessage());
             return Result.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error while listing models", e);
-            return Result.error(500, "服务器内部错误");
+            return Result.error(500, "Internal server error");
         }
     }
 
     private Object handleRequest(HttpServletRequest servletRequest,
                                  HttpServletResponse servletResponse,
                                  String requestBody,
-                                 OpenAIProtocol protocol) {
-        OpenAIProxyRequest request = parseRequest(protocol, requestBody);
+                                 ProxyProtocol protocol) {
+        ProxyRequest request = parseRequest(protocol, requestBody);
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
         log.debug("Received {} request, endpointCode={}, model={}, stream={}",
                 protocol, protocol.getCode(), request.getModel(), request.isStream());
 
         if (!request.isStream()) {
-            return openAIProxyService.forward(token, request);
+            return proxyService.forward(token, request);
         }
         return stream(token, request, servletResponse);
     }
 
-    private OpenAIProxyRequest parseRequest(OpenAIProtocol protocol, String requestBody) {
+    private ProxyRequest parseRequest(ProxyProtocol protocol, String requestBody) {
         try {
             JsonNode payload = objectMapper.readTree(requestBody);
             JsonNode modelNode = payload.path("model");
             JsonNode streamNode = payload.get("stream");
-            return OpenAIProxyRequest.builder()
+            return ProxyRequest.builder()
                     .protocol(protocol)
                     .model(modelNode.isMissingNode() || modelNode.isNull() ? null : modelNode.asText())
                     .stream(streamNode == null || streamNode.isNull() ? null : streamNode.asBoolean())
@@ -120,7 +120,7 @@ public class OpenAIProxyController {
         }
     }
 
-    private SseEmitter stream(String token, OpenAIProxyRequest request, HttpServletResponse servletResponse) {
+    private SseEmitter stream(String token, ProxyRequest request, HttpServletResponse servletResponse) {
         prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
         emitter.onCompletion(() -> log.debug("SSE completed for endpointCode={}, protocol={}",
@@ -133,13 +133,13 @@ public class OpenAIProxyController {
 
         taskExecutor.execute(() -> {
             try {
-                openAIProxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
+                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("SSE forwarding failed for endpointCode={}, protocol={}: {}",
                         request.getProtocol().getCode(), request.getProtocol(), e.getMessage(), e);
                 sendStreamErrorQuietly(emitter, request.getProtocol(), e);
-                if (request.getProtocol() == OpenAIProtocol.CHAT_COMPLETIONS) {
+                if (request.getProtocol() == ProxyProtocol.CHAT_COMPLETIONS) {
                     sendDoneEventQuietly(emitter);
                 }
                 emitter.complete();
@@ -158,7 +158,7 @@ public class OpenAIProxyController {
         servletResponse.setHeader("X-Accel-Buffering", "no");
     }
 
-    private void sendEvent(SseEmitter emitter, OpenAIStreamEvent event) {
+    private void sendEvent(SseEmitter emitter, StreamEvent event) {
         try {
             SseEmitter.SseEventBuilder builder = SseEmitter.event();
             String eventName = event.getEvent();
@@ -191,10 +191,10 @@ public class OpenAIProxyController {
         }
     }
 
-    private void sendStreamErrorQuietly(SseEmitter emitter, OpenAIProtocol protocol, Exception e) {
+    private void sendStreamErrorQuietly(SseEmitter emitter, ProxyProtocol protocol, Exception e) {
         try {
             OpenAIErrorResponse errorResponse = resolveStreamError(e);
-            if (protocol == OpenAIProtocol.RESPONSES) {
+            if (protocol == ProxyProtocol.RESPONSES) {
                 emitter.send(SseEmitter.event()
                         .name("error")
                         .data(buildResponsesErrorEvent(errorResponse)));
@@ -243,3 +243,4 @@ public class OpenAIProxyController {
         }
     }
 }
+

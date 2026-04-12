@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 客户套餐服务
+ * 瀹㈡埛濂楅鏈嶅姟
  */
 @Slf4j
 @Service
@@ -23,7 +23,7 @@ public class CustomerPlanService {
     private final CustomerPlanMapper customerPlanMapper;
 
     /**
-     * 使用套餐额度（带悲观锁）
+     * 浣跨敤濂楅棰濆害锛堝甫鎮茶閿侊級
      */
     @Transactional
     public void consumeQuota(Long planRecordId, BigDecimal amount) {
@@ -68,8 +68,7 @@ public class CustomerPlanService {
     }
 
     /**
-     * 每天零点重置“昨日已用满日额度”的套餐记录。
-     */
+     * 姣忓ぉ闆剁偣閲嶇疆鈥滄槰鏃ュ凡鐢ㄦ弧鏃ラ搴︹€濈殑濂楅璁板綍銆?     */
     @Scheduled(cron = "${xlinks.router.quota-reset.cron:0 0 0 * * ?}", zone = "${xlinks.router.quota-reset.zone:Asia/Shanghai}")
     @Transactional
     public void resetDailyQuotaAtMidnight() {

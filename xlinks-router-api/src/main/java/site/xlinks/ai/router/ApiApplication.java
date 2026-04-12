@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
- * 对外 API 应用入口
+ * 瀵瑰 API 搴旂敤鍏ュ彛
  */
 @SpringBootApplication
 @EnableScheduling

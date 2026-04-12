@@ -7,16 +7,21 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
+import site.xlinks.ai.router.dto.SubscriptionGrantDTO;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerPlan;
+import site.xlinks.ai.router.entity.Plan;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 import site.xlinks.ai.router.mapper.CustomerPlanMapper;
+import site.xlinks.ai.router.mapper.PlanMapper;
 import site.xlinks.ai.router.vo.SubscriptionRecordVO;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +33,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SubscriptionService extends ServiceImpl<CustomerPlanMapper, CustomerPlan> {
 
+    private static final String ADMIN_SOURCE = "admin";
+    private static final String ADMIN_GRANT_REMARK = "后台发放的订阅";
+
     private final CustomerAccountMapper customerAccountMapper;
+    private final PlanMapper planMapper;
 
     public IPage<SubscriptionRecordVO> pageQuery(Integer page, Integer pageSize, String accountKeyword,
                                                  Long planId, Integer status, String source) {
@@ -58,6 +67,51 @@ public class SubscriptionService extends ServiceImpl<CustomerPlanMapper, Custome
     public SubscriptionRecordVO getDetail(Long id) {
         CustomerPlan plan = getEntity(id);
         return enrich(Collections.singletonList(plan)).stream().findFirst().orElseThrow();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public SubscriptionRecordVO createByAdmin(SubscriptionGrantDTO dto, String operator) {
+        if (dto == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Request body must not be null");
+        }
+        CustomerAccount account = customerAccountMapper.selectById(dto.getAccountId());
+        if (account == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Merchant account not found");
+        }
+        Plan plan = planMapper.selectById(dto.getPlanId());
+        if (plan == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Plan not found");
+        }
+        if (plan.getStatus() == null || plan.getStatus() != 1) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Plan is disabled");
+        }
+        if (plan.getDurationDays() == null || plan.getDurationDays() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Plan duration must be greater than 0");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        CustomerPlan customerPlan = new CustomerPlan();
+        customerPlan.setAccountId(account.getId());
+        customerPlan.setPlanId(plan.getId());
+        customerPlan.setPlanName(plan.getPlanName());
+        customerPlan.setPrice(defaultDecimal(plan.getPrice()));
+        customerPlan.setDurationDays(plan.getDurationDays());
+        customerPlan.setDailyQuota(defaultDecimal(plan.getDailyQuota()));
+        customerPlan.setTotalQuota(defaultDecimal(plan.getTotalQuota()));
+        customerPlan.setUsedQuota(BigDecimal.ZERO);
+        customerPlan.setTotalUsedQuota(BigDecimal.ZERO);
+        customerPlan.setQuotaRefreshTime(now);
+        customerPlan.setPlanExpireTime(now.plusDays(plan.getDurationDays()));
+        customerPlan.setStatus(1);
+        customerPlan.setSource(ADMIN_SOURCE);
+        customerPlan.setRemark(ADMIN_GRANT_REMARK);
+        if (StringUtils.hasText(operator)) {
+            customerPlan.setCreateBy(operator.trim());
+            customerPlan.setUpdateBy(operator.trim());
+        }
+
+        super.save(customerPlan);
+        return getDetail(customerPlan.getId());
     }
 
     private List<SubscriptionRecordVO> enrich(List<CustomerPlan> plans) {

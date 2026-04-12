@@ -18,6 +18,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(bearerTokenInterceptor)
-                .addPathPatterns("/v1/**");
+                .addPathPatterns("/v1/chat/completions", "/v1/responses", "/v1/models");
     }
 }
