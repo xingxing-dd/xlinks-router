@@ -37,7 +37,7 @@ public class UsageRecordFlowVO {
     private BigDecimal completionCost;
     private BigDecimal totalCost;
     private Integer responseMs;
-    private Integer latencyMs;
+    private Integer sessionMs;
     private String errorCode;
     private String errorMessage;
     private LocalDateTime createdAt;

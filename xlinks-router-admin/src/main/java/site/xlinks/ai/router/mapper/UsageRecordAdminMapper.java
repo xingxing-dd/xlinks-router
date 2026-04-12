@@ -155,7 +155,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
               COALESCE(SUM(u.total_tokens), 0) AS totalTokens,
               COALESCE(SUM(u.cache_hit_tokens), 0) AS cacheHitTokens,
               COALESCE(SUM(u.total_cost), 0) AS totalCost,
-              COALESCE(AVG(u.latency_ms), 0) AS avgLatencyMs
+              COALESCE(AVG(u.session_ms), 0) AS avgSessionMs
             FROM usage_records u
             LEFT JOIN customer_accounts c ON c.id = u.account_id
             WHERE 1 = 1
@@ -244,7 +244,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
               COALESCE(SUM(u.total_tokens), 0) AS totalTokens,
               COALESCE(SUM(u.cache_hit_tokens), 0) AS cacheHitTokens,
               COALESCE(SUM(u.total_cost), 0) AS totalCost,
-              COALESCE(AVG(u.latency_ms), 0) AS avgLatencyMs
+              COALESCE(AVG(u.session_ms), 0) AS avgSessionMs
             FROM usage_records u
             WHERE 1 = 1
             <if test='accountIds != null and accountIds.size() > 0'>

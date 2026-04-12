@@ -3,6 +3,17 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
 set "BACKENDS=xlinks-router-admin xlinks-router-api xlinks-router-client"
+set "FORCE_COMMON_INSTALL=0"
+set "TARGET="
+
+for %%a in (%*) do (
+  if /I "%%~a"=="--common-install" set "FORCE_COMMON_INSTALL=1"
+  if /I "%%~a"=="-ci" set "FORCE_COMMON_INSTALL=1"
+  if /I "%%~a"=="--ci" set "FORCE_COMMON_INSTALL=1"
+  if /I not "%%~a"=="--common-install" if /I not "%%~a"=="-ci" if /I not "%%~a"=="--ci" (
+    if not defined TARGET set "TARGET=%%~a"
+  )
+)
 
 where mvn >nul 2>nul
 if errorlevel 1 (
@@ -11,9 +22,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if /I "%~1"=="all" goto RUN_ALL
-if not "%~1"=="" (
-  call :RUN_ONE "%~1"
+if /I "%TARGET%"=="all" goto RUN_ALL
+if not "%TARGET%"=="" (
+  call :RUN_ONE "%TARGET%"
   goto END
 )
 
@@ -49,6 +60,9 @@ if not exist "%ROOT%%module%\pom.xml" (
   goto :eof
 )
 
+call :PREPARE_COMMON_INSTALL
+if errorlevel 1 goto :eof
+
 echo [START] %module%
 cd /d "%ROOT%%module%"
 call mvn clean package spring-boot:run
@@ -62,6 +76,9 @@ if /I "%input%"=="client" set "module=xlinks-router-client"
 goto :eof
 
 :RUN_ALL
+call :PREPARE_COMMON_INSTALL
+if errorlevel 1 goto END
+
 for %%m in (%BACKENDS%) do (
   if exist "%ROOT%%%m\pom.xml" (
     start "backend-%%m" cmd /k "cd /d ""%ROOT%%%m"" && mvn clean package spring-boot:run"
@@ -70,6 +87,21 @@ for %%m in (%BACKENDS%) do (
   )
 )
 goto END
+
+:PREPARE_COMMON_INSTALL
+if not "%FORCE_COMMON_INSTALL%"=="1" goto :eof
+if not exist "%ROOT%xlinks-router-common\pom.xml" (
+  echo [ERROR] xlinks-router-common\pom.xml not found
+  exit /b 1
+)
+echo [PREPARE] Running mvn clean install for xlinks-router-common
+cd /d "%ROOT%xlinks-router-common"
+call mvn clean install
+if errorlevel 1 (
+  echo [ERROR] Failed to install xlinks-router-common
+  exit /b 1
+)
+goto :eof
 
 :END
 endlocal

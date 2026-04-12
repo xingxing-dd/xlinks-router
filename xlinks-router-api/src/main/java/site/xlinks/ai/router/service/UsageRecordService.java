@@ -25,15 +25,15 @@ public class UsageRecordService {
 
     public void record(ProviderInvokeContext context,
                        UsageMetrics usageMetrics,
-                       long latencyMs,
+                       long sessionMs,
                        String errorCode,
                        String errorMessage) {
-        record(context, usageMetrics, latencyMs, normalizeDurationMs(latencyMs), errorCode, errorMessage);
+        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage);
     }
 
     public void record(ProviderInvokeContext context,
                        UsageMetrics usageMetrics,
-                       long latencyMs,
+                       long sessionMs,
                        Integer responseMs,
                        String errorCode,
                        String errorMessage) {
@@ -42,8 +42,10 @@ public class UsageRecordService {
         }
         UsageRecord record = buildRecord(context, usageMetrics);
         record.setResponseStatus(errorCode == null ? 200 : 500);
-        record.setLatencyMs(normalizeDurationMs(latencyMs));
-        record.setResponseMs(responseMs == null ? null : normalizeDurationMs(responseMs.longValue()));
+        int normalizedSessionMs = normalizeDurationMs(sessionMs);
+        record.setSessionMs(normalizedSessionMs);
+        // Non-streaming requests and stream fallbacks should still persist a usable first-response duration.
+        record.setResponseMs(responseMs == null ? normalizedSessionMs : normalizeDurationMs(responseMs.longValue()));
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
         try {
@@ -58,33 +60,33 @@ public class UsageRecordService {
     @Async("usageTaskExecutor")
     public void recordAsync(ProviderInvokeContext context,
                             UsageMetrics usageMetrics,
-                            long latencyMs,
+                            long sessionMs,
                             String errorCode,
                             String errorMessage) {
-        record(context, usageMetrics, latencyMs, normalizeDurationMs(latencyMs), errorCode, errorMessage);
+        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage);
     }
 
     @Async("usageTaskExecutor")
     public void recordAsync(ProviderInvokeContext context,
                             UsageMetrics usageMetrics,
-                            long latencyMs,
+                            long sessionMs,
                             Integer responseMs,
                             String errorCode,
                             String errorMessage) {
-        record(context, usageMetrics, latencyMs, responseMs, errorCode, errorMessage);
+        record(context, usageMetrics, sessionMs, responseMs, errorCode, errorMessage);
     }
 
     public void recordError(ProviderInvokeContext context,
                             int responseStatus,
                             String errorCode,
                             String errorMessage,
-                            long latencyMs) {
+                            long sessionMs) {
         if (context == null) {
             return;
         }
         UsageRecord record = buildRecord(context, null);
         record.setResponseStatus(responseStatus);
-        record.setLatencyMs(normalizeDurationMs(latencyMs));
+        record.setSessionMs(normalizeDurationMs(sessionMs));
         record.setResponseMs(null);
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);

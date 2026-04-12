@@ -121,7 +121,7 @@ const formatCost = (value) => {
   return Number(value).toFixed(6)
 }
 
-const formatLatency = (value) => {
+const formatDuration = (value) => {
   if (value === null || value === undefined) {
     return '0'
   }
@@ -203,7 +203,7 @@ onMounted(loadRecords)
           <table v-if="activeTab === 'flow'" class="table min-w-[1680px]">
             <thead>
               <tr>
-                <th>请求ID</th>
+                <!-- <th>请求ID</th> -->
                 <th>账户</th>
                 <th>模型</th>
                 <th>服务商</th>
@@ -214,16 +214,17 @@ onMounted(loadRecords)
                 <th>输出</th>
                 <th>总Token</th>
                 <th>总费用</th>
-                <th>延迟(ms)</th>
+                <th>首次响应</th>
+                <th>会话耗时</th>
                 <th>时间</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!records.length && !loading">
-                <td colspan="13" class="empty-state">暂无数据</td>
+                <td colspan="14" class="empty-state">暂无数据</td>
               </tr>
               <tr v-for="item in records" :key="item.id">
-                <td class="font-mono text-xs break-all">{{ item.requestId || '-' }}</td>
+                <!-- <td class="font-mono text-xs break-all">{{ item.requestId || '-' }}</td> -->
                 <td>
                   <div class="font-medium text-slate-800">{{ item.accountName || item.accountId }}</div>
                   <div class="text-xs text-slate-400 mt-1">{{ item.accountEmail || item.accountPhone || '-' }}</div>
@@ -240,7 +241,8 @@ onMounted(loadRecords)
                 <td>{{ formatNumber(item.completionTokens) }}</td>
                 <td>{{ formatNumber(item.totalTokens) }}</td>
                 <td>{{ formatCost(item.totalCost) }}</td>
-                <td>{{ item.latencyMs ?? 0 }}</td>
+                <td>{{ item.responseMs ?? 0 }}</td>
+                <td>{{ item.sessionMs ?? 0 }}</td>
                 <td>{{ formatDateTime(item.createdAt) }}</td>
               </tr>
             </tbody>
@@ -274,7 +276,7 @@ onMounted(loadRecords)
                 <td>{{ formatNumber(item.completionTokens) }}</td>
                 <td>{{ formatNumber(item.totalTokens) }}</td>
                 <td>{{ formatCost(item.totalCost) }}</td>
-                <td>{{ formatLatency(item.avgLatencyMs) }}</td>
+                <td>{{ formatDuration(item.avgSessionMs) }}</td>
               </tr>
             </tbody>
           </table>
@@ -307,7 +309,7 @@ onMounted(loadRecords)
                 <td>{{ formatNumber(item.completionTokens) }}</td>
                 <td>{{ formatNumber(item.totalTokens) }}</td>
                 <td>{{ formatCost(item.totalCost) }}</td>
-                <td>{{ formatLatency(item.avgLatencyMs) }}</td>
+                <td>{{ formatDuration(item.avgSessionMs) }}</td>
               </tr>
             </tbody>
           </table>

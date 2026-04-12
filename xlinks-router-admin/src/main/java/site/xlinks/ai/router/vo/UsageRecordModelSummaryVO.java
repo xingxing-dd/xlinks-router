@@ -18,5 +18,5 @@ public class UsageRecordModelSummaryVO {
     private Long totalTokens;
     private Long cacheHitTokens;
     private BigDecimal totalCost;
-    private BigDecimal avgLatencyMs;
+    private BigDecimal avgSessionMs;
 }

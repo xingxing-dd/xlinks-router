@@ -269,14 +269,17 @@ public class ProtocolProxyService {
     }
 
     private boolean isFirstResponseDataEvent(StreamEvent event) {
-        if (event == null || !event.hasData()) {
+        if (event == null || event.isDoneSignal()) {
             return false;
         }
-        String data = event.joinedData();
-        if (data == null || data.isBlank()) {
-            return false;
+        if (event.hasData()) {
+            String data = event.joinedData();
+            return data != null && !data.isBlank();
         }
-        return !event.isDoneSignal();
+        if (event.getEvent() != null && !event.getEvent().isBlank()) {
+            return true;
+        }
+        return event.getComments() != null && !event.getComments().isEmpty();
     }
 }
 

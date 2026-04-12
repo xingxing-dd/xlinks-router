@@ -80,11 +80,11 @@ public class UsageRecord extends BaseEntity {
 
     /**
      * Time to first response data in milliseconds.
-     * Non-streaming requests should use the same value as latencyMs.
+     * Non-streaming requests should use the same value as sessionMs.
      */
     private Integer responseMs;
 
-    private Integer latencyMs;
+    private Integer sessionMs;
 
     private String errorCode;
 
