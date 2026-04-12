@@ -66,6 +66,8 @@ public interface CustomerPlanMapper extends BaseMapper<CustomerPlan> {
                 updated_at = NOW()
             WHERE status = 1
               AND daily_quota IS NOT NULL
+              AND total_quota IS NOT NULL
+              AND total_quota > COALESCE(total_used_quota, 0)
               AND used_quota = daily_quota
             """)
     int resetDailyQuotaAtMidnight(@Param("refreshTime") LocalDateTime refreshTime);
