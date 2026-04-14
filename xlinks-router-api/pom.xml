@@ -13,6 +13,10 @@
     <artifactId>xlinks-router-api</artifactId>
     <packaging>jar</packaging>
 
+    <properties>
+        <spring-boot.repackage.skip>false</spring-boot.repackage.skip>
+    </properties>
+
     <name>xlinks-router-api</name>
     <description>对外 API 模块</description>
 
@@ -73,12 +77,101 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>default</id>
                         <goals>
                             <goal>repackage</goal>
                         </goals>
+                        <configuration>
+                            <skip>${spring-boot.repackage.skip}</skip>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>obf</id>
+            <properties>
+                <spring-boot.repackage.skip>true</spring-boot.repackage.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <configuration>
+                            <forceCreation>true</forceCreation>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.wvengen</groupId>
+                        <artifactId>proguard-maven-plugin</artifactId>
+                        <version>2.7.0</version>
+                        <executions>
+                            <execution>
+                                <id>proguard-obfuscate</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>proguard</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <proguardVersion>7.4.2</proguardVersion>
+                            <injar>${project.build.finalName}.jar</injar>
+                            <outjar>${project.build.finalName}.jar</outjar>
+                            <obfuscate>true</obfuscate>
+                            <addMavenDescriptor>false</addMavenDescriptor>
+                            <inLibsFilter>!META-INF/versions/**</inLibsFilter>
+                            <options>
+                                <option>@${project.basedir}/proguard-rules.pro</option>
+                            </options>
+                            <libs>
+                                <lib>${java.home}/jmods/java.base.jmod</lib>
+                                <lib>${java.home}/jmods/java.logging.jmod</lib>
+                                <lib>${java.home}/jmods/java.sql.jmod</lib>
+                                <lib>${java.home}/jmods/java.naming.jmod</lib>
+                                <lib>${java.home}/jmods/java.management.jmod</lib>
+                                <lib>${java.home}/jmods/java.desktop.jmod</lib>
+                                <lib>${java.home}/jmods/jdk.unsupported.jmod</lib>
+                            </libs>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.guardsquare</groupId>
+                                <artifactId>proguard-base</artifactId>
+                                <version>7.4.2</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <version>${spring-boot.version}</version>
+                        <configuration>
+                            <mainClass>site.xlinks.ai.router.ApiApplication</mainClass>
+                            <excludes>
+                                <exclude>
+                                    <groupId>org.projectlombok</groupId>
+                                    <artifactId>lombok</artifactId>
+                                </exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>repackage-obfuscated</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>repackage</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
