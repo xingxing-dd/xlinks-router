@@ -43,7 +43,7 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
     }
 
     @Override
-    public JsonNode forward(ProxyRequest request, ProviderInvokeContext context) {
+    public JsonNode forwardDirect(ProxyRequest request, ProviderInvokeContext context) {
         try {
             Request httpRequest = buildRequest(request, context);
             try (Response response = httpClient.newCall(httpRequest).execute()) {

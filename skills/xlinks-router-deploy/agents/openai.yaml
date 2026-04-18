@@ -1,0 +1,4 @@
+interface:
+  display_name: "Xlinks Router Deploy"
+  short_description: "Deploy xlinks-router fully or by app."
+  default_prompt: "Use $xlinks-router-deploy to resolve and run the correct xlinks-router publish command."

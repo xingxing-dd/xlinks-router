@@ -47,14 +47,14 @@ public class ProtocolProxyService {
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
 
-    public JsonNode forward(String token, ProxyRequest request) {
+    public JsonNode forwardDirect(String token, ProxyRequest request) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
         try {
             context = buildContext(token, request, requestId);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
-            JsonNode response = adapter.forward(request, context);
+            JsonNode response = adapter.forwardDirect(request, context);
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
             return response;

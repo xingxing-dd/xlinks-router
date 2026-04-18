@@ -24,7 +24,7 @@ onMounted(loadPromotionData)
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="w-full max-w-[90rem] mx-auto px-4 py-4 md:px-6 md:py-8 xl:px-8">
 
     <!-- 推广统计 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

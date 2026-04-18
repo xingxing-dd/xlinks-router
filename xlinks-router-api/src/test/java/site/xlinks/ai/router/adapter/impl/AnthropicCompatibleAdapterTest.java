@@ -2,24 +2,28 @@ package site.xlinks.ai.router.adapter.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnthropicCompatibleAdapterTest {
@@ -57,9 +61,9 @@ class AnthropicCompatibleAdapterTest {
         assertEquals("text/event-stream", httpRequest.header("Accept"));
         assertEquals("application/json", httpRequest.header("Content-Type"));
         assertEquals("provider-token", httpRequest.header("x-api-key"));
+        assertEquals("Bearer provider-token", httpRequest.header("Authorization"));
         assertEquals("2023-06-01", httpRequest.header("anthropic-version"));
         assertEquals("prompt-caching-2024-07-31", httpRequest.header("anthropic-beta"));
-        assertNull(httpRequest.header("Authorization"));
     }
 
     @Test
@@ -92,18 +96,72 @@ class AnthropicCompatibleAdapterTest {
     }
 
     @Test
-    void shouldEmitAnthropicFallbackErrorWithoutDone() throws Exception {
-        List<StreamEvent> events = new ArrayList<>();
-        Consumer<StreamEvent> collector = events::add;
-        ReflectionTestUtils.invokeMethod(adapter, "emitFallbackErrorEvent", collector, "fallback failed");
+    void shouldForwardDirectAnthropicSseEvents() {
+        String ssePayload = String.join("\n",
+                "id: evt-1",
+                "event: message_start",
+                "data: {\"type\":\"message_start\"}",
+                "",
+                "event: message_stop",
+                "data: {\"type\":\"message_stop\"}",
+                "",
+                "");
+        adapter = createAdapterResponding("text/event-stream; charset=utf-8", ssePayload);
 
-        assertEquals(1, events.size());
-        StreamEvent event = events.get(0);
-        assertEquals("error", event.getEvent());
-        JsonNode payload = objectMapper.readTree(event.joinedData());
-        assertEquals("error", payload.path("type").asText());
-        assertEquals("api_error", payload.path("error").path("type").asText());
-        assertEquals("fallback failed", payload.path("error").path("message").asText());
+        List<StreamEvent> events = new ArrayList<>();
+        adapter.forwardStream(streamRequest(), context(), events::add);
+
+        assertEquals(2, events.size());
+        assertEquals("evt-1", events.get(0).getId());
+        assertEquals("message_start", events.get(0).getEvent());
+        assertEquals("{\"type\":\"message_start\"}", events.get(0).joinedData());
+        assertEquals("message_stop", events.get(1).getEvent());
+        assertEquals("{\"type\":\"message_stop\"}", events.get(1).joinedData());
+    }
+
+    @Test
+    void shouldRejectNonSsePayloadForStreamRequests() {
+        adapter = createAdapterResponding("application/json", "{\"type\":\"message_start\"}");
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> adapter.forwardStream(streamRequest(), context(), event -> {
+                }));
+        assertTrue(exception.getMessage().contains("did not return SSE"));
+    }
+
+    @Test
+    void shouldRejectHtmlResponseWithHelpfulError() {
+        IOException exception = assertThrows(IOException.class,
+                () -> adapter.parseJsonResponseBody(
+                        "<!doctype html><html><body>hello</body></html>",
+                        "text/html; charset=utf-8",
+                        "https://timicc.com/messages"));
+        assertTrue(exception.getMessage().contains("returned HTML instead of JSON"));
+        assertTrue(exception.getMessage().contains("https://timicc.com/messages"));
+    }
+
+    private AnthropicCompatibleAdapter createAdapterResponding(String contentType, String body) {
+        Interceptor interceptor = chain -> new Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("Content-Type", contentType)
+                .body(ResponseBody.create(body, okhttp3.MediaType.get(contentType)))
+                .build();
+        OkHttpClient client = new OkHttpClient.Builder()
+                .addInterceptor(interceptor)
+                .build();
+        return new AnthropicCompatibleAdapter(client, objectMapper);
+    }
+
+    private ProxyRequest streamRequest() {
+        return ProxyRequest.builder()
+                .protocol(ProxyProtocol.ANTHROPIC_MESSAGES)
+                .stream(true)
+                .model("claude-sonnet-4-5")
+                .requestBody("{\"model\":\"claude-sonnet-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}")
+                .build();
     }
 
     private ProviderInvokeContext context() {

@@ -98,7 +98,7 @@ public class OpenAIProxyController {
                 protocol, protocol.getCode(), request.getModel(), request.isStream());
 
         if (!request.isStream()) {
-            return proxyService.forward(token, request);
+            return proxyService.forwardDirect(token, request);
         }
         return stream(token, request, servletResponse);
     }

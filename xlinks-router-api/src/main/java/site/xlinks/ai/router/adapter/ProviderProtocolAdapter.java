@@ -21,7 +21,7 @@ public interface ProviderProtocolAdapter {
     /**
      * Forward a non-streaming request.
      */
-    JsonNode forward(ProxyRequest request, ProviderInvokeContext context);
+    JsonNode forwardDirect(ProxyRequest request, ProviderInvokeContext context);
 
     /**
      * Forward a streaming request.

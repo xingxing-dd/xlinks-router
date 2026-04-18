@@ -52,7 +52,7 @@ onMounted(loadTokens)
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="w-full max-w-[90rem] mx-auto px-4 py-4 md:px-6 md:py-8 xl:px-8">
     <!-- 搜索框和筛选下拉框 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6">
       <div class="flex flex-col sm:flex-row gap-4">

@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Copy, Check, Code, Shield, Zap, Wrench } from 'lucide-vue-next'
@@ -111,7 +111,7 @@ const tocSections = computed(() => [
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="w-full max-w-[90rem] mx-auto px-4 py-4 md:px-6 md:py-8 xl:px-8">
     <div class="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6">
       <aside class="hidden lg:block">
         <div class="sticky top-24 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">

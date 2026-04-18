@@ -69,7 +69,7 @@ public class AnthropicProxyController {
                 request.getModel(), request.isStream());
 
         if (!request.isStream()) {
-            return proxyService.forward(token, request);
+            return proxyService.forwardDirect(token, request);
         }
         return stream(token, request, servletResponse);
     }
@@ -161,6 +161,12 @@ public class AnthropicProxyController {
     private void sendEvent(SseEmitter emitter, StreamEvent event) {
         try {
             SseEmitter.SseEventBuilder builder = SseEmitter.event();
+            if (event.getId() != null && !event.getId().isBlank()) {
+                builder.id(event.getId());
+            }
+            if (event.getRetry() != null && event.getRetry() >= 0) {
+                builder.reconnectTime(event.getRetry());
+            }
             if (event.getEvent() != null && !event.getEvent().isBlank()) {
                 builder.name(event.getEvent());
             }

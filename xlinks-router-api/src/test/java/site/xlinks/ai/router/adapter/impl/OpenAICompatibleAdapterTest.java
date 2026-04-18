@@ -66,7 +66,7 @@ class OpenAICompatibleAdapterTest {
 
 
     @Test
-    void shouldUnwrapResponsesCompletedSsePayloadForNonStreamForward() throws Exception {
+    void shouldUnwrapResponsesCompletedSsePayloadForNonStreamForwardDirect() throws Exception {
         ProxyRequest request = ProxyRequest.builder()
                 .protocol(ProxyProtocol.RESPONSES)
                 .stream(false)

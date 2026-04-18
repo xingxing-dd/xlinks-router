@@ -158,7 +158,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-7xl mx-auto">
+  <div class="w-full max-w-[90rem] mx-auto px-4 py-4 md:px-6 md:py-8 xl:px-8">
     <div v-if="errorMessage" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
       {{ errorMessage }}
     </div>

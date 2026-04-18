@@ -214,6 +214,21 @@ public abstract class AbstractSseHttpAdapter {
         }
     }
 
+    protected boolean looksLikeHtml(String responseBody) {
+        if (responseBody == null) {
+            return false;
+        }
+        String trimmed = responseBody.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        String lower = trimmed.toLowerCase();
+        return lower.startsWith("<!doctype html")
+                || lower.startsWith("<html")
+                || lower.startsWith("<head")
+                || lower.startsWith("<body");
+    }
+
     protected String abbreviate(String value, int maxLen) {
         if (value == null) {
             return null;
