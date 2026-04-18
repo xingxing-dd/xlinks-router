@@ -37,7 +37,7 @@ class UsageRecordServiceTest {
                 .inputPrice(new BigDecimal("2"))
                 .cacheHitPrice(new BigDecimal("0.5"))
                 .outputPrice(new BigDecimal("8"))
-                .cacheHitStrategy("openai_cached_tokens")
+                .modelProvider("OPENAI")
                 .build();
 
         UsageMetrics usageMetrics = UsageMetrics.builder()
@@ -84,7 +84,7 @@ class UsageRecordServiceTest {
                 .inputPrice(new BigDecimal("2"))
                 .cacheHitPrice(new BigDecimal("0.5"))
                 .outputPrice(new BigDecimal("8"))
-                .cacheHitStrategy("none")
+                .modelProvider("CUSTOM_PROVIDER")
                 .build();
 
         UsageMetrics usageMetrics = UsageMetrics.builder()

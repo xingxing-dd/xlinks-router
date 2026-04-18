@@ -40,7 +40,6 @@ public class ProviderController {
         provider.setProviderName(dto.getProviderName());
         provider.setSupportedProtocols(dto.getSupportedProtocols());
         provider.setPriority(dto.getPriority());
-        provider.setCacheHitStrategy(dto.getCacheHitStrategy());
         provider.setBaseUrl(dto.getBaseUrl());
         provider.setProviderLogo(dto.getProviderLogo());
         provider.setProviderWebsite(dto.getProviderWebsite());
@@ -91,9 +90,6 @@ public class ProviderController {
         }
         if (dto.getPriority() != null) {
             provider.setPriority(dto.getPriority());
-        }
-        if (dto.getCacheHitStrategy() != null) {
-            provider.setCacheHitStrategy(dto.getCacheHitStrategy());
         }
         if (dto.getProviderLogo() != null) {
             provider.setProviderLogo(dto.getProviderLogo());

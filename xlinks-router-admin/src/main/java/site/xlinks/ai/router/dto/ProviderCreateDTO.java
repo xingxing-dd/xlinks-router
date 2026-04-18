@@ -25,9 +25,6 @@ public class ProviderCreateDTO {
     @Schema(description = "Route priority, higher value means higher priority")
     private Integer priority = 0;
 
-    @Schema(description = "Cache-hit strategy: none/openai_cached_tokens/anthropic_cache_read_input_tokens")
-    private String cacheHitStrategy = "none";
-
     @Schema(description = "Base URL", required = true)
     @NotBlank(message = "Base URL must not be blank")
     private String baseUrl;

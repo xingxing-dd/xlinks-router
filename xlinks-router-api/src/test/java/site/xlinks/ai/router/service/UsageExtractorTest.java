@@ -149,7 +149,7 @@ class UsageExtractorTest {
                 }
                 """;
 
-        UsageMetrics usage = extractor.extract(payload, "openai_cached_tokens");
+        UsageMetrics usage = extractor.extract(payload, "OPENAI");
 
         assertNotNull(usage);
         assertEquals(100, usage.getInputTokens());
@@ -172,7 +172,7 @@ class UsageExtractorTest {
                 }
                 """;
 
-        UsageMetrics usage = extractor.extract(payload, "openai_cached_tokens");
+        UsageMetrics usage = extractor.extract(payload, "OPENAI");
 
         assertNotNull(usage);
         assertEquals(32, usage.getInputTokens());
@@ -180,5 +180,46 @@ class UsageExtractorTest {
         assertEquals(6, usage.getOutputTokens());
         assertEquals(38, usage.getTotalTokens());
     }
+
+    @Test
+    void shouldRecoverUsageWhenPayloadJsonIsMalformedButUsageObjectIsValid() {
+        String payload = """
+                {"type":"response.completed","response":{"id":"resp_test","instructions":"bad
+                text","usage":{"input_tokens":16747,"input_tokens_details":{"cached_tokens":3456},"output_tokens":255,"total_tokens":17002}}}
+                """;
+
+        UsageMetrics usage = extractor.extract(payload, "OPENAI");
+
+        assertNotNull(usage);
+        assertEquals(16747, usage.getInputTokens());
+        assertEquals(3456, usage.getCacheHitTokens());
+        assertEquals(255, usage.getOutputTokens());
+        assertEquals(17002, usage.getTotalTokens());
+    }
+
+    @Test
+    void shouldExtractUsageWhenTokenFieldsAreStringNumbers() {
+        String payload = """
+                {
+                  "usage": {
+                    "input_tokens": "16747",
+                    "input_tokens_details": {
+                      "cached_tokens": "3456"
+                    },
+                    "output_tokens": "255",
+                    "total_tokens": "17002"
+                  }
+                }
+                """;
+
+        UsageMetrics usage = extractor.extract(payload, "OPENAI");
+
+        assertNotNull(usage);
+        assertEquals(16747, usage.getInputTokens());
+        assertEquals(3456, usage.getCacheHitTokens());
+        assertEquals(255, usage.getOutputTokens());
+        assertEquals(17002, usage.getTotalTokens());
+    }
 }
+
 

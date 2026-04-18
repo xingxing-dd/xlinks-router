@@ -8,12 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
-import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.mapper.ProviderMapper;
-
-import java.util.Locale;
 
 /**
  * Provider service.
@@ -50,17 +47,11 @@ public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
         if (exist != null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider code already exists");
         }
-        provider.setCacheHitStrategy(normalizeCacheHitStrategy(provider.getCacheHitStrategy()));
         return super.save(provider);
     }
 
     public boolean update(Provider provider) {
-        Provider existing = getById(provider.getId());
-        if (provider.getCacheHitStrategy() != null) {
-            provider.setCacheHitStrategy(normalizeCacheHitStrategy(provider.getCacheHitStrategy()));
-        } else if (!StringUtils.hasText(existing.getCacheHitStrategy())) {
-            provider.setCacheHitStrategy(ProviderCacheHitStrategy.NONE.getCode());
-        }
+        getById(provider.getId());
         return super.updateById(provider);
     }
 
@@ -75,19 +66,5 @@ public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
     public boolean deleteById(Long id) {
         getById(id);
         return super.removeById(id);
-    }
-
-    private String normalizeCacheHitStrategy(String strategyCode) {
-        if (!StringUtils.hasText(strategyCode)) {
-            return ProviderCacheHitStrategy.NONE.getCode();
-        }
-        String normalized = strategyCode.trim().toLowerCase(Locale.ROOT);
-        for (ProviderCacheHitStrategy strategy : ProviderCacheHitStrategy.values()) {
-            if (strategy.getCode().equals(normalized)) {
-                return strategy.getCode();
-            }
-        }
-        throw new BusinessException(ErrorCode.PARAM_ERROR,
-                "Unsupported cacheHitStrategy: " + strategyCode);
     }
 }

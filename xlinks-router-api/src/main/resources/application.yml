@@ -62,6 +62,8 @@ xlinks:
       zone: "Asia/Shanghai"
     auth:
       token-cache-ttl-seconds: 15
+    debug:
+      log-upstream-responses-stream-payload: true
     async:
       usage:
         core-size: 4

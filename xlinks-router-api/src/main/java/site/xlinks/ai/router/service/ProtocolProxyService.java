@@ -3,6 +3,7 @@ package site.xlinks.ai.router.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.adapter.ProviderProtocolAdapter;
 import site.xlinks.ai.router.adapter.ProviderProtocolAdapterFactory;
@@ -43,6 +44,9 @@ public class ProtocolProxyService {
     private final UsageEntitlementService usageEntitlementService;
     private final UsageExtractor usageExtractor;
 
+    @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
+    private boolean logUpstreamResponsesStreamPayload;
+
     public JsonNode forward(String token, ProxyRequest request) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
@@ -51,7 +55,7 @@ public class ProtocolProxyService {
             context = buildContext(token, request, requestId);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             JsonNode response = adapter.forward(request, context);
-            UsageMetrics usageMetrics = usageExtractor.extract(response, context.getCacheHitStrategy());
+            UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
             return response;
         } catch (BusinessException e) {
@@ -68,19 +72,22 @@ public class ProtocolProxyService {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
+        boolean captureUpstreamStreamPayload = shouldCaptureUpstreamResponsesStreamPayload(request);
+        StringBuilder upstreamStreamPayloadBuilder = captureUpstreamStreamPayload ? new StringBuilder() : null;
         try {
             context = buildContext(token, request, requestId);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
-            String cacheHitStrategy = context.getCacheHitStrategy();
+            String modelProvider = context.getModelProvider();
             adapter.forwardStream(request, context, event -> {
+                appendStreamEvent(upstreamStreamPayloadBuilder, event);
                 if (isFirstResponseDataEvent(event)) {
                     long firstResponseMs = System.currentTimeMillis() - startAt;
                     int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
                     responseMsRef.compareAndSet(null, normalized);
                 }
-                UsageMetrics usageMetrics = usageExtractor.extract(event, cacheHitStrategy);
+                UsageMetrics usageMetrics = usageExtractor.extract(event, modelProvider);
                 if (usageMetrics != null) {
                     usageMetricsRef.set(usageMetrics);
                 }
@@ -94,10 +101,13 @@ public class ProtocolProxyService {
                     null,
                     null
             );
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
         } catch (BusinessException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             recordBusinessError(context, e, startAt);
             throw e;
         } catch (Exception e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             throw handleUnexpectedError("Proxy stream failed", context, e, startAt);
         }
     }
@@ -188,7 +198,6 @@ public class ProtocolProxyService {
         if (upstreamModelCode == null || upstreamModelCode.isBlank()) {
             upstreamModelCode = model.getModelCode();
         }
-
         return ProviderInvokeContext.builder()
                 .requestId(requestId)
                 .providerId(provider.getId())
@@ -204,7 +213,7 @@ public class ProtocolProxyService {
                 .inputPrice(model.getInputPrice())
                 .cacheHitPrice(model.getCacheHitPrice())
                 .outputPrice(model.getOutputPrice())
-                .cacheHitStrategy(provider.getCacheHitStrategy())
+                .modelProvider(model.getModelProvider())
                 .providerModel(upstreamModelCode)
                 .planId(usageDecision.getPlanId())
                 .customerTokenId(customerToken.getId())
@@ -280,6 +289,63 @@ public class ProtocolProxyService {
             return true;
         }
         return event.getComments() != null && !event.getComments().isEmpty();
+    }
+
+    private boolean shouldCaptureUpstreamResponsesStreamPayload(ProxyRequest request) {
+        return logUpstreamResponsesStreamPayload
+                && request != null
+                && request.isStream()
+                && request.getProtocol() == ProxyProtocol.RESPONSES;
+    }
+
+    private void appendStreamEvent(StringBuilder payloadBuilder, StreamEvent event) {
+        if (payloadBuilder == null || event == null) {
+            return;
+        }
+        List<String> comments = event.getComments();
+        if (comments != null) {
+            for (String comment : comments) {
+                payloadBuilder.append(':');
+                if (comment != null && !comment.isEmpty()) {
+                    payloadBuilder.append(comment);
+                }
+                payloadBuilder.append('\n');
+            }
+        }
+        if (event.getId() != null && !event.getId().isBlank()) {
+            payloadBuilder.append("id: ").append(event.getId()).append('\n');
+        }
+        if (event.getRetry() != null) {
+            payloadBuilder.append("retry: ").append(event.getRetry()).append('\n');
+        }
+        if (event.getEvent() != null && !event.getEvent().isBlank()) {
+            payloadBuilder.append("event: ").append(event.getEvent()).append('\n');
+        }
+        List<String> dataLines = event.getDataLines();
+        if (dataLines != null) {
+            for (String dataLine : dataLines) {
+                payloadBuilder.append("data: ");
+                if (dataLine != null) {
+                    payloadBuilder.append(dataLine);
+                }
+                payloadBuilder.append('\n');
+            }
+        }
+        payloadBuilder.append('\n');
+    }
+
+    private void logUpstreamResponsesStreamPayload(ProviderInvokeContext context, StringBuilder payloadBuilder) {
+        if (payloadBuilder == null || payloadBuilder.isEmpty()) {
+            return;
+        }
+        String requestId = context == null ? null : context.getRequestId();
+        String providerCode = context == null ? null : context.getProviderCode();
+        String modelCode = context == null ? null : context.getModelCode();
+        log.info("Upstream responses stream payload captured once. requestId={}, providerCode={}, modelCode={}\n{}",
+                requestId,
+                providerCode,
+                modelCode,
+                payloadBuilder);
     }
 }
 

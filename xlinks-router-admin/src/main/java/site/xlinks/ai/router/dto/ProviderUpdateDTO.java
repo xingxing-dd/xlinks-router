@@ -22,9 +22,6 @@ public class ProviderUpdateDTO {
     @Schema(description = "Route priority, higher value means higher priority")
     private Integer priority;
 
-    @Schema(description = "Cache-hit strategy: none/openai_cached_tokens/anthropic_cache_read_input_tokens")
-    private String cacheHitStrategy;
-
     @Schema(description = "Provider logo URL")
     private String providerLogo;
 

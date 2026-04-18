@@ -45,11 +45,6 @@ public class Provider extends BaseEntity {
     private Integer priority;
 
     /**
-     * Cache-hit usage extraction strategy.
-     */
-    private String cacheHitStrategy;
-
-    /**
      * 基础请求 URL
      */
     private String baseUrl;

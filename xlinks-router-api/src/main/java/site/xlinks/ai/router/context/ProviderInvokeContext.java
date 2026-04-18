@@ -50,9 +50,9 @@ public class ProviderInvokeContext {
     private BigDecimal outputPrice;
 
     /**
-     * Strategy used to extract cache-hit tokens from provider usage payload.
+     * Real upstream model provider, e.g. OPENAI / ANTHROPIC.
      */
-    private String cacheHitStrategy;
+    private String modelProvider;
 
     /**
      * Real upstream model code.

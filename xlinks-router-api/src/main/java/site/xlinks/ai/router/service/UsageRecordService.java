@@ -127,7 +127,7 @@ public class UsageRecordService {
             cacheHitTokens = normalizeCacheHitTokens(
                     usageMetrics.getCacheHitTokens(),
                     promptTokens,
-                    context.getCacheHitStrategy()
+                    context.getModelProvider()
             );
         } else {
             promptTokens = 0;
@@ -168,8 +168,8 @@ public class UsageRecordService {
         customerPlanService.consumeQuota(planId, record.getTotalCost());
     }
 
-    private int normalizeCacheHitTokens(Integer cacheHitTokens, int promptTokens, String cacheHitStrategyCode) {
-        ProviderCacheHitStrategy strategy = ProviderCacheHitStrategy.fromCode(cacheHitStrategyCode);
+    private int normalizeCacheHitTokens(Integer cacheHitTokens, int promptTokens, String modelProvider) {
+        ProviderCacheHitStrategy strategy = ProviderCacheHitStrategy.fromModelProvider(modelProvider);
         if (!strategy.isCacheHitSupported() || promptTokens <= 0) {
             return 0;
         }

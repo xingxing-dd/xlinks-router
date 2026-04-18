@@ -120,7 +120,6 @@ CREATE TABLE IF NOT EXISTS `providers` (
   `provider_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `supported_protocols` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `priority` int(11) NOT NULL DEFAULT '0',
-  `cache_hit_strategy` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'none',
   `base_url` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `provider_logo` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_website` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -544,10 +543,10 @@ WHERE NOT EXISTS (
 -- ============================================
 
 INSERT IGNORE INTO `providers`
-  (`id`, `provider_code`, `provider_name`, `supported_protocols`, `priority`, `cache_hit_strategy`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
+  (`id`, `provider_code`, `provider_name`, `supported_protocols`, `priority`, `base_url`, `provider_logo`, `provider_website`, `status`, `remark`, `create_by`, `update_by`)
 VALUES
-  (1, 'deepseek', 'DeepSeek', 'chat/completions,responses', 100, 'none', 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 'default provider', 'system', 'system'),
-  (2, 'right-codex', 'Right Codex', 'chat/completions', 50, 'openai_cached_tokens', 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
+  (1, 'deepseek', 'DeepSeek', 'chat/completions,responses', 100, 'https://api.deepseek.com/v1', 'https://deepseek.com/logo.png', 'https://deepseek.com', 1, 'default provider', 'system', 'system'),
+  (2, 'right-codex', 'Right Codex', 'chat/completions', 50, 'https://right.codes/codex/v1', NULL, 'https://right.codes', 1, 'test provider', 'system', 'system');
 
 INSERT IGNORE INTO `models`
   (`id`, `model_name`, `model_code`, `model_provider`, `model_desc`, `input_price`, `output_price`, `cache_hit_price`, `context_size`, `status`, `remark`, `create_by`, `update_by`)

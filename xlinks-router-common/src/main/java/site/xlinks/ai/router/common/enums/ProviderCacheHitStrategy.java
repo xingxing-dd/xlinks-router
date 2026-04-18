@@ -49,4 +49,18 @@ public enum ProviderCacheHitStrategy {
         }
         return NONE;
     }
+
+    public static ProviderCacheHitStrategy fromModelProvider(String modelProvider) {
+        if (modelProvider == null || modelProvider.isBlank()) {
+            return NONE;
+        }
+        String normalized = modelProvider.trim().toUpperCase(Locale.ROOT);
+        if (normalized.contains("OPENAI")) {
+            return OPENAI_CACHED_TOKENS;
+        }
+        if (normalized.contains("ANTHROPIC")) {
+            return ANTHROPIC_CACHE_READ_INPUT_TOKENS;
+        }
+        return NONE;
+    }
 }

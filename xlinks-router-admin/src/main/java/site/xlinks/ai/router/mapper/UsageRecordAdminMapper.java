@@ -197,7 +197,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
     @Select("""
             <script>
             SELECT COUNT(*) FROM (
-              SELECT u.model_id, u.model_code
+              SELECT u.model_code
               FROM usage_records u
               WHERE 1 = 1
               <if test='accountIds != null and accountIds.size() > 0'>
@@ -221,7 +221,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
               <if test='endAt != null'>
                 AND u.created_at <![CDATA[<=]]> #{endAt}
               </if>
-              GROUP BY u.model_id, u.model_code
+              GROUP BY u.model_code
             ) t
             </script>
             """)
@@ -235,7 +235,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
     @Select("""
             <script>
             SELECT
-              u.model_id AS modelId,
+              MAX(u.model_id) AS modelId,
               u.model_code AS modelCode,
               MAX(u.model_name) AS modelName,
               COUNT(*) AS requestCount,
@@ -268,7 +268,7 @@ public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
             <if test='endAt != null'>
               AND u.created_at <![CDATA[<=]]> #{endAt}
             </if>
-            GROUP BY u.model_id, u.model_code
+            GROUP BY u.model_code
             ORDER BY totalCost DESC, requestCount DESC
             LIMIT #{offset}, #{limit}
             </script>

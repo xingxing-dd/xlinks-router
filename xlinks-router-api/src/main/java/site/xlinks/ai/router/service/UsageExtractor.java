@@ -20,11 +20,62 @@ public class UsageExtractor {
     private final ObjectMapper objectMapper;
 
     public UsageMetrics extract(JsonNode payload) {
-        return extract(payload, ProviderCacheHitStrategy.NONE.getCode());
+        return extract(payload, null);
     }
 
-    public UsageMetrics extract(JsonNode payload, String cacheHitStrategyCode) {
+    public UsageMetrics extract(JsonNode payload, String modelProvider) {
         JsonNode usageNode = findUsageNode(payload);
+        return extractFromUsageNode(usageNode, modelProvider);
+    }
+
+    public UsageMetrics extract(String payload) {
+        return extract(payload, null);
+    }
+
+    public UsageMetrics extract(String payload, String modelProvider) {
+        if (payload == null || payload.isBlank() || "[DONE]".equals(payload)) {
+            return null;
+        }
+
+        try {
+            return extract(objectMapper.readTree(payload), modelProvider);
+        } catch (Exception e) {
+            UsageMetrics fallbackUsage = extractUsageFromMalformedPayload(payload, modelProvider);
+            if (fallbackUsage != null) {
+                log.debug("Recovered usage metrics from malformed payload");
+                return fallbackUsage;
+            }
+            log.debug("Failed to parse usage payload", e);
+            return null;
+        }
+    }
+
+    public UsageMetrics extract(StreamEvent event) {
+        return extract(event, null);
+    }
+
+    public UsageMetrics extract(StreamEvent event, String modelProvider) {
+        if (event == null || !event.hasData()) {
+            return null;
+        }
+        return extract(event.joinedData(), modelProvider);
+    }
+
+    private JsonNode findUsageNode(JsonNode payload) {
+        if (payload == null || payload.isMissingNode()) {
+            return null;
+        }
+        if (payload.has("usage")) {
+            return payload.get("usage");
+        }
+        JsonNode responseNode = payload.get("response");
+        if (responseNode != null && responseNode.has("usage")) {
+            return responseNode.get("usage");
+        }
+        return null;
+    }
+
+    private UsageMetrics extractFromUsageNode(JsonNode usageNode, String modelProvider) {
         if (usageNode == null || usageNode.isMissingNode() || usageNode.isNull()) {
             return null;
         }
@@ -43,7 +94,7 @@ public class UsageExtractor {
 
         Integer cacheHitTokens = extractCacheHitTokens(
                 usageNode,
-                ProviderCacheHitStrategy.fromCode(cacheHitStrategyCode)
+                ProviderCacheHitStrategy.fromModelProvider(modelProvider)
         );
         int normalizedInput = defaultInt(inputTokens);
         int normalizedCacheHit = normalizeCacheHitTokens(cacheHitTokens, normalizedInput);
@@ -54,48 +105,6 @@ public class UsageExtractor {
                 .outputTokens(defaultInt(outputTokens))
                 .totalTokens(defaultInt(totalTokens))
                 .build();
-    }
-
-    public UsageMetrics extract(String payload) {
-        return extract(payload, ProviderCacheHitStrategy.NONE.getCode());
-    }
-
-    public UsageMetrics extract(String payload, String cacheHitStrategyCode) {
-        if (payload == null || payload.isBlank() || "[DONE]".equals(payload)) {
-            return null;
-        }
-
-        try {
-            return extract(objectMapper.readTree(payload), cacheHitStrategyCode);
-        } catch (Exception e) {
-            log.debug("Failed to parse usage payload", e);
-            return null;
-        }
-    }
-
-    public UsageMetrics extract(StreamEvent event) {
-        return extract(event, ProviderCacheHitStrategy.NONE.getCode());
-    }
-
-    public UsageMetrics extract(StreamEvent event, String cacheHitStrategyCode) {
-        if (event == null || !event.hasData()) {
-            return null;
-        }
-        return extract(event.joinedData(), cacheHitStrategyCode);
-    }
-
-    private JsonNode findUsageNode(JsonNode payload) {
-        if (payload == null || payload.isMissingNode()) {
-            return null;
-        }
-        if (payload.has("usage")) {
-            return payload.get("usage");
-        }
-        JsonNode responseNode = payload.get("response");
-        if (responseNode != null && responseNode.has("usage")) {
-            return responseNode.get("usage");
-        }
-        return null;
     }
 
     private Integer extractCacheHitTokens(JsonNode usageNode, ProviderCacheHitStrategy strategy) {
@@ -131,8 +140,27 @@ public class UsageExtractor {
     private Integer readInt(JsonNode node, String... fieldNames) {
         for (String fieldName : fieldNames) {
             JsonNode field = node.get(fieldName);
-            if (field != null && field.canConvertToInt()) {
+            if (field == null || field.isNull()) {
+                continue;
+            }
+            if (field.canConvertToInt()) {
                 return field.asInt();
+            }
+            if (field.isNumber() && field.canConvertToLong()) {
+                long value = field.asLong();
+                if (value > Integer.MAX_VALUE) {
+                    return Integer.MAX_VALUE;
+                }
+                if (value < Integer.MIN_VALUE) {
+                    return Integer.MIN_VALUE;
+                }
+                return (int) value;
+            }
+            if (field.isTextual()) {
+                Integer parsed = parseIntSafely(field.asText());
+                if (parsed != null) {
+                    return parsed;
+                }
             }
         }
         return null;
@@ -143,11 +171,7 @@ public class UsageExtractor {
         if (objectNode == null || objectNode.isNull()) {
             return null;
         }
-        JsonNode field = objectNode.get(fieldName);
-        if (field != null && field.canConvertToInt()) {
-            return field.asInt();
-        }
-        return null;
+        return readInt(objectNode, fieldName);
     }
 
     private Integer firstNonNull(Integer... values) {
@@ -164,6 +188,95 @@ public class UsageExtractor {
 
     private int defaultInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private Integer parseIntSafely(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(trimmed);
+            if (value > Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+            if (value < Integer.MIN_VALUE) {
+                return Integer.MIN_VALUE;
+            }
+            return (int) value;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private UsageMetrics extractUsageFromMalformedPayload(String payload, String modelProvider) {
+        String usageJson = extractUsageJsonObject(payload);
+        if (usageJson == null || usageJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode usageNode = objectMapper.readTree(usageJson);
+            return extractFromUsageNode(usageNode, modelProvider);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String extractUsageJsonObject(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return null;
+        }
+        int usageKeyIndex = payload.lastIndexOf("\"usage\"");
+        if (usageKeyIndex < 0) {
+            return null;
+        }
+        int colonIndex = payload.indexOf(':', usageKeyIndex);
+        if (colonIndex < 0) {
+            return null;
+        }
+        int objectStartIndex = payload.indexOf('{', colonIndex);
+        if (objectStartIndex < 0) {
+            return null;
+        }
+
+        int depth = 0;
+        boolean inString = false;
+        boolean escaping = false;
+        for (int i = objectStartIndex; i < payload.length(); i++) {
+            char current = payload.charAt(i);
+            if (inString) {
+                if (escaping) {
+                    escaping = false;
+                    continue;
+                }
+                if (current == '\\') {
+                    escaping = true;
+                    continue;
+                }
+                if (current == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (current == '"') {
+                inString = true;
+                continue;
+            }
+            if (current == '{') {
+                depth++;
+                continue;
+            }
+            if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return payload.substring(objectStartIndex, i + 1);
+                }
+            }
+        }
+        return null;
     }
 }
 
