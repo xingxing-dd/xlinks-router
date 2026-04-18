@@ -178,11 +178,18 @@ const formatUsageSource = (usageType) => {
 
 const formatResponseSeconds = (responseMs) => {
   const ms = Number(responseMs || 0)
+  if (ms <= 0) {
+    return t('dashboard.usageTable.responseAbnormal')
+  }
   return `${(ms / 1000).toFixed(2)}s`
 }
 
 const getResponseTagClass = (responseMs) => {
-  const seconds = Number(responseMs || 0) / 1000
+  const ms = Number(responseMs || 0)
+  if (ms <= 0) {
+    return 'bg-red-100 text-red-700 border-red-200'
+  }
+  const seconds = ms / 1000
   if (seconds > 10) {
     return 'bg-red-100 text-red-700 border-red-200'
   }
