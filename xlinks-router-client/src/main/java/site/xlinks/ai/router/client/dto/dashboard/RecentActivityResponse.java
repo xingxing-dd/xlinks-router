@@ -16,5 +16,7 @@ public class RecentActivityResponse {
     private Integer cacheHitTokens;
     private Integer outputTokens;
     private Integer totalTokens;
+    private Integer responseMs;
+    private String usageType;
     private java.math.BigDecimal cost;
 }

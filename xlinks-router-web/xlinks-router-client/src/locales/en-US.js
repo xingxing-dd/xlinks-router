@@ -115,6 +115,12 @@ export default {
       cacheHitTokens: 'Cache-hit',
       outputTokens: 'Output',
       totalTokens: 'Total Tokens',
+      tokenBreakdown: 'Tokens (In/Cache/Out/Total)',
+      responseMs: 'Response Time',
+      usageSource: 'Cost Source',
+      usageSourcePlan: 'Plan',
+      usageSourceBalance: 'Balance',
+      usageSourceUnknown: 'Unknown',
       cost: 'Cost',
     },
     pagination: {

@@ -165,6 +165,42 @@ const barOption = computed(() => ({
 }))
 
 onMounted(loadDashboard)
+
+const formatUsageSource = (usageType) => {
+  if (usageType === 'plan') {
+    return t('dashboard.usageTable.usageSourcePlan')
+  }
+  if (usageType === 'balance') {
+    return t('dashboard.usageTable.usageSourceBalance')
+  }
+  return t('dashboard.usageTable.usageSourceUnknown')
+}
+
+const formatResponseSeconds = (responseMs) => {
+  const ms = Number(responseMs || 0)
+  return `${(ms / 1000).toFixed(2)}s`
+}
+
+const getResponseTagClass = (responseMs) => {
+  const seconds = Number(responseMs || 0) / 1000
+  if (seconds > 10) {
+    return 'bg-red-100 text-red-700 border-red-200'
+  }
+  if (seconds >= 6) {
+    return 'bg-amber-100 text-amber-700 border-amber-200'
+  }
+  return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+}
+
+const getUsageSourceTagClass = (usageType) => {
+  if (usageType === 'plan') {
+    return 'bg-blue-100 text-blue-700 border-blue-200'
+  }
+  if (usageType === 'balance') {
+    return 'bg-violet-100 text-violet-700 border-violet-200'
+  }
+  return 'bg-slate-100 text-slate-600 border-slate-200'
+}
 </script>
 
 <template>
@@ -305,13 +341,15 @@ onMounted(loadDashboard)
               <thead>
                 <tr class="border-b-2 border-slate-200">
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.time') }}</th>
-                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[180px]">{{ t('dashboard.usageTable.token') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[140px]">{{ t('dashboard.usageTable.token') }}</th>
                   <!-- <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.channel') }}</th> -->
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 w-[140px]">{{ t('dashboard.usageTable.model') }}</th>
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.inputTokens') }}</th>
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.cacheHitTokens') }}</th>
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.outputTokens') }}</th>
                   <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700">{{ t('dashboard.usageTable.totalTokens') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 whitespace-nowrap">{{ t('dashboard.usageTable.responseMs') }}</th>
+                  <th class="text-left py-3 px-4 text-sm font-semibold text-slate-700 whitespace-nowrap">{{ t('dashboard.usageTable.usageSource') }}</th>
                   <th class="text-right py-3 px-4 text-sm font-semibold text-slate-700 w-[120px]">{{ t('dashboard.usageTable.cost') }}</th>
                 </tr>
               </thead>
@@ -323,7 +361,7 @@ onMounted(loadDashboard)
                 >
                   <td class="py-4 px-4 text-sm text-slate-600 whitespace-nowrap">{{ formatDateTime(record.time) }}</td>
                   <td class="py-4 px-4 text-sm text-slate-700 font-medium">
-                    <div class="truncate max-w-[180px]" :title="record.token">{{ record.token }}</div>
+                    <div class="truncate max-w-[140px]" :title="record.token">{{ record.token }}</div>
                   </td>
                   <!-- <td class="py-4 px-4 text-sm text-slate-700 font-medium">
                     <div class="truncate max-w-[160px]" :title="record.channel">{{ record.channel }}</div>
@@ -333,11 +371,21 @@ onMounted(loadDashboard)
                       <span class="font-medium text-slate-900">{{ record.model }}</span>
                     </div>
                   </td>
-                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
-                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
-                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
-                  <td class="py-4 px-4 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
-                  <td class="py-4 px-4 text-right text-sm font-semibold text-slate-900 whitespace-nowrap">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getResponseTagClass(record.responseMs)">
+                      {{ formatResponseSeconds(record.responseMs) }}
+                    </span>
+                  </td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getUsageSourceTagClass(record.usageType)">
+                      {{ formatUsageSource(record.usageType) }}
+                    </span>
+                  </td>
+                  <td class="py-4 px-4 text-right text-sm text-slate-600 whitespace-nowrap">{{ formatCurrency(record.cost, 'USD', undefined, 6) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -371,19 +419,35 @@ onMounted(loadDashboard)
               <div class="grid grid-cols-2 gap-3">
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.inputTokens') }}</p>
-                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.inputTokens) }}</p>
+                  <p class="text-sm text-slate-700">{{ formatCompactNumber(record.inputTokens) }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.cacheHitTokens') }}</p>
-                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.cacheHitTokens) }}</p>
+                  <p class="text-sm text-slate-700">{{ formatCompactNumber(record.cacheHitTokens) }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.outputTokens') }}</p>
-                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.outputTokens) }}</p>
+                  <p class="text-sm text-slate-700">{{ formatCompactNumber(record.outputTokens) }}</p>
                 </div>
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.totalTokens') }}</p>
-                  <p class="text-sm font-semibold text-slate-900">{{ formatCompactNumber(record.totalTokens) }}</p>
+                  <p class="text-sm text-slate-700">{{ formatCompactNumber(record.totalTokens) }}</p>
+                </div>
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.responseMs') }}</p>
+                  <p>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getResponseTagClass(record.responseMs)">
+                      {{ formatResponseSeconds(record.responseMs) }}
+                    </span>
+                  </p>
+                </div>
+                <div class="bg-white rounded-xl p-3 border border-slate-200">
+                  <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.usageSource') }}</p>
+                  <p>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getUsageSourceTagClass(record.usageType)">
+                      {{ formatUsageSource(record.usageType) }}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>

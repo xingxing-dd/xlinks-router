@@ -201,8 +201,22 @@ public class DashboardController {
             Integer cacheHitTokens = record.getCacheHitTokens();
             Integer outputTokens = record.getCompletionTokens();
             Integer totalTokens = record.getTotalTokens();
+            Integer responseMs = record.getResponseMs();
+            String usageType = record.getUsageType();
             java.math.BigDecimal cost = record.getTotalCost();
-            responses.add(new RecentActivityResponse(time, token, channel, model, inputTokens, cacheHitTokens, outputTokens, totalTokens, cost));
+            responses.add(new RecentActivityResponse(
+                    time,
+                    token,
+                    channel,
+                    model,
+                    inputTokens,
+                    cacheHitTokens,
+                    outputTokens,
+                    totalTokens,
+                    responseMs,
+                    usageType,
+                    cost
+            ));
         }
         return Result.success(PageResult.of(responses, total, page, pageSize));
     }

@@ -115,6 +115,12 @@
       cacheHitTokens: '缓存命中',
       outputTokens: '输出',
       totalTokens: '总Token',
+      tokenBreakdown: 'Token明细(输入/缓存/输出/总)',
+      responseMs: '响应耗时',
+      usageSource: '费用来源',
+      usageSourcePlan: '套餐',
+      usageSourceBalance: '余额',
+      usageSourceUnknown: '未知',
       cost: '费用',
     },
     pagination: {

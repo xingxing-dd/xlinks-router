@@ -47,6 +47,8 @@ export function useDashboard() {
     const cacheHitTokens = Number(item?.cacheHitTokens ?? item?.cachedTokens ?? 0) || 0
     const outputTokens = Number(item?.outputTokens ?? item?.completionTokens ?? 0) || 0
     const totalTokens = Number(item?.totalTokens ?? inputTokens + outputTokens) || 0
+    const responseMs = Number(item?.responseMs ?? item?.latencyMs ?? item?.firstResponseMs ?? 0) || 0
+    const usageType = String(item?.usageType ?? '').trim().toLowerCase()
     const cost = Number(item?.cost ?? item?.amount ?? 0) || 0
 
     const time = item?.time ?? item?.createdAt ?? item?.timestamp ?? ''
@@ -63,6 +65,8 @@ export function useDashboard() {
       cacheHitTokens,
       outputTokens,
       totalTokens,
+      responseMs,
+      usageType,
       cost,
     }
   }
