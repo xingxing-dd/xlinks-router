@@ -1,17 +1,15 @@
 package site.xlinks.ai.router.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import site.xlinks.ai.router.common.enums.ErrorCode;
-import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
+import site.xlinks.ai.router.service.routing.ProxyErrors;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,45 +29,33 @@ public class CustomerTokenAuthService {
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
     };
 
+    private final RouteCacheService routeCacheService;
     private final CustomerTokenMapper customerTokenMapper;
     private final ObjectMapper objectMapper;
-
-    @Value("${xlinks.router.auth.token-cache-ttl-seconds:15}")
-    private long tokenCacheTtlSeconds;
-
-    private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Set<String>> allowedModelsCache = new ConcurrentHashMap<>();
 
     /**
-     * Validate customer bearer token.
+     * Validate customer bearer token state only.
      */
     public CustomerToken validateToken(String token) {
-        if (token == null || token.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Missing bearer token");
-        }
-
         LocalDateTime now = LocalDateTime.now();
-        CachedToken cached = tokenCache.get(token);
-        if (cached != null && cached.isValidAt(now)) {
-            return cached.customerToken();
-        }
-
-        CustomerToken customerToken = customerTokenMapper.selectOne(
-                new LambdaQueryWrapper<CustomerToken>().eq(CustomerToken::getTokenValue, token)
-        );
-        if (customerToken == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Invalid token");
-        }
-        if (customerToken.getStatus() == null || customerToken.getStatus() != 1) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token is disabled");
-        }
-        if (customerToken.getExpireTime() != null && now.isAfter(customerToken.getExpireTime())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Token has expired");
-        }
-
-        cacheValidatedToken(token, customerToken, now);
+        CustomerToken customerToken = loadCustomerToken(token);
+        assertTokenState(customerToken, now);
         log.debug("Token validated for customer: {}", customerToken.getCustomerName());
         return customerToken;
+    }
+
+    /**
+     * Validate token access for a specific model.
+     */
+    public CustomerToken validateRequestAccess(String token, String model) {
+        LocalDateTime now = LocalDateTime.now();
+        CustomerToken cachedToken = loadCustomerToken(token);
+        assertRequestAllowed(cachedToken, model, now);
+        CustomerToken freshToken = loadFreshCustomerToken(cachedToken, token);
+        assertRequestAllowed(freshToken, model, now);
+        routeCacheService.cacheCustomerToken(freshToken);
+        return freshToken;
     }
 
     /**
@@ -77,6 +63,71 @@ public class CustomerTokenAuthService {
      */
     public boolean hasPermissionForModel(CustomerToken customerToken, String model) {
         String allowedModels = customerToken == null ? null : customerToken.getAllowedModels();
+        return isModelAllowed(allowedModels, model);
+    }
+
+    private CustomerToken loadCustomerToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw ProxyErrors.missingBearerToken();
+        }
+        CustomerToken customerToken = routeCacheService.getCustomerTokenByValue(token);
+        if (customerToken == null) {
+            throw ProxyErrors.invalidToken();
+        }
+        return customerToken;
+    }
+
+    private CustomerToken loadFreshCustomerToken(CustomerToken cachedToken, String token) {
+        if (cachedToken == null || cachedToken.getId() == null) {
+            throw ProxyErrors.invalidToken();
+        }
+        CustomerToken freshToken = customerTokenMapper.selectById(cachedToken.getId());
+        if (freshToken == null || freshToken.getTokenValue() == null || !freshToken.getTokenValue().equals(token)) {
+            throw ProxyErrors.invalidToken();
+        }
+        return freshToken;
+    }
+
+    private void assertRequestAllowed(CustomerToken customerToken, String model, LocalDateTime now) {
+        assertTokenState(customerToken, now);
+        assertModelAllowed(customerToken.getAllowedModels(), model);
+        assertQuotaAvailable(
+                customerToken.getDailyQuota(),
+                customerToken.getUsedQuota(),
+                customerToken.getTotalQuota(),
+                customerToken.getTotalUsedQuota()
+        );
+    }
+
+    private void assertQuotaAvailable(BigDecimal dailyQuota,
+                                      BigDecimal dailyUsedQuota,
+                                      BigDecimal totalQuota,
+                                      BigDecimal totalUsedQuota) {
+        if (totalQuota != null && totalQuota.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal usedTotal = defaultDecimal(totalUsedQuota);
+            if (usedTotal.compareTo(totalQuota) >= 0) {
+                throw ProxyErrors.customerTokenTotalQuotaReached();
+            }
+        }
+
+        if (dailyQuota == null || dailyQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        if (defaultDecimal(dailyUsedQuota).compareTo(dailyQuota) >= 0) {
+            throw ProxyErrors.customerTokenDailyQuotaReached();
+        }
+    }
+
+    private void assertModelAllowed(String allowedModels, String model) {
+        if (model == null || model.isBlank()) {
+            return;
+        }
+        if (!isModelAllowed(allowedModels, model)) {
+            throw ProxyErrors.customerTokenModelNotAllowed();
+        }
+    }
+
+    private boolean isModelAllowed(String allowedModels, String model) {
         if (allowedModels == null || allowedModels.isBlank()) {
             return true;
         }
@@ -85,19 +136,24 @@ public class CustomerTokenAuthService {
             Set<String> allowedSet = allowedModelsCache.computeIfAbsent(allowedModels, this::parseAllowedModelsToSet);
             return allowedSet.contains(model);
         } catch (Exception e) {
-            // Keep backward-compatible fail-open behavior on malformed data.
             log.warn("Failed to parse allowed models, granting access", e);
             return true;
         }
     }
 
-    private void cacheValidatedToken(String token, CustomerToken customerToken, LocalDateTime now) {
-        LocalDateTime cacheExpireAt = now.plusSeconds(Math.max(tokenCacheTtlSeconds, 1));
-        LocalDateTime tokenExpireAt = customerToken.getExpireTime();
-        if (tokenExpireAt != null && tokenExpireAt.isBefore(cacheExpireAt)) {
-            cacheExpireAt = tokenExpireAt;
+    private void assertTokenState(CustomerToken customerToken, LocalDateTime now) {
+        assertTokenState(customerToken == null ? null : customerToken.getStatus(),
+                customerToken == null ? null : customerToken.getExpireTime(),
+                now);
+    }
+
+    private void assertTokenState(Integer status, LocalDateTime expireTime, LocalDateTime now) {
+        if (status == null || status != 1) {
+            throw ProxyErrors.tokenDisabled();
         }
-        tokenCache.put(token, new CachedToken(customerToken, cacheExpireAt));
+        if (expireTime != null && now.isAfter(expireTime)) {
+            throw ProxyErrors.tokenExpired();
+        }
     }
 
     private Set<String> parseAllowedModelsToSet(String allowedModels) {
@@ -126,9 +182,7 @@ public class CustomerTokenAuthService {
                 .collect(Collectors.toSet());
     }
 
-    private record CachedToken(CustomerToken customerToken, LocalDateTime expireAt) {
-        boolean isValidAt(LocalDateTime now) {
-            return true;//expireAt != null && !now.isAfter(expireAt);
-        }
+    private BigDecimal defaultDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

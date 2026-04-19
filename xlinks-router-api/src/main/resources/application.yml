@@ -62,6 +62,7 @@ xlinks:
       zone: "Asia/Shanghai"
     auth:
       token-cache-ttl-seconds: 15
+      internal-cache-refresh-token: ${INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}
     debug:
       log-upstream-responses-stream-payload: true
     async:

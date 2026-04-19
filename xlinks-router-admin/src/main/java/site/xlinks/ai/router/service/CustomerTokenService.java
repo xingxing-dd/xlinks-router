@@ -18,6 +18,7 @@ import site.xlinks.ai.router.mapper.CustomerTokenMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -57,6 +58,10 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
         CustomerAccount account = resolveAccount(token.getCustomerName());
         token.setAccountId(account.getId());
         token.setCustomerName(resolveDisplayName(account));
+        token.setDailyQuota(normalizeDailyQuota(token.getDailyQuota()));
+        token.setTotalQuota(normalizeDailyQuota(token.getTotalQuota()));
+        token.setUsedQuota(BigDecimal.ZERO);
+        token.setTotalUsedQuota(BigDecimal.ZERO);
 
         String rawToken = "xlr_ct_" + UUID.randomUUID().toString().replace("-", "");
         token.setTokenValue(hashToken(rawToken));
@@ -75,6 +80,8 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
         } else {
             token.setAccountId(existing.getAccountId());
         }
+        token.setDailyQuota(normalizeDailyQuota(token.getDailyQuota()));
+        token.setTotalQuota(normalizeDailyQuota(token.getTotalQuota()));
         token.setTokenValue(null);
         return super.updateById(token);
     }
@@ -138,5 +145,15 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
+    }
+
+    private BigDecimal normalizeDailyQuota(BigDecimal dailyQuota) {
+        if (dailyQuota == null) {
+            return null;
+        }
+        if (dailyQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return dailyQuota;
     }
 }

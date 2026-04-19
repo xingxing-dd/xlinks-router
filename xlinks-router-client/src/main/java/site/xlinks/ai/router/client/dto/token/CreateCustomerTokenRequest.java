@@ -3,6 +3,7 @@ package site.xlinks.ai.router.client.dto.token;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -13,4 +14,8 @@ public class CreateCustomerTokenRequest {
     private List<String> allowedModels;
 
     private Integer expireDays;
+
+    private BigDecimal dailyQuota;
+
+    private BigDecimal totalQuota;
 }

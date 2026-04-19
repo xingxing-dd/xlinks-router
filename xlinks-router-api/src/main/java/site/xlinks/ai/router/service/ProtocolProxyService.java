@@ -20,6 +20,9 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
+import site.xlinks.ai.router.service.routing.ProxyErrors;
+import site.xlinks.ai.router.service.routing.RoutingBuildContext;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +46,7 @@ public class ProtocolProxyService {
     private final UsageRecordService usageRecordService;
     private final UsageEntitlementService usageEntitlementService;
     private final UsageExtractor usageExtractor;
+    private final ProxyRoutingPipeline proxyRoutingPipeline;
 
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
@@ -133,66 +137,17 @@ public class ProtocolProxyService {
         );
     }
 
-    private void validateRequest(ProxyRequest request) {
-        if (request == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Request must not be null");
-        }
-        if (request.getModel() == null || request.getModel().isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Model must not be blank");
-        }
-        if (request.getProtocol() == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Unsupported protocol");
-        }
-    }
-
     private ProviderInvokeContext buildContext(String token,
                                                ProxyRequest request,
                                                String requestId) {
-        validateRequest(request);
-        CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-
-        UsageDecision usageDecision = usageEntitlementService.decide(customerToken, request.getModel());
-        if (usageDecision == null || !usageDecision.isPackageEnabled()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "Customer plan is unavailable");
-        }
-
+        RoutingBuildContext routingContext = proxyRoutingPipeline.resolve(token, request, requestId);
+        CustomerToken customerToken = routingContext.getCustomerToken();
+        UsageDecision usageDecision = routingContext.getUsageDecision();
+        Model model = routingContext.getModel();
+        Provider provider = routingContext.getProvider();
+        ProviderModel providerModel = routingContext.getProviderModel();
+        ProviderToken providerToken = routingContext.getProviderToken();
         String endpointCode = request.getProtocol().getCode();
-        Model model = routeCacheService.getModel(request.getModel());
-        if (model == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "Model does not exist or is unavailable: " + request.getModel());
-        }
-
-        List<ProviderModel> providerModels = routeCacheService.listProviderModelsByPriority(model.getId(), request.getProtocol());
-        if (providerModels == null || providerModels.isEmpty()) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR,
-                    "No available provider mapping for model and protocol: " + request.getModel());
-        }
-
-        Provider provider = null;
-        ProviderModel providerModel = null;
-        ProviderToken providerToken = null;
-        for (ProviderModel candidate : providerModels) {
-            if (candidate == null || candidate.getProviderId() == null) {
-                continue;
-            }
-            Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());
-            if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
-                continue;
-            }
-            ProviderToken candidateToken = providerTokenSelectService.selectTokenOrNull(candidateProvider.getId());
-            if (candidateToken == null) {
-                continue;
-            }
-            provider = candidateProvider;
-            providerModel = candidate;
-            providerToken = candidateToken;
-            break;
-        }
-
-        if (provider == null || providerModel == null || providerToken == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR,
-                    "No available provider token for model and protocol: " + request.getModel());
-        }
 
         String upstreamModelCode = providerModel.getProviderModelCode();
         if (upstreamModelCode == null || upstreamModelCode.isBlank()) {
@@ -225,7 +180,7 @@ public class ProtocolProxyService {
     private ProviderProtocolAdapter resolveAdapter(ProxyProtocol protocol) {
         ProviderProtocolAdapter adapter = adapterFactory.getAdapter(protocol);
         if (adapter == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "Unsupported protocol: " + protocol);
+            throw ProxyErrors.unsupportedProtocol(protocol);
         }
         return adapter;
     }
@@ -244,7 +199,7 @@ public class ProtocolProxyService {
                                                     long startAt) {
         log.error(logMessage, e);
         recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), startAt);
-        return new BusinessException(ErrorCode.INTERNAL_ERROR, "Request processing failed: " + e.getMessage());
+        return ProxyErrors.requestProcessingFailed(e.getMessage());
     }
 
     private void recordError(ProviderInvokeContext context,

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -14,8 +16,12 @@ import site.xlinks.ai.router.mapper.ModelMapper;
 /**
  * Standard model service.
  */
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class ModelService extends ServiceImpl<ModelMapper, Model> {
+
+    private final ApiCacheRefreshNotifier apiCacheRefreshNotifier;
 
     public IPage<Model> pageQuery(Integer page, Integer pageSize, String modelCode, Integer status) {
         LambdaQueryWrapper<Model> wrapper = new LambdaQueryWrapper<>();
@@ -39,7 +45,12 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         if (model.getCacheHitPrice() == null) {
             model.setCacheHitPrice(model.getInputPrice());
         }
-        return super.save(model);
+        boolean saved = super.save(model);
+        if (saved) {
+            log.info("Model created: id={}, modelCode={}", model.getId(), model.getModelCode());
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("model", "created", model.getId());
+        }
+        return saved;
     }
 
     public boolean update(Model model) {
@@ -50,7 +61,12 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         if (model.getCacheHitPrice() == null && existing.getCacheHitPrice() == null && model.getInputPrice() != null) {
             model.setCacheHitPrice(model.getInputPrice());
         }
-        return super.updateById(model);
+        boolean updated = super.updateById(model);
+        if (updated) {
+            log.info("Model updated: id={}, modelCode={}", model.getId(), modelCode);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("model", "updated", model.getId());
+        }
+        return updated;
     }
 
     public boolean updateStatus(Long id, Integer status) {
@@ -58,12 +74,22 @@ public class ModelService extends ServiceImpl<ModelMapper, Model> {
         Model model = new Model();
         model.setId(id);
         model.setStatus(status);
-        return super.updateById(model);
+        boolean updated = super.updateById(model);
+        if (updated) {
+            log.info("Model status updated: id={}, status={}", id, status);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("model", "updated", id);
+        }
+        return updated;
     }
 
     public boolean deleteById(Long id) {
         getById(id);
-        return super.removeById(id);
+        boolean deleted = super.removeById(id);
+        if (deleted) {
+            log.info("Model deleted: id={}", id);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("model", "deleted", id);
+        }
+        return deleted;
     }
 
     private void validateUnique(String modelCode, Long excludeId) {

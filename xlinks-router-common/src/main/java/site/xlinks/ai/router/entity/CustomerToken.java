@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -56,6 +57,26 @@ public class CustomerToken extends BaseEntity {
      * 允许访问的模型列表（JSON）
      */
     private String allowedModels;
+
+    /**
+     * Daily usage quota. NULL means unlimited.
+     */
+    private BigDecimal dailyQuota;
+
+    /**
+     * Used quota for the current day snapshot.
+     */
+    private BigDecimal usedQuota;
+
+    /**
+     * Total available quota. NULL means unlimited.
+     */
+    private BigDecimal totalQuota;
+
+    /**
+     * Total used quota.
+     */
+    private BigDecimal totalUsedQuota;
 
     /**
      * 备注

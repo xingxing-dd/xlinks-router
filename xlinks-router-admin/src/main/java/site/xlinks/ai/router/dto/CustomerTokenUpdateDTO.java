@@ -3,6 +3,7 @@ package site.xlinks.ai.router.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -23,6 +24,12 @@ public class CustomerTokenUpdateDTO {
 
     @Schema(description = "Allowed model codes in JSON array string")
     private String allowedModels;
+
+    @Schema(description = "Daily usage quota, NULL means unlimited")
+    private BigDecimal dailyQuota;
+
+    @Schema(description = "Total usage quota, NULL means unlimited")
+    private BigDecimal totalQuota;
 
     @Schema(description = "Remark")
     private String remark;

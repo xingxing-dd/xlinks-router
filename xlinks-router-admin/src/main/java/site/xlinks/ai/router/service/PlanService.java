@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
 /**
  * Plan management service.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PlanService extends ServiceImpl<PlanMapper, Plan> {
@@ -52,6 +54,7 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
     private final CustomerPlanMapper customerPlanMapper;
     private final ModelMapper modelMapper;
     private final ObjectMapper objectMapper;
+    private final ApiCacheRefreshNotifier apiCacheRefreshNotifier;
 
     public IPage<PlanVO> pageQuery(Integer page,
                                    Integer pageSize,
@@ -99,6 +102,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         validateMaxPurchaseCount(plan.getMaxPurchaseCount());
         super.save(plan);
         syncPayLink(plan.getId(), dto.getPayUrl(), dto.getPayLinkStatus());
+        log.info("Plan created: id={}, planName={}", plan.getId(), plan.getPlanName());
+        apiCacheRefreshNotifier.notifyAdminCacheChanged("plan", "created", plan.getId());
         return getDetail(plan.getId());
     }
 
@@ -146,6 +151,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         if (dto.getPayUrl() != null || dto.getPayLinkStatus() != null) {
             updatePayLink(id, dto.getPayUrl(), dto.getPayLinkStatus());
         }
+        log.info("Plan updated: id={}", id);
+        apiCacheRefreshNotifier.notifyAdminCacheChanged("plan", "updated", id);
         return getDetail(id);
     }
 
@@ -155,6 +162,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         plan.setId(id);
         plan.setStatus(normalizeBinaryStatus(status, "Plan status"));
         super.updateById(plan);
+        log.info("Plan status updated: id={}, status={}", id, status);
+        apiCacheRefreshNotifier.notifyAdminCacheChanged("plan", "updated", id);
     }
 
     public void updateVisible(Long id, Integer visible) {
@@ -163,6 +172,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         plan.setId(id);
         plan.setVisible(normalizeBinaryStatus(visible, "Plan visibility"));
         super.updateById(plan);
+        log.info("Plan visibility updated: id={}, visible={}", id, visible);
+        apiCacheRefreshNotifier.notifyAdminCacheChanged("plan", "updated", id);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -186,6 +197,8 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
                 .eq(ThirdPartyPayLink::getTargetType, TARGET_TYPE_PLAN)
                 .eq(ThirdPartyPayLink::getTargetId, id));
         super.removeById(id);
+        log.info("Plan deleted: id={}", id);
+        apiCacheRefreshNotifier.notifyAdminCacheChanged("plan", "deleted", id);
     }
 
     private List<PlanVO> enrich(List<Plan> plans) {

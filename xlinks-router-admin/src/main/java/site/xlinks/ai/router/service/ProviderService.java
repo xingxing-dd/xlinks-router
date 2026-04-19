@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -15,9 +16,12 @@ import site.xlinks.ai.router.mapper.ProviderMapper;
 /**
  * Provider service.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
+
+    private final ApiCacheRefreshNotifier apiCacheRefreshNotifier;
 
     public IPage<Provider> pageQuery(Integer page, Integer pageSize, String providerCode,
                                      String providerName, Integer status) {
@@ -47,12 +51,22 @@ public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
         if (exist != null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider code already exists");
         }
-        return super.save(provider);
+        boolean saved = super.save(provider);
+        if (saved) {
+            log.info("Provider created: id={}, providerCode={}", provider.getId(), provider.getProviderCode());
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("provider", "created", provider.getId());
+        }
+        return saved;
     }
 
     public boolean update(Provider provider) {
         getById(provider.getId());
-        return super.updateById(provider);
+        boolean updated = super.updateById(provider);
+        if (updated) {
+            log.info("Provider updated: id={}", provider.getId());
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("provider", "updated", provider.getId());
+        }
+        return updated;
     }
 
     public boolean updateStatus(Long id, Integer status) {
@@ -60,11 +74,21 @@ public class ProviderService extends ServiceImpl<ProviderMapper, Provider> {
         Provider provider = new Provider();
         provider.setId(id);
         provider.setStatus(status);
-        return super.updateById(provider);
+        boolean updated = super.updateById(provider);
+        if (updated) {
+            log.info("Provider status updated: id={}, status={}", id, status);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("provider", "updated", id);
+        }
+        return updated;
     }
 
     public boolean deleteById(Long id) {
         getById(id);
-        return super.removeById(id);
+        boolean deleted = super.removeById(id);
+        if (deleted) {
+            log.info("Provider deleted: id={}", id);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("provider", "deleted", id);
+        }
+        return deleted;
     }
 }

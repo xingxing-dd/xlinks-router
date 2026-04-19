@@ -4,10 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.xlinks.ai.router.common.enums.ErrorCode;
-import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
+import site.xlinks.ai.router.service.routing.ProxyErrors;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,7 +25,7 @@ public class ProviderTokenSelectService {
     public ProviderToken selectToken(Long providerId) {
         ProviderToken selected = selectTokenOrNull(providerId);
         if (selected == null) {
-            throw new BusinessException(ErrorCode.ROUTE_ERROR, "No available Provider Token");
+            throw ProxyErrors.noProviderTokenAvailable();
         }
         return selected;
     }

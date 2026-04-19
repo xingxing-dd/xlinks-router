@@ -9,28 +9,31 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.dto.ProxyProtocol;
+import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Plan;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.mapper.CustomerTokenMapper;
 import site.xlinks.ai.router.mapper.ModelMapper;
 import site.xlinks.ai.router.mapper.PlanMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
 import site.xlinks.ai.router.mapper.ProviderModelMapper;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -46,13 +49,18 @@ public class RouteCacheService {
     private final ProviderMapper providerMapper;
     private final ProviderModelMapper providerModelMapper;
     private final ProviderTokenMapper providerTokenMapper;
+    private final CustomerTokenMapper customerTokenMapper;
     private final ObjectMapper objectMapper;
+
+    private final ReentrantLock refreshLock = new ReentrantLock();
 
     private volatile Map<String, Model> modelCache = Collections.emptyMap();
     private volatile Map<Long, Provider> providerCache = Collections.emptyMap();
     private volatile Map<Long, List<ProviderModel>> providerModelCache = Collections.emptyMap();
     private volatile Map<Long, List<ProviderToken>> providerTokenCache = Collections.emptyMap();
     private volatile Map<Long, ProviderToken> providerTokenByIdCache = Collections.emptyMap();
+    private volatile Map<String, CustomerToken> customerTokenByValueCache = Collections.emptyMap();
+    private volatile Map<Long, CustomerToken> customerTokenByIdCache = Collections.emptyMap();
     private volatile Map<Long, ProviderProtocolMatcher> providerProtocolCache = Collections.emptyMap();
     private volatile Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache = Collections.emptyMap();
     private volatile Map<Long, PlanModelMatcher> planModelCache = Collections.emptyMap();
@@ -69,55 +77,20 @@ public class RouteCacheService {
     }
 
     public void refreshAll() {
-        List<Provider> providers = providerMapper.selectList(
-                new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
-        );
-        List<Model> models = modelMapper.selectList(
-                new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1)
-        );
-        List<Plan> plans = planMapper.selectList(
-                new LambdaQueryWrapper<Plan>().select(Plan::getId, Plan::getAllowedModels)
-        );
-        List<ProviderModel> providerModels = providerModelMapper.selectList(
-                new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
-        );
-        List<ProviderToken> providerTokens = providerTokenMapper.selectList(
-                new LambdaQueryWrapper<ProviderToken>().eq(ProviderToken::getTokenStatus, 1)
-        );
-
-        Map<String, Model> nextModelCache = buildModelCache(models);
-        Map<Long, Provider> nextProviderCache = buildProviderCache(providers);
-        Map<Long, ProviderProtocolMatcher> nextProtocolCache = buildProviderProtocolCache(providers);
-        Map<Long, List<ProviderModel>> nextProviderModelCache = buildProviderModelCache(providerModels);
-        Map<Long, PlanModelMatcher> nextPlanModelCache = buildPlanModelCache(plans);
-        Map<String, List<ProviderModel>> nextRoutingIndex = buildRoutingIndex(
-                nextProviderModelCache,
-                nextProviderCache,
-                nextProtocolCache
-        );
-        Map<Long, List<ProviderToken>> nextProviderTokenCache = buildProviderTokenCache(providerTokens);
-        Map<Long, ProviderToken> nextProviderTokenByIdCache = buildProviderTokenByIdCache(providerTokens);
-
-        // Atomic-ish snapshot swap via volatile references.
-        modelCache = nextModelCache;
-        modelListCache = buildModelList(nextModelCache);
-        providerCache = nextProviderCache;
-        providerProtocolCache = nextProtocolCache;
-        providerModelCache = nextProviderModelCache;
-        planModelCache = nextPlanModelCache;
-        providerModelByModelAndProtocolCache = nextRoutingIndex;
-        providerTokenCache = nextProviderTokenCache;
-        providerTokenByIdCache = nextProviderTokenByIdCache;
-
-        log.info(
-                "Route cache refreshed: models={}, providers={}, modelMappings={}, planRules={}, routingKeys={}, providerTokens={}",
-                modelCache.size(),
-                providerCache.size(),
-                providerModelCache.size(),
-                planModelCache.size(),
-                providerModelByModelAndProtocolCache.size(),
-                providerTokenByIdCache.size()
-        );
+        withRefreshLock("refreshAll", () -> {
+            CacheSnapshot snapshot = buildFullSnapshot();
+            applySnapshot(snapshot);
+            log.info(
+                    "Route cache refreshed: models={}, providers={}, modelMappings={}, planRules={}, routingKeys={}, providerTokens={}, customerTokens={}",
+                    snapshot.modelCache().size(),
+                    snapshot.providerCache().size(),
+                    snapshot.providerModelCache().size(),
+                    snapshot.planModelCache().size(),
+                    snapshot.providerModelByModelAndProtocolCache().size(),
+                    snapshot.providerTokenByIdCache().size(),
+                    snapshot.customerTokenByValueCache().size()
+            );
+        });
     }
 
     public void refreshModels() {
@@ -138,6 +111,126 @@ public class RouteCacheService {
 
     public void refreshPlans() {
         refreshAll();
+    }
+
+    public void refreshCustomerTokens() {
+        refreshAll();
+    }
+
+    public void refreshModelsOnly() {
+        withRefreshLock("refreshModelsOnly", () -> {
+            List<Model> models = modelMapper.selectList(
+                    new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1)
+            );
+            Map<String, Model> nextModelCache = buildModelCache(models);
+            List<Model> nextModelListCache = buildModelList(nextModelCache);
+            modelCache = nextModelCache;
+            modelListCache = nextModelListCache;
+            log.info("Model cache refreshed: models={}", nextModelCache.size());
+        });
+    }
+
+    public void refreshProvidersOnly() {
+        withRefreshLock("refreshProvidersOnly", () -> {
+            List<Provider> providers = providerMapper.selectList(
+                    new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
+            );
+            Map<Long, Provider> nextProviderCache = buildProviderCache(providers);
+            Map<Long, ProviderProtocolMatcher> nextProviderProtocolCache = buildProviderProtocolCache(providers);
+            Map<String, List<ProviderModel>> nextRoutingIndex = buildRoutingIndex(
+                    providerModelCache,
+                    nextProviderCache,
+                    nextProviderProtocolCache
+            );
+            providerCache = nextProviderCache;
+            providerProtocolCache = nextProviderProtocolCache;
+            providerModelByModelAndProtocolCache = nextRoutingIndex;
+            log.info("Provider cache refreshed: providers={}, routingKeys={}",
+                    nextProviderCache.size(), nextRoutingIndex.size());
+        });
+    }
+
+    public void refreshProviderModelsOnly() {
+        withRefreshLock("refreshProviderModelsOnly", () -> {
+            List<ProviderModel> providerModels = providerModelMapper.selectList(
+                    new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
+            );
+            Map<Long, List<ProviderModel>> nextProviderModelCache = buildProviderModelCache(providerModels);
+            Map<String, List<ProviderModel>> nextRoutingIndex = buildRoutingIndex(
+                    nextProviderModelCache,
+                    providerCache,
+                    providerProtocolCache
+            );
+            providerModelCache = nextProviderModelCache;
+            providerModelByModelAndProtocolCache = nextRoutingIndex;
+            log.info("Provider model cache refreshed: modelMappings={}, routingKeys={}",
+                    nextProviderModelCache.size(), nextRoutingIndex.size());
+        });
+    }
+
+    public void refreshProviderTokensOnly() {
+        withRefreshLock("refreshProviderTokensOnly", () -> {
+            List<ProviderToken> providerTokens = providerTokenMapper.selectList(
+                    new LambdaQueryWrapper<ProviderToken>().eq(ProviderToken::getTokenStatus, 1)
+            );
+            Map<Long, List<ProviderToken>> nextProviderTokenCache = buildProviderTokenCache(providerTokens);
+            Map<Long, ProviderToken> nextProviderTokenByIdCache = buildProviderTokenByIdCache(providerTokens);
+            providerTokenCache = nextProviderTokenCache;
+            providerTokenByIdCache = nextProviderTokenByIdCache;
+            log.info("Provider token cache refreshed: providers={}, tokens={}",
+                    nextProviderTokenCache.size(), nextProviderTokenByIdCache.size());
+        });
+    }
+
+    public void refreshPlansOnly() {
+        withRefreshLock("refreshPlansOnly", () -> {
+            List<Plan> plans = planMapper.selectList(
+                    new LambdaQueryWrapper<Plan>().select(Plan::getId, Plan::getAllowedModels)
+            );
+            Map<Long, PlanModelMatcher> nextPlanModelCache = buildPlanModelCache(plans);
+            planModelCache = nextPlanModelCache;
+            log.info("Plan cache refreshed: planRules={}", nextPlanModelCache.size());
+        });
+    }
+
+    public void refreshCustomerTokensByAccountId(Long accountId) {
+        if (accountId == null) {
+            return;
+        }
+        withRefreshLock("refreshCustomerTokensByAccountId", () -> {
+            List<CustomerToken> latestTokens = customerTokenMapper.selectList(
+                    new LambdaQueryWrapper<CustomerToken>().eq(CustomerToken::getAccountId, accountId)
+            );
+
+            Map<String, CustomerToken> nextByValue = new HashMap<>(customerTokenByValueCache);
+            nextByValue.entrySet().removeIf(entry -> {
+                CustomerToken token = entry.getValue();
+                return token != null && accountId.equals(token.getAccountId());
+            });
+
+            Map<Long, CustomerToken> nextById = new HashMap<>(customerTokenByIdCache);
+            nextById.entrySet().removeIf(entry -> {
+                CustomerToken token = entry.getValue();
+                return token != null && accountId.equals(token.getAccountId());
+            });
+
+            for (CustomerToken token : latestTokens) {
+                if (token == null) {
+                    continue;
+                }
+                if (token.getTokenValue() != null && !token.getTokenValue().isBlank()) {
+                    nextByValue.put(token.getTokenValue(), token);
+                }
+                if (token.getId() != null) {
+                    nextById.put(token.getId(), token);
+                }
+            }
+
+            customerTokenByValueCache = Collections.unmodifiableMap(nextByValue);
+            customerTokenByIdCache = Collections.unmodifiableMap(nextById);
+            log.info("Customer token cache refreshed incrementally: accountId={}, loadedTokens={}",
+                    accountId, latestTokens.size());
+        });
     }
 
     public List<Model> listModels() {
@@ -300,6 +393,124 @@ public class RouteCacheService {
         }
     }
 
+    public CustomerToken getCustomerTokenByValue(String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) {
+            return null;
+        }
+        CustomerToken cached = customerTokenByValueCache.get(tokenValue);
+        if (cached != null) {
+            return cached;
+        }
+
+        CustomerToken customerToken = customerTokenMapper.selectOne(
+                new LambdaQueryWrapper<CustomerToken>().eq(CustomerToken::getTokenValue, tokenValue)
+        );
+        if (customerToken != null) {
+            cacheCustomerToken(customerToken);
+        }
+        return customerToken;
+    }
+
+    public void cacheCustomerToken(CustomerToken customerToken) {
+        if (customerToken == null || customerToken.getTokenValue() == null || customerToken.getTokenValue().isBlank()) {
+            return;
+        }
+        Map<String, CustomerToken> nextByValue = new HashMap<>(customerTokenByValueCache);
+        nextByValue.put(customerToken.getTokenValue(), customerToken);
+
+        Map<Long, CustomerToken> nextById = new HashMap<>(customerTokenByIdCache);
+        if (customerToken.getId() != null) {
+            nextById.put(customerToken.getId(), customerToken);
+        }
+
+        customerTokenByValueCache = Collections.unmodifiableMap(nextByValue);
+        customerTokenByIdCache = Collections.unmodifiableMap(nextById);
+    }
+
+    public void updateCustomerTokenQuota(Long tokenId, BigDecimal usedQuota, BigDecimal totalUsedQuota) {
+        if (tokenId == null) {
+            return;
+        }
+        CustomerToken token = customerTokenByIdCache.get(tokenId);
+        if (token == null) {
+            return;
+        }
+        token.setUsedQuota(usedQuota);
+        token.setTotalUsedQuota(totalUsedQuota);
+    }
+
+    private CacheSnapshot buildFullSnapshot() {
+        List<Provider> providers = providerMapper.selectList(
+                new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
+        );
+        List<Model> models = modelMapper.selectList(
+                new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1)
+        );
+        List<Plan> plans = planMapper.selectList(
+                new LambdaQueryWrapper<Plan>().select(Plan::getId, Plan::getAllowedModels)
+        );
+        List<ProviderModel> providerModels = providerModelMapper.selectList(
+                new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
+        );
+        List<ProviderToken> providerTokens = providerTokenMapper.selectList(
+                new LambdaQueryWrapper<ProviderToken>().eq(ProviderToken::getTokenStatus, 1)
+        );
+        List<CustomerToken> customerTokens = customerTokenMapper.selectList(new LambdaQueryWrapper<>());
+
+        Map<String, Model> nextModelCache = buildModelCache(models);
+        Map<Long, Provider> nextProviderCache = buildProviderCache(providers);
+        Map<Long, ProviderProtocolMatcher> nextProviderProtocolCache = buildProviderProtocolCache(providers);
+        Map<Long, List<ProviderModel>> nextProviderModelCache = buildProviderModelCache(providerModels);
+        Map<Long, List<ProviderToken>> nextProviderTokenCache = buildProviderTokenCache(providerTokens);
+        Map<Long, ProviderToken> nextProviderTokenByIdCache = buildProviderTokenByIdCache(providerTokens);
+        Map<Long, PlanModelMatcher> nextPlanModelCache = buildPlanModelCache(plans);
+        Map<String, List<ProviderModel>> nextRoutingIndex = buildRoutingIndex(
+                nextProviderModelCache,
+                nextProviderCache,
+                nextProviderProtocolCache
+        );
+        Map<String, CustomerToken> nextCustomerTokenByValueCache = buildCustomerTokenByValueCache(customerTokens);
+        Map<Long, CustomerToken> nextCustomerTokenByIdCache = buildCustomerTokenByIdCache(customerTokens);
+
+        return new CacheSnapshot(
+                nextModelCache,
+                buildModelList(nextModelCache),
+                nextProviderCache,
+                nextProviderModelCache,
+                nextProviderTokenCache,
+                nextProviderTokenByIdCache,
+                nextCustomerTokenByValueCache,
+                nextCustomerTokenByIdCache,
+                nextProviderProtocolCache,
+                nextRoutingIndex,
+                nextPlanModelCache
+        );
+    }
+
+    private void applySnapshot(CacheSnapshot snapshot) {
+        modelCache = snapshot.modelCache();
+        modelListCache = snapshot.modelListCache();
+        providerCache = snapshot.providerCache();
+        providerModelCache = snapshot.providerModelCache();
+        providerTokenCache = snapshot.providerTokenCache();
+        providerTokenByIdCache = snapshot.providerTokenByIdCache();
+        customerTokenByValueCache = snapshot.customerTokenByValueCache();
+        customerTokenByIdCache = snapshot.customerTokenByIdCache();
+        providerProtocolCache = snapshot.providerProtocolCache();
+        providerModelByModelAndProtocolCache = snapshot.providerModelByModelAndProtocolCache();
+        planModelCache = snapshot.planModelCache();
+    }
+
+    private void withRefreshLock(String operation, Runnable runnable) {
+        refreshLock.lock();
+        try {
+            runnable.run();
+        } finally {
+            refreshLock.unlock();
+            log.debug("Cache refresh operation finished: {}", operation);
+        }
+    }
+
     private Map<String, Model> buildModelCache(List<Model> models) {
         if (models == null || models.isEmpty()) {
             return Collections.emptyMap();
@@ -369,6 +580,37 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(immutable);
     }
 
+    private Map<Long, List<ProviderToken>> buildProviderTokenCache(List<ProviderToken> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, List<ProviderToken>> grouped = new HashMap<>();
+        for (ProviderToken token : tokens) {
+            if (token.getProviderId() == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(token.getProviderId(), ignored -> new ArrayList<>()).add(token);
+        }
+        Map<Long, List<ProviderToken>> immutable = new HashMap<>();
+        for (Map.Entry<Long, List<ProviderToken>> entry : grouped.entrySet()) {
+            immutable.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return Collections.unmodifiableMap(immutable);
+    }
+
+    private Map<Long, ProviderToken> buildProviderTokenByIdCache(List<ProviderToken> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, ProviderToken> map = new HashMap<>();
+        for (ProviderToken token : tokens) {
+            if (token.getId() != null) {
+                map.put(token.getId(), token);
+            }
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
     private Map<Long, PlanModelMatcher> buildPlanModelCache(List<Plan> plans) {
         if (plans == null || plans.isEmpty()) {
             return Collections.emptyMap();
@@ -381,38 +623,6 @@ public class RouteCacheService {
             map.put(plan.getId(), parsePlanModelMatcher(plan.getAllowedModels()));
         }
         return Collections.unmodifiableMap(map);
-    }
-
-    private PlanModelMatcher parsePlanModelMatcher(String rawAllowedModels) {
-        if (rawAllowedModels == null || rawAllowedModels.isBlank()) {
-            return new PlanModelMatcher(true, Collections.emptySet());
-        }
-        String trimmed = rawAllowedModels.trim();
-        try {
-            Set<String> values;
-            if (trimmed.startsWith("[")) {
-                List<String> models = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {
-                });
-                values = models == null
-                        ? Collections.emptySet()
-                        : models.stream()
-                        .filter(item -> item != null && !item.isBlank())
-                        .map(String::trim)
-                        .collect(Collectors.toSet());
-            } else {
-                values = Arrays.stream(trimmed.split("[,;，]"))
-                        .map(item -> item == null ? "" : item.trim())
-                        .filter(item -> !item.isBlank())
-                        .collect(Collectors.toSet());
-            }
-            if (values.isEmpty()) {
-                return new PlanModelMatcher(true, Collections.emptySet());
-            }
-            return new PlanModelMatcher(false, Collections.unmodifiableSet(values));
-        } catch (Exception ex) {
-            log.warn("Failed to parse plan allowed models: {}", rawAllowedModels, ex);
-            return new PlanModelMatcher(true, Collections.emptySet());
-        }
     }
 
     private Map<String, List<ProviderModel>> buildRoutingIndex(Map<Long, List<ProviderModel>> providerModelsByModel,
@@ -452,35 +662,64 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(index);
     }
 
-    private Map<Long, List<ProviderToken>> buildProviderTokenCache(List<ProviderToken> tokens) {
+    private Map<String, CustomerToken> buildCustomerTokenByValueCache(List<CustomerToken> tokens) {
         if (tokens == null || tokens.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<Long, List<ProviderToken>> grouped = new HashMap<>();
-        for (ProviderToken token : tokens) {
-            if (token.getProviderId() == null) {
+        Map<String, CustomerToken> map = new HashMap<>();
+        for (CustomerToken token : tokens) {
+            if (token == null || token.getTokenValue() == null || token.getTokenValue().isBlank()) {
                 continue;
             }
-            grouped.computeIfAbsent(token.getProviderId(), ignored -> new ArrayList<>()).add(token);
+            map.put(token.getTokenValue(), token);
         }
-        Map<Long, List<ProviderToken>> immutable = new HashMap<>();
-        for (Map.Entry<Long, List<ProviderToken>> entry : grouped.entrySet()) {
-            immutable.put(entry.getKey(), List.copyOf(entry.getValue()));
-        }
-        return Collections.unmodifiableMap(immutable);
+        return Collections.unmodifiableMap(map);
     }
 
-    private Map<Long, ProviderToken> buildProviderTokenByIdCache(List<ProviderToken> tokens) {
+    private Map<Long, CustomerToken> buildCustomerTokenByIdCache(List<CustomerToken> tokens) {
         if (tokens == null || tokens.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<Long, ProviderToken> map = new HashMap<>();
-        for (ProviderToken token : tokens) {
-            if (token.getId() != null) {
-                map.put(token.getId(), token);
+        Map<Long, CustomerToken> map = new HashMap<>();
+        for (CustomerToken token : tokens) {
+            if (token == null || token.getId() == null) {
+                continue;
             }
+            map.put(token.getId(), token);
         }
         return Collections.unmodifiableMap(map);
+    }
+
+    private PlanModelMatcher parsePlanModelMatcher(String rawAllowedModels) {
+        if (rawAllowedModels == null || rawAllowedModels.isBlank()) {
+            return new PlanModelMatcher(true, Collections.emptySet());
+        }
+        String trimmed = rawAllowedModels.trim();
+        try {
+            Set<String> values;
+            if (trimmed.startsWith("[")) {
+                List<String> models = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {
+                });
+                values = models == null
+                        ? Collections.emptySet()
+                        : models.stream()
+                        .filter(item -> item != null && !item.isBlank())
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+            } else {
+                values = Arrays.stream(trimmed.split("[,;\uFF0C]"))
+                        .map(item -> item == null ? "" : item.trim())
+                        .filter(item -> !item.isBlank())
+                        .collect(Collectors.toSet());
+            }
+            if (values.isEmpty()) {
+                return new PlanModelMatcher(true, Collections.emptySet());
+            }
+            return new PlanModelMatcher(false, Collections.unmodifiableSet(values));
+        } catch (Exception ex) {
+            log.warn("Failed to parse plan allowed models: {}", rawAllowedModels, ex);
+            return new PlanModelMatcher(true, Collections.emptySet());
+        }
     }
 
     private String buildRoutingIndexKey(Long modelId, ProxyProtocol protocol) {
@@ -497,6 +736,19 @@ public class RouteCacheService {
 
     private int resolvePriority(Provider provider) {
         return provider == null || provider.getPriority() == null ? 0 : provider.getPriority();
+    }
+
+    private record CacheSnapshot(Map<String, Model> modelCache,
+                                 List<Model> modelListCache,
+                                 Map<Long, Provider> providerCache,
+                                 Map<Long, List<ProviderModel>> providerModelCache,
+                                 Map<Long, List<ProviderToken>> providerTokenCache,
+                                 Map<Long, ProviderToken> providerTokenByIdCache,
+                                 Map<String, CustomerToken> customerTokenByValueCache,
+                                 Map<Long, CustomerToken> customerTokenByIdCache,
+                                 Map<Long, ProviderProtocolMatcher> providerProtocolCache,
+                                 Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache,
+                                 Map<Long, PlanModelMatcher> planModelCache) {
     }
 
     private record PlanModelMatcher(boolean allowAll, Set<String> allowedModels) {
@@ -557,4 +809,3 @@ public class RouteCacheService {
         }
     }
 }
-

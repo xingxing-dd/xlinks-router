@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.client.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,6 +15,7 @@ import site.xlinks.ai.router.client.context.CustomerAccountContext;
 import site.xlinks.ai.router.client.dto.token.CreateCustomerTokenRequest;
 import site.xlinks.ai.router.client.dto.token.CreateCustomerTokenResponse;
 import site.xlinks.ai.router.client.dto.token.CustomerTokenItemResponse;
+import site.xlinks.ai.router.client.dto.token.CustomerTokenSummaryResponse;
 import site.xlinks.ai.router.client.dto.token.RefreshCustomerTokenResponse;
 import site.xlinks.ai.router.client.dto.token.UpdateCustomerTokenRequest;
 import site.xlinks.ai.router.client.service.CustomerTokenService;
@@ -23,12 +23,16 @@ import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerToken;
-import site.xlinks.ai.router.entity.UsageRecord;
 import site.xlinks.ai.router.mapper.UsageRecordMapper;
+import site.xlinks.ai.router.model.TokenUsageStats;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/customer-tokens")
@@ -40,16 +44,61 @@ public class CustomerTokenController {
     private final CustomerTokenService customerTokenService;
     private final UsageRecordMapper usageRecordMapper;
 
+    @GetMapping("/summary")
+    public Result<CustomerTokenSummaryResponse> getTokenSummary() {
+        CustomerAccount account = CustomerAccountContext.getAccount();
+        var tokenPage = customerTokenService.pageTokens(account.getId(), 1, 500);
+        List<CustomerToken> tokens = tokenPage.getRecords();
+        List<TokenUsageStats> usageStats = usageRecordMapper.aggregateTokenStatsByAccountId(account.getId());
+
+        long totalRequests = usageStats.stream()
+                .map(TokenUsageStats::getTotalRequests)
+                .filter(value -> value != null && value > 0)
+                .mapToLong(Long::longValue)
+                .sum();
+
+        LocalDateTime now = LocalDateTime.now();
+        int activeTokens = 0;
+        int disabledTokens = 0;
+        int expiredTokens = 0;
+        for (CustomerToken token : tokens) {
+            if (token.getExpireTime() != null && now.isAfter(token.getExpireTime())) {
+                expiredTokens++;
+            } else if (token.getStatus() != null && token.getStatus() == 1) {
+                activeTokens++;
+            } else {
+                disabledTokens++;
+            }
+        }
+
+        return Result.success(new CustomerTokenSummaryResponse(
+                tokens.size(),
+                activeTokens,
+                disabledTokens,
+                expiredTokens,
+                totalRequests
+        ));
+    }
+
     @GetMapping
     public Result<PageResult<CustomerTokenItemResponse>> getTokens(@RequestParam(name = "page", defaultValue = "1") Integer page,
                                                                    @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
         CustomerAccount account = CustomerAccountContext.getAccount();
         var tokenPage = customerTokenService.pageTokens(account.getId(), page, pageSize);
+        Map<String, TokenUsageStats> usageStatsMap = toUsageStatsMap(account.getId());
 
         List<CustomerTokenItemResponse> records = tokenPage.getRecords().stream()
-                .map(token -> toItemResponse(token, account.getId()))
+                .map(token -> toItemResponse(token, usageStatsMap.get(token.getTokenValue())))
                 .toList();
         return Result.success(PageResult.of(records, tokenPage.getTotal(), page, pageSize));
+    }
+
+    @GetMapping("/{id}")
+    public Result<CustomerTokenItemResponse> getToken(@PathVariable Long id) {
+        CustomerAccount account = CustomerAccountContext.getAccount();
+        CustomerToken token = customerTokenService.getToken(account.getId(), id);
+        Map<String, TokenUsageStats> usageStatsMap = toUsageStatsMap(account.getId());
+        return Result.success(toItemResponse(token, usageStatsMap.get(token.getTokenValue())));
     }
 
     @PostMapping
@@ -62,6 +111,8 @@ public class CustomerTokenController {
         response.setTokenName(token.getTokenName());
         response.setTokenValue(token.getTokenValue());
         response.setExpireTime(formatDateTime(token.getExpireTime()));
+        response.setDailyQuota(token.getDailyQuota());
+        response.setTotalQuota(token.getTotalQuota());
         response.setCreatedAt(formatDateTime(token.getCreatedAt()));
         return Result.success(response);
     }
@@ -99,8 +150,7 @@ public class CustomerTokenController {
         return Result.success(response);
     }
 
-    private CustomerTokenItemResponse toItemResponse(CustomerToken token, Long accountId) {
-        Integer totalRequests = queryTotalRequests(accountId, token.getTokenValue());
+    private CustomerTokenItemResponse toItemResponse(CustomerToken token, TokenUsageStats usageStats) {
         return new CustomerTokenItemResponse(
                 String.valueOf(token.getId()),
                 token.getCustomerName(),
@@ -109,22 +159,25 @@ public class CustomerTokenController {
                 token.getStatus(),
                 formatDateTime(token.getExpireTime()),
                 parseAllowedModels(token.getAllowedModels()),
-                totalRequests,
-                null,
+                token.getDailyQuota(),
+                defaultDecimal(token.getUsedQuota()),
+                token.getTotalQuota(),
+                defaultDecimal(token.getTotalUsedQuota()),
+                usageStats == null || usageStats.getTotalRequests() == null ? 0 : usageStats.getTotalRequests().intValue(),
+                formatDateTime(usageStats == null ? null : usageStats.getLastUsedAt()),
                 formatDateTime(token.getCreatedAt())
         );
     }
 
-    private Integer queryTotalRequests(Long accountId, String tokenValue) {
-        if (accountId == null || tokenValue == null || tokenValue.isBlank()) {
-            return 0;
+    private Map<String, TokenUsageStats> toUsageStatsMap(Long accountId) {
+        List<TokenUsageStats> usageStats = usageRecordMapper.aggregateTokenStatsByAccountId(accountId);
+        Map<String, TokenUsageStats> usageStatsMap = new HashMap<>();
+        for (TokenUsageStats item : usageStats) {
+            if (item != null && item.getCustomerToken() != null && !item.getCustomerToken().isBlank()) {
+                usageStatsMap.put(item.getCustomerToken(), item);
+            }
         }
-        Long count = usageRecordMapper.selectCount(
-                new LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
-                        .eq(UsageRecord::getCustomerToken, tokenValue)
-        );
-        return count == null ? 0 : count.intValue();
+        return usageStatsMap;
     }
 
     private String formatDateTime(java.time.LocalDateTime time) {
@@ -142,10 +195,7 @@ public class CustomerTokenController {
         }
     }
 
-    private String maskToken(String tokenValue) {
-        if (tokenValue == null || tokenValue.length() < 10) {
-            return tokenValue;
-        }
-        return tokenValue.substring(0, 6) + "***" + tokenValue.substring(tokenValue.length() - 4);
+    private BigDecimal defaultDecimal(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

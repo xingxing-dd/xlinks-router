@@ -11,7 +11,6 @@ import site.xlinks.ai.router.entity.UsageRecord;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
 /**
  * Usage record service.
  */
@@ -22,6 +21,7 @@ public class UsageRecordService {
 
     private final site.xlinks.ai.router.mapper.UsageRecordMapper usageRecordMapper;
     private final CustomerPlanService customerPlanService;
+    private final CustomerTokenQuotaService customerTokenQuotaService;
 
     public void record(ProviderInvokeContext context,
                        UsageMetrics usageMetrics,
@@ -51,6 +51,7 @@ public class UsageRecordService {
         try {
             usageRecordMapper.insert(record);
             consumePlanQuota(context, record);
+            syncCustomerTokenQuotaUsage(context, record);
             log.debug("Usage record saved: {}", context.getRequestId());
         } catch (Exception e) {
             log.error("Failed to save usage record", e);
@@ -166,6 +167,29 @@ public class UsageRecordService {
             return;
         }
         customerPlanService.consumeQuota(planId, record.getTotalCost());
+    }
+
+    private void syncCustomerTokenQuotaUsage(ProviderInvokeContext context, UsageRecord record) {
+        if (context == null || record == null || context.getCustomerTokenId() == null) {
+            return;
+        }
+        if (context.getAccountId() == null || context.getCustomerToken() == null || context.getCustomerToken().isBlank()) {
+            return;
+        }
+        BigDecimal totalCost = record.getTotalCost();
+        if (totalCost == null || totalCost.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        BigDecimal todayUsed = usageRecordMapper.sumTotalCostByDateRange(
+                context.getAccountId(),
+                context.getCustomerToken(),
+                java.time.LocalDate.now().atStartOfDay(),
+                java.time.LocalDate.now().plusDays(1).atStartOfDay()
+        );
+        if (todayUsed == null) {
+            todayUsed = BigDecimal.ZERO;
+        }
+        customerTokenQuotaService.syncQuotaUsage(context.getCustomerTokenId(), todayUsed, totalCost);
     }
 
     private int normalizeCacheHitTokens(Integer cacheHitTokens, int promptTokens, String modelProvider) {

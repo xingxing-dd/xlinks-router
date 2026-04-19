@@ -1,0 +1,28 @@
+package site.xlinks.ai.router.service.routing;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import site.xlinks.ai.router.context.UsageDecision;
+import site.xlinks.ai.router.service.UsageEntitlementService;
+
+/**
+ * Resolves the active entitlement and package availability for the request.
+ */
+@Component
+@RequiredArgsConstructor
+public class UsageDecisionRoutingStep implements RoutingStep {
+
+    private final UsageEntitlementService usageEntitlementService;
+
+    @Override
+    public void apply(RoutingBuildContext context) {
+        UsageDecision usageDecision = usageEntitlementService.decide(
+                context.getCustomerToken(),
+                context.getRequest().getModel()
+        );
+        if (usageDecision == null || !usageDecision.isPackageEnabled()) {
+            throw ProxyErrors.customerPlanUnavailable();
+        }
+        context.setUsageDecision(usageDecision);
+    }
+}

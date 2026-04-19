@@ -215,6 +215,10 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
   `status` tinyint(4) NOT NULL DEFAULT '1',
   `expire_time` datetime DEFAULT NULL,
   `allowed_models` json DEFAULT NULL,
+  `daily_quota` decimal(12,2) DEFAULT NULL,
+  `used_quota` decimal(12,2) DEFAULT NULL,
+  `total_quota` decimal(12,2) DEFAULT NULL,
+  `total_used_quota` decimal(12,2) DEFAULT NULL,
   `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -601,7 +605,7 @@ VALUES
   (10003, 'plan', 'https://dwz.cn/qCXw5k5E', 1, '大包套餐支付链接', 'system', 'system');
 
 INSERT IGNORE INTO `customer_tokens`
-  (`account_id`, `customer_name`, `token_name`, `token_value`, `status`, `allowed_models`, `remark`, `create_by`, `update_by`)
+  (`account_id`, `customer_name`, `token_name`, `token_value`, `status`, `allowed_models`, `daily_quota`, `used_quota`, `total_quota`, `total_used_quota`, `remark`, `create_by`, `update_by`)
 VALUES
   (
     1,
@@ -610,6 +614,10 @@ VALUES
     '4f7d9c2a1b6e43d8a5c0f1e2b3d4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a',
     1,
     JSON_ARRAY('gpt-5.2', 'gpt-5.3', 'gpt-5.4'),
+    NULL,
+    0.00,
+    NULL,
+    0.00,
     'default customer token',
     'system',
     'system'

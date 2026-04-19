@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.client.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -15,6 +16,7 @@ import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +30,7 @@ import java.util.UUID;
 public class CustomerTokenService {
 
     private final CustomerTokenMapper customerTokenMapper;
+    private final ApiCacheRefreshNotifier apiCacheRefreshNotifier;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public IPage<CustomerToken> pageTokens(Long accountId, Integer page, Integer pageSize) {
@@ -46,25 +49,33 @@ public class CustomerTokenService {
         token.setTokenValue(generateTokenValue());
         token.setAllowedModels(toJson(request.getAllowedModels()));
         token.setExpireTime(resolveExpireTime(request.getExpireDays()));
+        token.setDailyQuota(normalizeDailyQuota(request.getDailyQuota()));
+        token.setTotalQuota(normalizeDailyQuota(request.getTotalQuota()));
+        token.setUsedQuota(BigDecimal.ZERO);
+        token.setTotalUsedQuota(BigDecimal.ZERO);
         token.setCreateBy(operator);
         token.setUpdateBy(operator);
 
         customerTokenMapper.insert(token);
+        apiCacheRefreshNotifier.notifyCustomerTokenChanged(accountId, token.getId(), "created");
         return token;
     }
 
     public void updateToken(Long accountId, Long id, UpdateCustomerTokenRequest request, String operator) {
         CustomerToken existing = getByIdAndAccount(id, accountId);
+        LambdaUpdateWrapper<CustomerToken> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(CustomerToken::getId, existing.getId())
+                .eq(CustomerToken::getAccountId, accountId)
+                .set(CustomerToken::getTokenName, request.getTokenName())
+                .set(CustomerToken::getStatus, request.getStatus())
+                .set(CustomerToken::getAllowedModels, toJson(request.getAllowedModels()))
+                .set(CustomerToken::getExpireTime, parseExpireTime(request.getExpireTime()))
+                .set(CustomerToken::getDailyQuota, normalizeDailyQuota(request.getDailyQuota()))
+                .set(CustomerToken::getTotalQuota, normalizeDailyQuota(request.getTotalQuota()))
+                .set(CustomerToken::getUpdateBy, operator);
 
-        CustomerToken update = new CustomerToken();
-        update.setId(existing.getId());
-        update.setTokenName(request.getTokenName());
-        update.setStatus(request.getStatus());
-        update.setAllowedModels(toJson(request.getAllowedModels()));
-        update.setExpireTime(parseExpireTime(request.getExpireTime()));
-        update.setUpdateBy(operator);
-
-        customerTokenMapper.updateById(update);
+        customerTokenMapper.update(null, updateWrapper);
+        apiCacheRefreshNotifier.notifyCustomerTokenChanged(accountId, existing.getId(), "updated");
     }
 
     public void updateStatus(Long accountId, Long id, Integer status, String operator) {
@@ -74,11 +85,13 @@ public class CustomerTokenService {
         update.setStatus(status);
         update.setUpdateBy(operator);
         customerTokenMapper.updateById(update);
+        apiCacheRefreshNotifier.notifyCustomerTokenChanged(accountId, existing.getId(), "updated");
     }
 
     public void deleteToken(Long accountId, Long id) {
         CustomerToken existing = getByIdAndAccount(id, accountId);
         customerTokenMapper.deleteById(existing.getId());
+        apiCacheRefreshNotifier.notifyCustomerTokenChanged(accountId, existing.getId(), "deleted");
     }
 
     public CustomerToken refreshToken(Long accountId, Long id, String operator) {
@@ -89,7 +102,12 @@ public class CustomerTokenService {
         update.setUpdateBy(operator);
         customerTokenMapper.updateById(update);
         existing.setTokenValue(update.getTokenValue());
+        apiCacheRefreshNotifier.notifyCustomerTokenChanged(accountId, existing.getId(), "refreshed");
         return existing;
+    }
+
+    public CustomerToken getToken(Long accountId, Long id) {
+        return getByIdAndAccount(id, accountId);
     }
 
     private CustomerToken getByIdAndAccount(Long id, Long accountId) {
@@ -108,7 +126,7 @@ public class CustomerTokenService {
     }
 
     private String toJson(List<String> values) {
-        if (values == null) {
+        if (values == null || values.isEmpty()) {
             return null;
         }
         try {
@@ -130,5 +148,12 @@ public class CustomerTokenService {
             return null;
         }
         return LocalDateTime.parse(expireTime.replace(" ", "T"));
+    }
+
+    private BigDecimal normalizeDailyQuota(BigDecimal dailyQuota) {
+        if (dailyQuota == null || dailyQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return dailyQuota;
     }
 }

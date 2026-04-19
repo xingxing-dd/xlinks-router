@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -19,12 +20,14 @@ import site.xlinks.ai.router.mapper.ProviderModelMapper;
 /**
  * Provider model mapping service.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProviderModelService extends ServiceImpl<ProviderModelMapper, ProviderModel> {
 
     private final ProviderMapper providerMapper;
     private final ModelMapper modelMapper;
+    private final ApiCacheRefreshNotifier apiCacheRefreshNotifier;
 
     public IPage<ProviderModel> pageQuery(Integer page,
                                           Integer pageSize,
@@ -52,7 +55,13 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
     public boolean save(ProviderModel providerModel) {
         validateReferences(providerModel.getProviderId(), providerModel.getModelId());
         validateUnique(providerModel.getProviderId(), providerModel.getModelId(), providerModel.getProviderModelCode(), null);
-        return super.save(providerModel);
+        boolean saved = super.save(providerModel);
+        if (saved) {
+            log.info("Provider model mapping created: id={}, providerId={}, modelId={}",
+                    providerModel.getId(), providerModel.getProviderId(), providerModel.getModelId());
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "created", providerModel.getId());
+        }
+        return saved;
     }
 
     public boolean update(ProviderModel providerModel) {
@@ -64,7 +73,13 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
                 : existing.getProviderModelCode();
         validateReferences(providerId, modelId);
         validateUnique(providerId, modelId, providerModelCode, providerModel.getId());
-        return super.updateById(providerModel);
+        boolean updated = super.updateById(providerModel);
+        if (updated) {
+            log.info("Provider model mapping updated: id={}, providerId={}, modelId={}",
+                    providerModel.getId(), providerId, modelId);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "updated", providerModel.getId());
+        }
+        return updated;
     }
 
     public boolean updateStatus(Long id, Integer status) {
@@ -72,12 +87,22 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
         ProviderModel providerModel = new ProviderModel();
         providerModel.setId(id);
         providerModel.setStatus(status);
-        return super.updateById(providerModel);
+        boolean updated = super.updateById(providerModel);
+        if (updated) {
+            log.info("Provider model mapping status updated: id={}, status={}", id, status);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "updated", id);
+        }
+        return updated;
     }
 
     public boolean deleteById(Long id) {
         getById(id);
-        return super.removeById(id);
+        boolean deleted = super.removeById(id);
+        if (deleted) {
+            log.info("Provider model mapping deleted: id={}", id);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "deleted", id);
+        }
+        return deleted;
     }
 
     private void validateUnique(Long providerId, Long modelId, String providerModelCode, Long excludeId) {

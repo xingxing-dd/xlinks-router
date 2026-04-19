@@ -20,7 +20,8 @@ class UsageRecordServiceTest {
     void shouldCalculateCostUsingCacheHitFormula() {
         UsageRecordMapper usageRecordMapper = mock(UsageRecordMapper.class);
         CustomerPlanService customerPlanService = mock(CustomerPlanService.class);
-        UsageRecordService service = new UsageRecordService(usageRecordMapper, customerPlanService);
+        CustomerTokenQuotaService customerTokenQuotaService = mock(CustomerTokenQuotaService.class);
+        UsageRecordService service = new UsageRecordService(usageRecordMapper, customerPlanService, customerTokenQuotaService);
 
         ProviderInvokeContext context = ProviderInvokeContext.builder()
                 .requestId("req_1")
@@ -67,7 +68,8 @@ class UsageRecordServiceTest {
     void shouldIgnoreCacheHitTokensWhenProviderStrategyIsNone() {
         UsageRecordMapper usageRecordMapper = mock(UsageRecordMapper.class);
         CustomerPlanService customerPlanService = mock(CustomerPlanService.class);
-        UsageRecordService service = new UsageRecordService(usageRecordMapper, customerPlanService);
+        CustomerTokenQuotaService customerTokenQuotaService = mock(CustomerTokenQuotaService.class);
+        UsageRecordService service = new UsageRecordService(usageRecordMapper, customerPlanService, customerTokenQuotaService);
 
         ProviderInvokeContext context = ProviderInvokeContext.builder()
                 .requestId("req_2")

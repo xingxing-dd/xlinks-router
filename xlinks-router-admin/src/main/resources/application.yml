@@ -76,3 +76,10 @@ logging:
     org.springframework: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+xlinks:
+  internal:
+    cache-refresh:
+      enabled: false
+      api-url: ${XLS_INTERNAL_CACHE_REFRESH_API_URL:https://ai.xlinks.site/internal/cache/refresh}
+      token: ${XLS_INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}

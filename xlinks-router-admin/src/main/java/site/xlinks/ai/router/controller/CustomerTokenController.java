@@ -32,6 +32,8 @@ public class CustomerTokenController {
         token.setStatus(dto.getStatus());
         token.setExpireTime(dto.getExpireTime());
         token.setAllowedModels(dto.getAllowedModels());
+        token.setDailyQuota(dto.getDailyQuota());
+        token.setTotalQuota(dto.getTotalQuota());
         token.setRemark(dto.getRemark());
 
         CustomerToken created = customerTokenService.create(token);
@@ -80,6 +82,12 @@ public class CustomerTokenController {
         }
         if (dto.getAllowedModels() != null) {
             token.setAllowedModels(dto.getAllowedModels());
+        }
+        if (dto.getDailyQuota() != null) {
+            token.setDailyQuota(dto.getDailyQuota());
+        }
+        if (dto.getTotalQuota() != null) {
+            token.setTotalQuota(dto.getTotalQuota());
         }
         if (dto.getRemark() != null) {
             token.setRemark(dto.getRemark());
