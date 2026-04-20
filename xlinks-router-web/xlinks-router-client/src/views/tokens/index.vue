@@ -4,8 +4,6 @@ import { useI18n } from 'vue-i18n'
 import {
   Plus,
   Copy,
-  Eye,
-  EyeOff,
   Trash2,
   Settings,
   Search,
@@ -15,9 +13,11 @@ import {
   Key,
   Check,
   RotateCcw,
+  Download,
 } from 'lucide-vue-next'
 import { useTokens } from '@/composables/useTokens'
 import { cn } from '@/utils/cn'
+import { toast } from '@/utils/toast'
 
 const { t } = useI18n()
 
@@ -30,7 +30,6 @@ const statusOptions = [
 ]
 
 const {
-  visibleKeys,
   isCreateModalOpen,
   isEditModalOpen,
   newTokenName,
@@ -46,7 +45,7 @@ const {
   loadingAvailableModels,
   filteredTokens,
   loadTokens,
-  toggleKeyVisibility,
+  loadAvailableModels,
   copyToClipboard,
   handleCreateToken,
   handleDeleteToken,
@@ -58,7 +57,6 @@ const {
   selectAllAllowedModels,
   clearAllowedModels,
   resetQuotaUsage,
-  maskKey,
   formatQuotaValue,
   getQuotaProgress,
   getDailyQuotaText,
@@ -77,6 +75,122 @@ const isModelSelected = (model) => settingsForm.value.allowedModels.includes(mod
 const isAllModelsSelected = computed(() => {
   return availableModels.value.length > 0 && settingsForm.value.allowedModels.length === availableModels.value.length
 })
+const isImportModalOpen = ref(false)
+const importToken = ref(null)
+const importApp = ref('codex')
+const importName = ref('')
+const importPrimaryModel = ref('')
+const importSonnetModel = ref('')
+const importOpusModel = ref('')
+const importDropdownOpen = ref('')
+
+const importModelOptions = computed(() => {
+  const tokenModels = Array.isArray(importToken.value?.allowedModels) ? importToken.value.allowedModels : []
+  const base = tokenModels.length > 0 ? tokenModels : availableModels.value
+  return Array.from(new Set((base || []).filter(Boolean)))
+})
+
+const getImportModelLabel = (value) => {
+  return value || t('tokens.ccswitchSelectModel')
+}
+
+const syncImportModels = () => {
+  const options = importModelOptions.value
+  const firstModel = options[0] || ''
+
+  if (!options.includes(importPrimaryModel.value)) {
+    importPrimaryModel.value = firstModel
+  }
+  if (!options.includes(importSonnetModel.value)) {
+    importSonnetModel.value = firstModel
+  }
+  if (!options.includes(importOpusModel.value)) {
+    importOpusModel.value = firstModel
+  }
+}
+
+const openImportModal = async (token) => {
+  importToken.value = token
+  importApp.value = 'codex'
+  importName.value = token.name
+  importPrimaryModel.value = ''
+  importSonnetModel.value = ''
+  importOpusModel.value = ''
+
+  await loadAvailableModels()
+  syncImportModels()
+  importDropdownOpen.value = ''
+  isImportModalOpen.value = true
+}
+
+const closeImportModal = () => {
+  isImportModalOpen.value = false
+  importToken.value = null
+  importDropdownOpen.value = ''
+}
+
+const toggleImportDropdown = (key) => {
+  importDropdownOpen.value = importDropdownOpen.value === key ? '' : key
+}
+
+const selectImportModel = (key, model) => {
+  if (key === 'primary') {
+    importPrimaryModel.value = model
+  } else if (key === 'sonnet') {
+    importSonnetModel.value = model
+  } else if (key === 'opus') {
+    importOpusModel.value = model
+  }
+  importDropdownOpen.value = ''
+}
+
+const handleImportToCCSwitch = () => {
+  if (!importToken.value) {
+    return
+  }
+  if (!importName.value.trim()) {
+    toast.warning(t('tokens.ccswitchNameRequired'))
+    return
+  }
+  if (!importPrimaryModel.value) {
+    toast.warning(t('tokens.ccswitchPrimaryRequired'))
+    return
+  }
+
+  try {
+    const origin = window.location.origin.replace(/\/$/, '')
+    const params = new URLSearchParams({
+      resource: 'provider',
+      app: importApp.value,
+      name: importName.value.trim(),
+      endpoint: importApp.value === 'codex' ? `${origin}/v1` : origin,
+      apiKey: importToken.value.key,
+      model: importPrimaryModel.value,
+      homepage: origin,
+      enabled: 'true',
+    })
+
+    if (importApp.value === 'claude') {
+      params.set('haikuModel', importPrimaryModel.value)
+      if (importSonnetModel.value) {
+        params.set('sonnetModel', importSonnetModel.value)
+      }
+      if (importOpusModel.value) {
+        params.set('opusModel', importOpusModel.value)
+      }
+    }
+
+    window.location.href = `ccswitch://v1/import?${params.toString()}`
+    toast.info(
+      t('tokens.ccswitchImportTriggered'),
+      t('tokens.ccswitchImportTriggeredDetail', { name: importName.value.trim() }),
+    )
+    closeImportModal()
+  } catch (error) {
+    toast.error(t('tokens.ccswitchImportFailed'), error?.message || t('tokens.ccswitchImportFailedDetail'))
+  }
+}
+
 const getCurrentDateTimeLocal = () => {
   const now = new Date()
   const offset = now.getTimezoneOffset()
@@ -203,10 +317,10 @@ onMounted(loadTokens)
             <table class="w-full">
               <thead>
                 <tr class="border-b-2 border-slate-200">
-                  <th class="w-[16%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
+                  <th class="w-[12%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
                     {{ t('tokens.table.name') }}
                   </th>
-                  <th class="w-[24%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
+                  <th class="w-[16%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
                     {{ t('tokens.table.key') }}
                   </th>
                   <th class="w-[15%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
@@ -224,7 +338,7 @@ onMounted(loadTokens)
                   <th class="w-[6%] text-left py-3 px-4 text-sm font-semibold text-slate-700">
                     {{ t('tokens.table.status') }}
                   </th>
-                  <th class="w-[4%] text-right py-3 px-4 text-sm font-semibold text-slate-700">
+                  <th class="w-[8%] text-right py-3 px-4 text-sm font-semibold text-slate-700">
                     {{ t('tokens.table.actions') }}
                   </th>
                 </tr>
@@ -235,39 +349,39 @@ onMounted(loadTokens)
                   :key="token.id"
                   class="border-b border-slate-100 hover:bg-slate-50 transition-colors group"
                 >
-                  <td class="py-4 px-4">
+                  <td class="max-w-[9rem] py-4 px-4">
                     <div class="flex items-center gap-2 min-w-0">
-                      <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
+                      <!-- <div class="w-8 h-8 bg-gradient-icon rounded-lg flex items-center justify-center">
                         <Key class="w-4 h-4 text-white" />
-                      </div>
+                      </div> -->
                       <span class="truncate font-medium text-slate-900" :title="token.name">
                         {{ token.name }}
                       </span>
                     </div>
                   </td>
-                  <td class="w-[24%] py-4 px-4">
-                    <div class="flex items-center gap-2 max-w-[16rem]">
+                  <td class="w-[16%] py-4 px-4">
+                    <div class="flex items-center gap-1.5 max-w-[12rem]">
                       <code
-                        :title="visibleKeys.has(token.id) ? token.key : maskKey(token.key)"
+                        :title="token.key"
                         :class="cn(
                           'text-xs font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded flex-1 whitespace-nowrap truncate'
                         )"
                       >
-                        {{ visibleKeys.has(token.id) ? token.key : maskKey(token.key) }}
+                        {{ token.key }}
                       </code>
-                      <button
-                        @click="toggleKeyVisibility(token.id)"
-                        class="p-1.5 hover:bg-slate-200 rounded transition-colors opacity-0 group-hover:opacity-100"
-                        :title="visibleKeys.has(token.id) ? t('common.hide') : t('common.show')"
-                      >
-                        <component :is="visibleKeys.has(token.id) ? EyeOff : Eye" class="w-3.5 h-3.5 text-slate-600" />
-                      </button>
                       <button
                         @click="copyToClipboard(token.key, token.name)"
                         class="p-1.5 hover:bg-primary/10 rounded transition-colors opacity-0 group-hover:opacity-100"
                         :title="t('common.copy')"
                       >
                         <Copy class="w-3.5 h-3.5 text-primary" />
+                      </button>
+                      <button
+                        @click="openImportModal(token)"
+                        class="p-1.5 hover:bg-sky-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                        :title="t('tokens.importToCCSwitch')"
+                      >
+                        <Download class="w-3.5 h-3.5 text-sky-600" />
                       </button>
                     </div>
                   </td>
@@ -336,7 +450,7 @@ onMounted(loadTokens)
                     </button>
                   </td>
                   <td class="py-4 px-4 text-right">
-                    <div class="inline-flex items-center gap-3">
+                    <div class="inline-flex items-center gap-2">
                       <button
                         @click="openEditModal(token)"
                         class="p-1.5 text-primary hover:text-primary/80 transition-colors"
@@ -379,24 +493,23 @@ onMounted(loadTokens)
               <div class="mb-3">
                 <div class="flex items-center gap-2">
                   <code
-                    :class="cn(
-                      'text-xs font-mono text-slate-700 bg-white px-2 py-1.5 rounded flex-1 border border-slate-200',
-                      visibleKeys.has(token.id) ? 'overflow-x-auto whitespace-nowrap' : 'truncate'
-                    )"
+                    class="flex-1 truncate rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-mono text-slate-700"
+                    :title="token.key"
                   >
-                    {{ visibleKeys.has(token.id) ? token.key : maskKey(token.key) }}
+                    {{ token.key }}
                   </code>
-                  <button
-                    @click="toggleKeyVisibility(token.id)"
-                    class="p-1.5 hover:bg-slate-200 rounded transition-colors"
-                  >
-                    <component :is="visibleKeys.has(token.id) ? EyeOff : Eye" class="w-4 h-4 text-slate-600" />
-                  </button>
                   <button
                     @click="copyToClipboard(token.key, token.name)"
                     class="p-1.5 hover:bg-primary/10 rounded transition-colors"
                   >
                     <Copy class="w-4 h-4 text-primary" />
+                  </button>
+                  <button
+                    @click="openImportModal(token)"
+                    class="p-1.5 hover:bg-sky-50 rounded transition-colors"
+                    :title="t('tokens.importToCCSwitch')"
+                  >
+                    <Download class="w-4 h-4 text-sky-600" />
                   </button>
                 </div>
               </div>
@@ -524,6 +637,157 @@ onMounted(loadTokens)
               class="flex-1 px-6 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
             >
               {{ submitting ? t('tokens.creating') : t('common.confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="isImportModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div class="bg-gradient-button p-6 text-white">
+          <h2 class="text-2xl font-bold">{{ t('tokens.ccswitchModalTitle') }}</h2>
+          <p class="mt-1 text-sm text-white/80">{{ importToken?.name }}</p>
+        </div>
+        <div class="space-y-4 p-6">
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchApp') }}</label>
+            <div class="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                @click="importApp = 'codex'"
+                class="rounded-xl border px-4 py-3 text-sm font-semibold transition"
+                :class="importApp === 'codex' ? 'border-transparent bg-gradient-button text-white shadow-lg shadow-primary/20' : 'border-slate-300 bg-white text-slate-700'"
+              >
+                {{ t('tokens.ccswitchCodex') }}
+              </button>
+              <button
+                type="button"
+                @click="importApp = 'claude'"
+                class="rounded-xl border px-4 py-3 text-sm font-semibold transition"
+                :class="importApp === 'claude' ? 'border-transparent bg-gradient-button text-white shadow-lg shadow-primary/20' : 'border-slate-300 bg-white text-slate-700'"
+              >
+                {{ t('tokens.ccswitchClaude') }}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchName') }}</label>
+            <input
+              v-model="importName"
+              type="text"
+              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+              :placeholder="t('tokens.modal.namePlaceholder')"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchPrimaryModel') }}</label>
+            <div class="relative">
+              <button
+                type="button"
+                @click="toggleImportDropdown('primary')"
+                class="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm text-slate-900 shadow-sm transition hover:border-primary/40 focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+              >
+                <span class="truncate">{{ getImportModelLabel(importPrimaryModel) }}</span>
+                <ChevronDown class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="{ 'rotate-180': importDropdownOpen === 'primary' }" />
+              </button>
+              <div
+                v-if="importDropdownOpen === 'primary'"
+                class="absolute z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border-2 border-primary/20 bg-white shadow-2xl"
+              >
+                <button
+                  v-for="model in importModelOptions"
+                  :key="`primary-${model}`"
+                  type="button"
+                  @click="selectImportModel('primary', model)"
+                  class="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-primary/5"
+                  :class="importPrimaryModel === model ? 'bg-primary/10 font-semibold text-primary' : 'text-slate-700'"
+                >
+                  <span class="truncate">{{ model }}</span>
+                  <Check v-if="importPrimaryModel === model" class="h-4 w-4 shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <template v-if="importApp === 'claude'">
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchSonnetModel') }}</label>
+              <div class="relative">
+                <button
+                  type="button"
+                  @click="toggleImportDropdown('sonnet')"
+                  class="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm text-slate-900 shadow-sm transition hover:border-primary/40 focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+                >
+                  <span class="truncate">{{ getImportModelLabel(importSonnetModel) }}</span>
+                  <ChevronDown class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="{ 'rotate-180': importDropdownOpen === 'sonnet' }" />
+                </button>
+                <div
+                  v-if="importDropdownOpen === 'sonnet'"
+                  class="absolute z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border-2 border-primary/20 bg-white shadow-2xl"
+                >
+                  <button
+                    v-for="model in importModelOptions"
+                    :key="`sonnet-${model}`"
+                    type="button"
+                    @click="selectImportModel('sonnet', model)"
+                    class="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-primary/5"
+                    :class="importSonnetModel === model ? 'bg-primary/10 font-semibold text-primary' : 'text-slate-700'"
+                  >
+                    <span class="truncate">{{ model }}</span>
+                    <Check v-if="importSonnetModel === model" class="h-4 w-4 shrink-0" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchOpusModel') }}</label>
+              <div class="relative">
+                <button
+                  type="button"
+                  @click="toggleImportDropdown('opus')"
+                  class="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm text-slate-900 shadow-sm transition hover:border-primary/40 focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+                >
+                  <span class="truncate">{{ getImportModelLabel(importOpusModel) }}</span>
+                  <ChevronDown class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="{ 'rotate-180': importDropdownOpen === 'opus' }" />
+                </button>
+                <div
+                  v-if="importDropdownOpen === 'opus'"
+                  class="absolute z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border-2 border-primary/20 bg-white shadow-2xl"
+                >
+                  <button
+                    v-for="model in importModelOptions"
+                    :key="`opus-${model}`"
+                    type="button"
+                    @click="selectImportModel('opus', model)"
+                    class="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-primary/5"
+                    :class="importOpusModel === model ? 'bg-primary/10 font-semibold text-primary' : 'text-slate-700'"
+                  >
+                    <span class="truncate">{{ model }}</span>
+                    <Check v-if="importOpusModel === model" class="h-4 w-4 shrink-0" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <div class="flex gap-3 pt-2">
+            <button
+              type="button"
+              @click="closeImportModal"
+              class="flex-1 rounded-xl border-2 border-slate-300 px-6 py-3 font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              @click="handleImportToCCSwitch"
+              class="flex-1 rounded-xl bg-gradient-button px-6 py-3 font-medium text-white transition hover:shadow-lg hover:shadow-primary/25"
+            >
+              {{ t('tokens.importToCCSwitch') }}
             </button>
           </div>
         </div>

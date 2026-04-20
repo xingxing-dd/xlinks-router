@@ -208,6 +208,17 @@ const getUsageSourceTagClass = (usageType) => {
   }
   return 'bg-slate-100 text-slate-600 border-slate-200'
 }
+
+const getInputTokenTagClass = (inputTokens) => {
+  const tokens = Number(inputTokens || 0)
+  if (tokens > 200000) {
+    return 'bg-red-100 text-red-700 border-red-200'
+  }
+  if (tokens > 150000) {
+    return 'bg-amber-100 text-amber-700 border-amber-200'
+  }
+  return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+}
 </script>
 
 <template>
@@ -378,7 +389,11 @@ const getUsageSourceTagClass = (usageType) => {
                       <span class="font-medium text-slate-900">{{ record.model }}</span>
                     </div>
                   </td>
-                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.inputTokens) }}</td>
+                  <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getInputTokenTagClass(record.inputTokens)">
+                      {{ formatCompactNumber(record.inputTokens) }}
+                    </span>
+                  </td>
                   <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.cacheHitTokens) }}</td>
                   <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.outputTokens) }}</td>
                   <td class="py-4 px-4 text-left text-sm text-slate-600 whitespace-nowrap">{{ formatCompactNumber(record.totalTokens) }}</td>
@@ -426,7 +441,11 @@ const getUsageSourceTagClass = (usageType) => {
               <div class="grid grid-cols-2 gap-3">
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.inputTokens') }}</p>
-                  <p class="text-sm text-slate-700">{{ formatCompactNumber(record.inputTokens) }}</p>
+                  <p>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-xs" :class="getInputTokenTagClass(record.inputTokens)">
+                      {{ formatCompactNumber(record.inputTokens) }}
+                    </span>
+                  </p>
                 </div>
                 <div class="bg-white rounded-xl p-3 border border-slate-200">
                   <p class="text-xs text-slate-500 mb-1">{{ t('dashboard.usageTable.cacheHitTokens') }}</p>

@@ -16,10 +16,42 @@ export default defineConfig({
     cssCodeSplit: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vue: ['vue', 'vue-router', 'pinia', 'vue-i18n'],
-          ui: ['lucide-vue-next', 'radix-vue', 'class-variance-authority', 'clsx', 'tailwind-merge', 'tailwindcss-animate'],
-          charts: ['echarts', 'vue-echarts'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return
+          }
+
+          if (id.includes('node_modules/vue-echarts/')) {
+            return 'charting-vue'
+          }
+
+          if (id.includes('node_modules/echarts/')) {
+            return 'charting-echarts'
+          }
+
+          if (id.includes('node_modules/zrender/')) {
+            return 'charting-zrender'
+          }
+
+          if (
+            id.includes('node_modules/vue/') ||
+            id.includes('node_modules/vue-router/') ||
+            id.includes('node_modules/pinia/') ||
+            id.includes('node_modules/vue-i18n/')
+          ) {
+            return 'vue'
+          }
+
+          if (
+            id.includes('node_modules/lucide-vue-next/') ||
+            id.includes('node_modules/radix-vue/') ||
+            id.includes('node_modules/class-variance-authority/') ||
+            id.includes('node_modules/clsx/') ||
+            id.includes('node_modules/tailwind-merge/') ||
+            id.includes('node_modules/tailwindcss-animate/')
+          ) {
+            return 'ui'
+          }
         },
       },
     },

@@ -24,7 +24,6 @@ export function useTokens() {
   const { t } = useI18n()
 
   const tokens = ref([])
-  const visibleKeys = ref(new Set())
   const isCreateModalOpen = ref(false)
   const isEditModalOpen = ref(false)
   const newTokenName = ref('')
@@ -87,19 +86,19 @@ export function useTokens() {
   const formatQuotaValue = (value) => {
     const num = Number(value || 0)
     if (num >= 1000000) {
-      return `$${(num / 1000000).toFixed(1)}M`
+      return `${(num / 1000000).toFixed(1)}M$`
     }
     if (num >= 1000) {
-      return `$${(num / 1000).toFixed(1)}K`
+      return `${(num / 1000).toFixed(1)}K$`
     }
-    return Number.isInteger(num) ? `$${num}` : `$${num.toFixed(1)}`
+    return Number.isInteger(num) ? `${num}$` : `${num.toFixed(1)}$`
   }
 
   const getDailyQuotaText = (token) => {
     if (token.dailyQuota == null) {
       return {
-        label: t('tokens.dailyQuotaUnlimitedShort'),
-        value: t('tokens.dailyQuotaUnlimited'),
+        label: t('tokens.dailyQuotaUsed'),
+        value: `${formatQuotaValue(token.usedQuota)}/${t('tokens.unlimitedText')}`,
       }
     }
     return {
@@ -112,7 +111,7 @@ export function useTokens() {
     if (token.totalQuota == null) {
       return {
         label: t('tokens.totalQuotaUsed'),
-        value: t('tokens.unlimitedText'),
+        value: `${formatQuotaValue(token.totalUsedQuota)}/${t('tokens.unlimitedText')}`,
       }
     }
     return {
@@ -129,7 +128,10 @@ export function useTokens() {
   }
 
   const getDailyQuotaPercent = (token) => {
-    if (token.dailyQuota == null || token.dailyQuota <= 0) {
+    if (token.dailyQuota == null) {
+      return 100
+    }
+    if (token.dailyQuota <= 0) {
       return 0
     }
     return Math.max(0, Math.min(100, (token.usedQuota / token.dailyQuota) * 100))
@@ -198,16 +200,6 @@ export function useTokens() {
     } finally {
       loadingAvailableModels.value = false
     }
-  }
-
-  const toggleKeyVisibility = (id) => {
-    const next = new Set(visibleKeys.value)
-    if (next.has(id)) {
-      next.delete(id)
-    } else {
-      next.add(id)
-    }
-    visibleKeys.value = next
   }
 
   const copyToClipboard = async (text, name) => {
@@ -301,6 +293,26 @@ export function useTokens() {
       toast.success(t('tokens.statusUpdated'), t('tokens.statusUpdatedDetail', { status: statusText }))
     } catch (error) {
       toast.error(t('tokens.statusUpdateFailed'), error.message)
+    }
+  }
+
+  const handleImportToCCSwitch = (token) => {
+    try {
+      const origin = window.location.origin.replace(/\/$/, '')
+      const params = new URLSearchParams({
+        app: 'codex',
+        name: `xlinks-${token.name}`,
+        endpoint: `${origin}/v1/`,
+        apiKey: token.key,
+        homepage: origin,
+      })
+      window.location.href = `ccswitch://v1/import?${params.toString()}`
+      toast.info(
+        t('tokens.ccswitchImportTriggered'),
+        t('tokens.ccswitchImportTriggeredDetail', { name: token.name }),
+      )
+    } catch (error) {
+      toast.error(t('tokens.ccswitchImportFailed'), error?.message || t('tokens.ccswitchImportFailedDetail'))
     }
   }
 
@@ -421,17 +433,8 @@ export function useTokens() {
     }
   }
 
-  const maskKey = (key) => {
-    if (!key || key.length <= 20) {
-      return key
-    }
-
-    return `${key.substring(0, 10)}${'\u2022'.repeat(20)}${key.substring(key.length - 10)}`
-  }
-
   return {
     tokens,
-    visibleKeys,
     isCreateModalOpen,
     isEditModalOpen,
     newTokenName,
@@ -449,8 +452,8 @@ export function useTokens() {
     filteredTokens,
     loadTokens,
     loadAvailableModels,
-    toggleKeyVisibility,
     copyToClipboard,
+    handleImportToCCSwitch,
     handleCreateToken,
     handleDeleteToken,
     handleToggleStatus,
@@ -461,7 +464,6 @@ export function useTokens() {
     openEditModal,
     closeEditModal,
     handleSaveSettings,
-    maskKey,
     formatQuotaValue,
     getQuotaProgress,
     getDailyQuotaText,

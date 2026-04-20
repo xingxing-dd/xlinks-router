@@ -1,19 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Login from '../views/login/index.vue'
-import ForgotPassword from '../views/forgot-password/index.vue'
-import Register from '../views/register/index.vue'
-import Dashboard from '../views/dashboard/index.vue'
-import Tokens from '../views/tokens/index.vue'
-import Models from '../views/models/index.vue'
-import Plans from '../views/plans/index.vue'
-import Promotion from '../views/promotion/index.vue'
-import Contact from '../views/contact/index.vue'
-import Docs from '../views/docs/index.vue'
-import Landing from '../views/landing/index.vue'
-import PaymentSuccess from '../views/payment/success.vue'
-import PaymentError from '../views/payment/error.vue'
-import DefaultLayout from '../layouts/DefaultLayout.vue'
 import { useAuthStore } from '@/stores/auth'
+
+const Login = () => import('../views/login/index.vue')
+const ForgotPassword = () => import('../views/forgot-password/index.vue')
+const Register = () => import('../views/register/index.vue')
+const Dashboard = () => import('../views/dashboard/index.vue')
+const Tokens = () => import('../views/tokens/index.vue')
+const Models = () => import('../views/models/index.vue')
+const Plans = () => import('../views/plans/index.vue')
+const Promotion = () => import('../views/promotion/index.vue')
+const Contact = () => import('../views/contact/index.vue')
+const Docs = () => import('../views/docs/index.vue')
+const Landing = () => import('../views/landing/index.vue')
+const PaymentSuccess = () => import('../views/payment/success.vue')
+const PaymentError = () => import('../views/payment/error.vue')
+const DefaultLayout = () => import('../layouts/DefaultLayout.vue')
 
 const routes = [
   {
