@@ -11,7 +11,9 @@ import site.xlinks.ai.router.entity.CustomerPlan;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerPlanMapper;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -71,7 +73,12 @@ public class UsageEntitlementService {
             return null;
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = now.toLocalDate();
         for (CustomerPlan availablePlan : availablePlans) {
+            if (!isPlanCurrentlyUsable(availablePlan, now, today)) {
+                continue;
+            }
             if (routeCacheService.isModelSupportedByPlan(availablePlan.getPlanId(), requestModel)) {
                 log.info("Selected available plan for account={}, model={}, planRecordId={}, planId={}",
                         accountId, requestModel, availablePlan.getId(), availablePlan.getPlanId());
@@ -81,6 +88,41 @@ public class UsageEntitlementService {
 
         log.info("No available plan supports model, account={}, model={}", accountId, requestModel);
         return null;
+    }
+
+    /**
+     * Defensive runtime guard: avoid using expired or over-quota plans even if query results are stale.
+     */
+    private boolean isPlanCurrentlyUsable(CustomerPlan plan, LocalDateTime now, LocalDate today) {
+        if (plan == null || plan.getStatus() == null || plan.getStatus() != 1) {
+            return false;
+        }
+
+        if (plan.getPlanExpireTime() != null && !plan.getPlanExpireTime().isAfter(now)) {
+            return false;
+        }
+
+        BigDecimal totalQuota = plan.getTotalQuota();
+        if (totalQuota == null || totalQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal totalUsed = plan.getTotalUsedQuota() == null ? BigDecimal.ZERO : plan.getTotalUsedQuota();
+        if (totalUsed.compareTo(totalQuota) >= 0) {
+            return false;
+        }
+
+        BigDecimal dailyQuota = plan.getDailyQuota();
+        if (dailyQuota == null || dailyQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal usedQuota = plan.getUsedQuota() == null ? BigDecimal.ZERO : plan.getUsedQuota();
+        LocalDateTime refreshTime = plan.getQuotaRefreshTime();
+        boolean refreshedToday = refreshTime != null && refreshTime.toLocalDate().isEqual(today);
+        if (refreshedToday && usedQuota.compareTo(dailyQuota) >= 0) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

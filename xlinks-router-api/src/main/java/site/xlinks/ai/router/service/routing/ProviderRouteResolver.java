@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.service.routing;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.entity.Provider;
@@ -14,6 +15,7 @@ import java.util.List;
 /**
  * Resolves the first available provider route for a model/protocol pair.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProviderRouteResolver {
@@ -29,6 +31,11 @@ public class ProviderRouteResolver {
 
         for (ProviderModel candidate : providerModels) {
             if (candidate == null || candidate.getProviderId() == null) {
+                continue;
+            }
+            if (routeCacheService.isProviderTemporarilyUnavailable(candidate.getProviderId())) {
+                log.warn("Skipping temporarily unavailable provider. providerId={}, modelId={}, modelCode={}, protocol={}",
+                        candidate.getProviderId(), modelId, modelCode, protocol);
                 continue;
             }
             Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());

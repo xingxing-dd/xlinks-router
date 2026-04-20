@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -16,6 +17,15 @@ import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.mapper.ModelMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
 import site.xlinks.ai.router.mapper.ProviderModelMapper;
+import site.xlinks.ai.router.dto.ProviderModelBatchCreateDTO;
+import site.xlinks.ai.router.vo.ProviderModelBatchCreateVO;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Provider model mapping service.
@@ -103,6 +113,75 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
             apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "deleted", id);
         }
         return deleted;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ProviderModelBatchCreateVO batchCreate(ProviderModelBatchCreateDTO dto) {
+        if (dto.getProviderId() == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider ID must not be null");
+        }
+        Provider provider = providerMapper.selectById(dto.getProviderId());
+        if (provider == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider not found");
+        }
+
+        List<Long> normalizedModelIds = dto.getModelIds() == null
+                ? List.of()
+                : dto.getModelIds().stream()
+                .filter(java.util.Objects::nonNull)
+                .map(Long::valueOf)
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
+        if (normalizedModelIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Standard model IDs must not be empty");
+        }
+
+        List<Model> models = modelMapper.selectBatchIds(normalizedModelIds);
+        Map<Long, Model> modelMap = models.stream().collect(Collectors.toMap(Model::getId, item -> item));
+        List<Long> missingModelIds = normalizedModelIds.stream()
+                .filter(modelId -> !modelMap.containsKey(modelId))
+                .collect(Collectors.toList());
+        if (!missingModelIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Standard model not found: " + missingModelIds);
+        }
+
+        List<ProviderModel> existingMappings = this.list(
+                new LambdaQueryWrapper<ProviderModel>()
+                        .eq(ProviderModel::getProviderId, dto.getProviderId())
+                        .in(ProviderModel::getModelId, normalizedModelIds)
+        );
+        Set<Long> existingModelIds = existingMappings.stream()
+                .map(ProviderModel::getModelId)
+                .collect(Collectors.toSet());
+
+        Integer targetStatus = dto.getStatus() == null ? 1 : dto.getStatus();
+        List<ProviderModel> toCreate = new ArrayList<>();
+        for (Long modelId : normalizedModelIds) {
+            if (existingModelIds.contains(modelId)) {
+                continue;
+            }
+            Model model = modelMap.get(modelId);
+            ProviderModel mapping = new ProviderModel();
+            mapping.setProviderId(dto.getProviderId());
+            mapping.setModelId(modelId);
+            mapping.setProviderModelCode(model.getModelCode());
+            mapping.setProviderModelName(StringUtils.hasText(model.getModelName()) ? model.getModelName() : model.getModelCode());
+            mapping.setStatus(targetStatus);
+            mapping.setRemark(dto.getRemark());
+            toCreate.add(mapping);
+        }
+
+        if (!toCreate.isEmpty()) {
+            super.saveBatch(toCreate);
+            apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "batchCreated", dto.getProviderId());
+        }
+
+        int requestedCount = normalizedModelIds.size();
+        int createdCount = toCreate.size();
+        int skippedCount = requestedCount - createdCount;
+        log.info("Provider model mappings batch create finished: providerId={}, requested={}, created={}, skipped={}",
+                dto.getProviderId(), requestedCount, createdCount, skippedCount);
+
+        return new ProviderModelBatchCreateVO(requestedCount, createdCount, skippedCount);
     }
 
     private void validateUnique(Long providerId, Long modelId, String providerModelCode, Long excludeId) {

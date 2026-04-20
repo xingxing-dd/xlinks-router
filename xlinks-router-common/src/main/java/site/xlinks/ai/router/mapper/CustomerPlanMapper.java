@@ -25,6 +25,7 @@ public interface CustomerPlanMapper extends BaseMapper<CustomerPlan> {
             FROM customer_plans
             WHERE account_id = #{accountId}
               AND status = 1
+              AND (plan_expire_time IS NULL OR plan_expire_time > NOW())
               AND daily_quota IS NOT NULL
               AND daily_quota > 0
               AND total_quota IS NOT NULL
@@ -45,6 +46,7 @@ public interface CustomerPlanMapper extends BaseMapper<CustomerPlan> {
             FROM customer_plans
             WHERE account_id = #{accountId}
               AND status = 1
+              AND (plan_expire_time IS NULL OR plan_expire_time > NOW())
               AND daily_quota IS NOT NULL
               AND daily_quota > 0
               AND total_quota IS NOT NULL

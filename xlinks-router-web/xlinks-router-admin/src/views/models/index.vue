@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   createModel,
-  createProviderModel,
+  createProviderModelsBatch,
   deleteModel,
   deleteProviderModel,
   listModels,
@@ -55,6 +55,7 @@ const mappingDialogMode = ref('create')
 const currentMappingId = ref(null)
 const mappingForm = reactive({
   providerId: '',
+  modelIds: [],
   modelId: '',
   providerModelCode: '',
   providerModelName: '',
@@ -64,6 +65,29 @@ const mappingForm = reactive({
 
 const modelCodeMap = computed(() => Object.fromEntries(modelOptions.value.map((item) => [item.id, item.modelCode])))
 const providerNameMap = computed(() => Object.fromEntries(providers.value.map((item) => [item.id, item.providerName])))
+const selectedModelIdSet = computed(() => new Set((mappingForm.modelIds || []).map((id) => Number(id))))
+
+const isModelSelected = (modelId) => selectedModelIdSet.value.has(Number(modelId))
+
+const toggleModelSelection = (modelId) => {
+  const normalizedId = Number(modelId)
+  const current = Array.isArray(mappingForm.modelIds) ? [...mappingForm.modelIds] : []
+  const index = current.findIndex((id) => Number(id) === normalizedId)
+  if (index >= 0) {
+    current.splice(index, 1)
+  } else {
+    current.push(normalizedId)
+  }
+  mappingForm.modelIds = current
+}
+
+const selectAllModels = () => {
+  mappingForm.modelIds = modelOptions.value.map((item) => Number(item.id))
+}
+
+const clearSelectedModels = () => {
+  mappingForm.modelIds = []
+}
 
 const loadProviders = async () => {
   const data = await listProviders({ page: 1, pageSize: 200 })
@@ -124,6 +148,7 @@ const resetModelForm = () => Object.assign(modelForm, {
 
 const resetMappingForm = () => Object.assign(mappingForm, {
   providerId: '',
+  modelIds: [],
   modelId: '',
   providerModelCode: '',
   providerModelName: '',
@@ -227,16 +252,15 @@ const removeModel = async (record) => {
 }
 
 const handleMappingModelChange = () => {
-  if (mappingDialogMode.value !== 'create' || !mappingForm.modelId) {
+  if (mappingDialogMode.value !== 'edit' || !mappingForm.modelId) {
     return
   }
   const selectedModel = modelOptions.value.find((item) => Number(item.id) === Number(mappingForm.modelId))
   if (!selectedModel) {
     return
   }
-  const defaultName = selectedModel.modelName || selectedModel.modelCode || ''
-  mappingForm.providerModelCode = defaultName
-  mappingForm.providerModelName = defaultName
+  mappingForm.providerModelCode = selectedModel.modelCode || ''
+  mappingForm.providerModelName = selectedModel.modelName || selectedModel.modelCode || ''
 }
 
 const openMappingCreate = () => {
@@ -251,6 +275,7 @@ const openMappingEdit = (record) => {
   currentMappingId.value = record.id
   Object.assign(mappingForm, {
     providerId: record.providerId || '',
+    modelIds: record.modelId ? [record.modelId] : [],
     modelId: record.modelId || '',
     providerModelCode: record.providerModelCode || '',
     providerModelName: record.providerModelName || '',
@@ -261,27 +286,60 @@ const openMappingEdit = (record) => {
 }
 
 const submitMapping = async () => {
-  if (!mappingForm.providerId || !mappingForm.modelId || !mappingForm.providerModelCode) {
-    toastStore.push('请完整填写服务商、标准模型和模型编码', 'warning')
+  if (!mappingForm.providerId) {
+    toastStore.push('请选择服务商', 'warning')
     return
   }
+
   mappingSubmitting.value = true
   try {
-    const payload = {
-      providerId: Number(mappingForm.providerId),
-      modelId: Number(mappingForm.modelId),
-      providerModelCode: mappingForm.providerModelCode,
-      providerModelName: mappingForm.providerModelName,
-      status: Number(mappingForm.status || 1),
-      remark: mappingForm.remark,
-    }
     if (mappingDialogMode.value === 'create') {
-      await createProviderModel(payload)
-      toastStore.push('服务商映射创建成功', 'success')
+      const selectedModelIds = Array.from(new Set(
+        (mappingForm.modelIds || [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id)),
+      ))
+      if (!selectedModelIds.length) {
+        toastStore.push('请至少勾选一个标准模型', 'warning')
+        return
+      }
+
+      const result = await createProviderModelsBatch({
+        providerId: Number(mappingForm.providerId),
+        modelIds: selectedModelIds,
+        status: Number(mappingForm.status || 1),
+        remark: mappingForm.remark,
+      })
+
+      const requestedCount = Number(result?.requestedCount || 0)
+      const createdCount = Number(result?.createdCount || 0)
+      const skippedCount = Number(result?.skippedCount || 0)
+      if (createdCount > 0) {
+        if (skippedCount > 0) {
+          toastStore.push(`批量添加完成：新增 ${createdCount} 条，跳过重复 ${skippedCount} 条（共 ${requestedCount} 条）`, 'success')
+        } else {
+          toastStore.push(`批量添加成功：共新增 ${createdCount} 条`, 'success')
+        }
+      } else {
+        toastStore.push(`未新增数据：${requestedCount || selectedModelIds.length} 条均已存在`, 'warning')
+      }
     } else {
+      if (!mappingForm.modelId || !mappingForm.providerModelCode) {
+        toastStore.push('请完整填写标准模型和模型编码', 'warning')
+        return
+      }
+      const payload = {
+        providerId: Number(mappingForm.providerId),
+        modelId: Number(mappingForm.modelId),
+        providerModelCode: mappingForm.providerModelCode,
+        providerModelName: mappingForm.providerModelName,
+        status: Number(mappingForm.status || 1),
+        remark: mappingForm.remark,
+      }
       await updateProviderModel(currentMappingId.value, payload)
       toastStore.push('服务商映射更新成功', 'success')
     }
+
     mappingDialogVisible.value = false
     await loadMappings()
   } catch (error) {
@@ -568,11 +626,12 @@ onMounted(async () => {
 
     <div v-if="mappingDialogVisible" class="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div class="absolute inset-0 bg-slate-900/50" @click="mappingDialogVisible = false"></div>
-      <div class="modal-panel max-w-3xl">
+      <div class="modal-panel max-w-5xl">
         <div class="flex items-center justify-between gap-4">
           <h3 class="text-lg font-semibold text-slate-800">{{ mappingDialogMode === 'create' ? '新增服务商映射' : '编辑服务商映射' }}</h3>
           <button class="btn-text" @click="mappingDialogVisible = false">关闭</button>
         </div>
+
         <div class="mt-6 grid gap-4 md:grid-cols-2">
           <div>
             <label class="text-sm text-slate-500">服务商</label>
@@ -581,21 +640,7 @@ onMounted(async () => {
               <option v-for="provider in providers" :key="provider.id" :value="provider.id">{{ provider.providerName }}</option>
             </select>
           </div>
-          <div>
-            <label class="text-sm text-slate-500">标准模型</label>
-            <select v-model="mappingForm.modelId" class="input mt-2" @change="handleMappingModelChange">
-              <option value="">请选择标准模型</option>
-              <option v-for="model in modelOptions" :key="model.id" :value="model.id">{{ model.modelCode }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-sm text-slate-500">模型编码</label>
-            <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="上游模型编码" />
-          </div>
-          <div>
-            <label class="text-sm text-slate-500">模型名称</label>
-            <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="上游模型展示名" />
-          </div>
+
           <div v-if="mappingDialogMode === 'create'">
             <label class="text-sm text-slate-500">初始状态</label>
             <select v-model.number="mappingForm.status" class="input mt-2">
@@ -603,11 +648,71 @@ onMounted(async () => {
               <option :value="0">停用</option>
             </select>
           </div>
+
+          <div v-else>
+            <label class="text-sm text-slate-500">标准模型</label>
+            <select v-model="mappingForm.modelId" class="input mt-2" @change="handleMappingModelChange">
+              <option value="">请选择标准模型</option>
+              <option v-for="model in modelOptions" :key="model.id" :value="model.id">{{ model.modelCode }}</option>
+            </select>
+          </div>
+
+          <template v-if="mappingDialogMode === 'create'">
+            <div class="md:col-span-2">
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-slate-500">可选模型</label>
+                <div class="flex items-center gap-2">
+                  <button type="button" class="btn-outline !h-8 !px-3 text-xs" @click="selectAllModels">全选</button>
+                  <button type="button" class="btn-outline !h-8 !px-3 text-xs" @click="clearSelectedModels">清空</button>
+                </div>
+              </div>
+              <div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 max-h-[26rem] overflow-auto">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <button
+                    v-for="model in modelOptions"
+                    :key="model.id"
+                    type="button"
+                    class="text-left rounded-xl border bg-white p-3 transition-colors"
+                    :class="isModelSelected(model.id) ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-primary/40'"
+                    @click="toggleModelSelection(model.id)"
+                  >
+                    <div class="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        class="mt-0.5"
+                        :checked="isModelSelected(model.id)"
+                        @change="toggleModelSelection(model.id)"
+                        @click.stop
+                      >
+                      <div class="min-w-0">
+                        <p class="font-medium text-slate-800 truncate">{{ model.modelName || model.modelCode }}</p>
+                        <p class="text-xs text-slate-500 truncate mt-0.5">{{ model.modelCode }}</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </template>
+
+          <template v-else>
+            <div>
+              <label class="text-sm text-slate-500">模型编码</label>
+              <input v-model.trim="mappingForm.providerModelCode" class="input mt-2" placeholder="上游模型编码" />
+            </div>
+            <div>
+              <label class="text-sm text-slate-500">模型名称</label>
+              <input v-model.trim="mappingForm.providerModelName" class="input mt-2" placeholder="上游模型展示名" />
+            </div>
+          </template>
+
           <div class="md:col-span-2">
             <label class="text-sm text-slate-500">备注</label>
             <textarea v-model.trim="mappingForm.remark" class="input mt-2 min-h-24" placeholder="可选"></textarea>
           </div>
         </div>
+
         <div class="mt-6 flex justify-end gap-3">
           <button class="btn-outline" @click="mappingDialogVisible = false">取消</button>
           <button class="btn-primary" :disabled="mappingSubmitting" @click="submitMapping">{{ mappingSubmitting ? '提交中...' : '确认保存' }}</button>

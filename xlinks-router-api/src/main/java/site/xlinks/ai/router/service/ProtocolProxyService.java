@@ -58,7 +58,14 @@ public class ProtocolProxyService {
         try {
             context = buildContext(token, request, requestId);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
-            JsonNode response = adapter.forwardDirect(request, context);
+            JsonNode response;
+            try {
+                response = adapter.forwardDirect(request, context);
+            } catch (Exception ex) {
+                routeCacheService.recordProviderFailure(context.getProviderId());
+                throw ex;
+            }
+            routeCacheService.clearProviderFailure(context.getProviderId());
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
             usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
             return response;
@@ -84,19 +91,25 @@ public class ProtocolProxyService {
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
             String modelProvider = context.getModelProvider();
-            adapter.forwardStream(request, context, event -> {
-                appendStreamEvent(upstreamStreamPayloadBuilder, event);
-                if (isFirstResponseDataEvent(event)) {
-                    long firstResponseMs = System.currentTimeMillis() - startAt;
-                    int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
-                    responseMsRef.compareAndSet(null, normalized);
-                }
-                UsageMetrics usageMetrics = usageExtractor.extract(event, modelProvider);
-                if (usageMetrics != null) {
-                    usageMetricsRef.set(usageMetrics);
-                }
-                onEvent.accept(event);
-            });
+            try {
+                adapter.forwardStream(request, context, event -> {
+                    appendStreamEvent(upstreamStreamPayloadBuilder, event);
+                    if (isFirstResponseDataEvent(event)) {
+                        long firstResponseMs = System.currentTimeMillis() - startAt;
+                        int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
+                        responseMsRef.compareAndSet(null, normalized);
+                    }
+                    UsageMetrics usageMetrics = usageExtractor.extract(event, modelProvider);
+                    if (usageMetrics != null) {
+                        usageMetricsRef.set(usageMetrics);
+                    }
+                    onEvent.accept(event);
+                });
+            } catch (Exception ex) {
+                routeCacheService.recordProviderFailure(context.getProviderId());
+                throw ex;
+            }
+            routeCacheService.clearProviderFailure(context.getProviderId());
             usageRecordService.recordAsync(
                     context,
                     usageMetricsRef.get(),

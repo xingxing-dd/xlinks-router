@@ -23,6 +23,9 @@ import site.xlinks.ai.router.mapper.ProviderModelMapper;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +36,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -44,6 +49,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RouteCacheService {
 
+    private static final int PROVIDER_FAILURE_THRESHOLD = 3;
+    private static final Duration PROVIDER_FAILURE_TTL = Duration.ofMinutes(10);
+
     private final ModelMapper modelMapper;
     private final PlanMapper planMapper;
     private final ProviderMapper providerMapper;
@@ -53,6 +61,9 @@ public class RouteCacheService {
     private final ObjectMapper objectMapper;
 
     private final ReentrantLock refreshLock = new ReentrantLock();
+    private final ConcurrentMap<Long, ProviderFailureMark> providerFailureCache = new ConcurrentHashMap<>();
+
+    private Clock clock = Clock.systemUTC();
 
     private volatile Map<String, Model> modelCache = Collections.emptyMap();
     private volatile Map<Long, Provider> providerCache = Collections.emptyMap();
@@ -78,6 +89,7 @@ public class RouteCacheService {
 
     public void refreshAll() {
         withRefreshLock("refreshAll", () -> {
+            cleanupExpiredProviderFailures();
             CacheSnapshot snapshot = buildFullSnapshot();
             applySnapshot(snapshot);
             log.info(
@@ -119,6 +131,7 @@ public class RouteCacheService {
 
     public void refreshModelsOnly() {
         withRefreshLock("refreshModelsOnly", () -> {
+            cleanupExpiredProviderFailures();
             List<Model> models = modelMapper.selectList(
                     new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1)
             );
@@ -132,6 +145,7 @@ public class RouteCacheService {
 
     public void refreshProvidersOnly() {
         withRefreshLock("refreshProvidersOnly", () -> {
+            cleanupExpiredProviderFailures();
             List<Provider> providers = providerMapper.selectList(
                     new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
             );
@@ -152,6 +166,7 @@ public class RouteCacheService {
 
     public void refreshProviderModelsOnly() {
         withRefreshLock("refreshProviderModelsOnly", () -> {
+            cleanupExpiredProviderFailures();
             List<ProviderModel> providerModels = providerModelMapper.selectList(
                     new LambdaQueryWrapper<ProviderModel>().eq(ProviderModel::getStatus, 1)
             );
@@ -170,6 +185,7 @@ public class RouteCacheService {
 
     public void refreshProviderTokensOnly() {
         withRefreshLock("refreshProviderTokensOnly", () -> {
+            cleanupExpiredProviderFailures();
             List<ProviderToken> providerTokens = providerTokenMapper.selectList(
                     new LambdaQueryWrapper<ProviderToken>().eq(ProviderToken::getTokenStatus, 1)
             );
@@ -184,6 +200,7 @@ public class RouteCacheService {
 
     public void refreshPlansOnly() {
         withRefreshLock("refreshPlansOnly", () -> {
+            cleanupExpiredProviderFailures();
             List<Plan> plans = planMapper.selectList(
                     new LambdaQueryWrapper<Plan>().select(Plan::getId, Plan::getAllowedModels)
             );
@@ -198,6 +215,7 @@ public class RouteCacheService {
             return;
         }
         withRefreshLock("refreshCustomerTokensByAccountId", () -> {
+            cleanupExpiredProviderFailures();
             List<CustomerToken> latestTokens = customerTokenMapper.selectList(
                     new LambdaQueryWrapper<CustomerToken>().eq(CustomerToken::getAccountId, accountId)
             );
@@ -439,6 +457,54 @@ public class RouteCacheService {
         token.setTotalUsedQuota(totalUsedQuota);
     }
 
+    public void recordProviderFailure(Long providerId) {
+        if (providerId == null) {
+            return;
+        }
+        Instant now = Instant.now(clock);
+        ProviderFailureMark mark = providerFailureCache.compute(providerId, (ignored, existing) -> {
+            if (existing == null || existing.isExpired(now)) {
+                return new ProviderFailureMark(1, now);
+            }
+            return new ProviderFailureMark(existing.failureCount() + 1, existing.firstFailureAt());
+        });
+        if (mark != null && mark.failureCount() > PROVIDER_FAILURE_THRESHOLD) {
+            log.warn("Provider marked temporarily unavailable after consecutive failures. providerId={}, failureCount={}, firstFailureAt={}",
+                    providerId, mark.failureCount(), mark.firstFailureAt());
+        } else if (mark != null) {
+            log.info("Provider failure recorded. providerId={}, failureCount={}, firstFailureAt={}",
+                    providerId, mark.failureCount(), mark.firstFailureAt());
+        }
+    }
+
+    public void clearProviderFailure(Long providerId) {
+        if (providerId == null) {
+            return;
+        }
+        ProviderFailureMark removed = providerFailureCache.remove(providerId);
+        if (removed != null) {
+            log.info("Provider failure state cleared after successful response. providerId={}, clearedFailureCount={}",
+                    providerId, removed.failureCount());
+        }
+    }
+
+    public boolean isProviderTemporarilyUnavailable(Long providerId) {
+        if (providerId == null) {
+            return false;
+        }
+        ProviderFailureMark mark = providerFailureCache.get(providerId);
+        if (mark == null) {
+            return false;
+        }
+        Instant now = Instant.now(clock);
+        if (mark.isExpired(now)) {
+            providerFailureCache.remove(providerId, mark);
+            log.info("Expired provider failure state cleaned on read. providerId={}", providerId);
+            return false;
+        }
+        return mark.failureCount() > PROVIDER_FAILURE_THRESHOLD;
+    }
+
     private CacheSnapshot buildFullSnapshot() {
         List<Provider> providers = providerMapper.selectList(
                 new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1)
@@ -509,6 +575,14 @@ public class RouteCacheService {
             refreshLock.unlock();
             log.debug("Cache refresh operation finished: {}", operation);
         }
+    }
+
+    private void cleanupExpiredProviderFailures() {
+        Instant now = Instant.now(clock);
+        providerFailureCache.entrySet().removeIf(entry -> {
+            ProviderFailureMark mark = entry.getValue();
+            return mark == null || mark.isExpired(now);
+        });
     }
 
     private Map<String, Model> buildModelCache(List<Model> models) {
@@ -806,6 +880,15 @@ public class RouteCacheService {
                 normalized = normalized.substring(1);
             }
             return normalized;
+        }
+    }
+
+    private record ProviderFailureMark(int failureCount, Instant firstFailureAt) {
+        boolean isExpired(Instant now) {
+            if (firstFailureAt == null || now == null) {
+                return true;
+            }
+            return now.isAfter(firstFailureAt.plus(PROVIDER_FAILURE_TTL));
         }
     }
 }

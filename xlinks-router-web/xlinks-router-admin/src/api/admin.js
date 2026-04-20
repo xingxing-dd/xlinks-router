@@ -37,6 +37,7 @@ export const deleteModel = (id) => request(`/api/models/${id}`, { method: 'DELET
 
 export const listProviderModels = (params) => request('/api/provider-models', { query: params })
 export const createProviderModel = (body) => request('/api/provider-models', { method: 'POST', body })
+export const createProviderModelsBatch = (body) => request('/api/provider-models/batch', { method: 'POST', body })
 export const updateProviderModel = (id, body) => request(`/api/provider-models/${id}`, { method: 'PUT', body })
 export const updateProviderModelStatus = (id, status) => request(`/api/provider-models/${id}/status`, { method: 'PATCH', query: { status } })
 export const deleteProviderModel = (id) => request(`/api/provider-models/${id}`, { method: 'DELETE' })

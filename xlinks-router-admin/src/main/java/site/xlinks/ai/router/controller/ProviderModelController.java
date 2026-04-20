@@ -16,10 +16,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.dto.ProviderModelBatchCreateDTO;
 import site.xlinks.ai.router.dto.ProviderModelCreateDTO;
 import site.xlinks.ai.router.dto.ProviderModelUpdateDTO;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.service.ProviderModelService;
+import site.xlinks.ai.router.vo.ProviderModelBatchCreateVO;
 
 /**
  * Provider model mapping management API.
@@ -44,6 +46,12 @@ public class ProviderModelController {
         providerModel.setRemark(dto.getRemark());
         providerModelService.save(providerModel);
         return Result.success(providerModel);
+    }
+
+    @PostMapping("/batch")
+    @Operation(summary = "Batch create provider model mappings (skip duplicates)")
+    public Result<ProviderModelBatchCreateVO> batchCreate(@Valid @RequestBody ProviderModelBatchCreateDTO dto) {
+        return Result.success(providerModelService.batchCreate(dto));
     }
 
     @GetMapping

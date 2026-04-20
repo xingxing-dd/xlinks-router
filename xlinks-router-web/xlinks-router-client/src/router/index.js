@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { finishRouteLoading, startRouteLoading } from '@/composables/useRouteLoading'
 
 const Login = () => import('../views/login/index.vue')
 const ForgotPassword = () => import('../views/forgot-password/index.vue')
@@ -101,6 +102,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  startRouteLoading()
+
   const authStore = useAuthStore()
   // Allow marketing, support, and auth pages to be visited without login.
   const publicPaths = ['/landing', '/login', '/register', '/forgot-password', '/promotion', '/contact', '/payment/success', '/payment/error']
@@ -119,6 +122,14 @@ router.beforeEach((to) => {
   }
 
   return true
+})
+
+router.afterEach(() => {
+  finishRouteLoading()
+})
+
+router.onError(() => {
+  finishRouteLoading()
 })
 
 export default router

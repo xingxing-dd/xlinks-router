@@ -110,6 +110,92 @@ const getHistoryStatusBadgeClass = (status) => {
   return historyStatusMeta?.[status]?.badgeClass || 'bg-slate-100 text-slate-700'
 }
 
+const getFeatureText = (feature) => {
+  if (typeof feature === 'string') {
+    return feature
+  }
+  return feature?.text || ''
+}
+
+const inferFeatureType = (text = '') => {
+  const normalized = String(text).toLowerCase()
+  if (
+    normalized.includes('total quota')
+    || normalized.includes('monthly quota')
+    || normalized.includes('总共可用')
+    || normalized.includes('总额度')
+  ) {
+    return 'totalQuota'
+  }
+  if (
+    normalized.includes('daily quota')
+    || normalized.includes('每日可用')
+    || normalized.includes('每日')
+  ) {
+    return 'dailyQuota'
+  }
+  return 'normal'
+}
+
+const getFeatureType = (feature) => {
+  if (feature && typeof feature === 'object' && feature.type) {
+    return feature.type
+  }
+  return inferFeatureType(getFeatureText(feature))
+}
+
+const getFeatureDisplayParts = (feature) => {
+  const text = getFeatureText(feature)
+  const featureType = getFeatureType(feature)
+
+  if (featureType === 'normal' || !text) {
+    return { prefix: '', emphasis: '', suffix: text }
+  }
+
+  if (featureType === 'totalQuota') {
+    const moneyMatch = text.match(/\$[\d.,]+/)
+    if (!moneyMatch) {
+      return { prefix: '', emphasis: '', suffix: text }
+    }
+    const start = moneyMatch.index || 0
+    const emphasis = moneyMatch[0]
+    return {
+      prefix: text.slice(0, start),
+      emphasis,
+      suffix: text.slice(start + emphasis.length),
+    }
+  }
+
+  const zhDailyMatch = text.match(/^(.*?)(\$[\s\S]*?)(\s*额度)$/)
+  if (zhDailyMatch) {
+    return {
+      prefix: zhDailyMatch[1],
+      emphasis: zhDailyMatch[2],
+      suffix: zhDailyMatch[3],
+    }
+  }
+
+  const enDailyMatch = text.match(/^(.*?:\s*)(\$[\s\S]+)$/)
+  if (enDailyMatch) {
+    return {
+      prefix: enDailyMatch[1],
+      emphasis: enDailyMatch[2],
+      suffix: '',
+    }
+  }
+
+  const dollarIndex = text.indexOf('$')
+  if (dollarIndex >= 0) {
+    return {
+      prefix: text.slice(0, dollarIndex),
+      emphasis: text.slice(dollarIndex),
+      suffix: '',
+    }
+  }
+
+  return { prefix: '', emphasis: '', suffix: text }
+}
+
 onMounted(() => {
   const defaultMethod = paymentMethods.find(m => m.isDefault && isPaymentMethodEnabled(m))
   if (defaultMethod) {
@@ -327,11 +413,24 @@ onMounted(loadPlans)
                 </button>
               </div>
             </li>
-            <li v-for="(feature, idx) in plan.features" :key="idx" class="flex items-start gap-2">
+            <li
+              v-for="(feature, idx) in plan.features"
+              :key="idx"
+              class="flex items-start gap-2"
+            >
               <div class="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <Check class="w-3 h-3 text-green-600" />
               </div>
-              <span class="text-sm text-slate-700">{{ feature }}</span>
+              <span class="text-sm text-slate-700">
+                {{ getFeatureDisplayParts(feature).prefix }}
+                <span
+                  v-if="getFeatureDisplayParts(feature).emphasis"
+                  class="inline-block rounded-md bg-amber-100 text-amber-700 font-semibold px-1.5 py-0.5"
+                >
+                  {{ getFeatureDisplayParts(feature).emphasis }}
+                </span>
+                {{ getFeatureDisplayParts(feature).suffix }}
+              </span>
             </li>
           </ul>
 

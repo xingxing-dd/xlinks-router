@@ -69,6 +69,9 @@ public class PlanController {
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CustomerPlan>()
                         .eq(CustomerPlan::getAccountId, accountId)
                         .eq(CustomerPlan::getStatus, 1)
+                        .and(wrapper -> wrapper.isNull(CustomerPlan::getPlanExpireTime)
+                                .or()
+                                .gt(CustomerPlan::getPlanExpireTime, LocalDateTime.now()))
                         .orderByAsc(CustomerPlan::getPlanExpireTime)
         );
         LocalDateTime now = LocalDateTime.now();

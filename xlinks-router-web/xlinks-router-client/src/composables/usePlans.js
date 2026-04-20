@@ -46,27 +46,39 @@ export function usePlans() {
     const features = []
 
     features.push(
-      t('plans.features.totalQuota', {
-        quota: plan.monthlyQuota ?? 0,
-      }),
+      {
+        type: 'totalQuota',
+        text: t('plans.features.totalQuota', {
+          quota: plan.monthlyQuota ?? 0,
+        }),
+      },
     )
 
     if (plan.carryOverDailyQuota !== false) {
       features.push(
-        t('plans.features.dailyQuotaCarryOver', {
-          quota: plan.dailyLimit ?? 0,
-        }),
+        {
+          type: 'dailyQuota',
+          text: t('plans.features.dailyQuotaCarryOver', {
+            quota: plan.dailyLimit ?? 0,
+          }),
+        },
       )
     } else {
       features.push(
-        t('plans.features.dailyQuota', {
-          quota: plan.dailyLimit ?? 0,
-        }),
+        {
+          type: 'dailyQuota',
+          text: t('plans.features.dailyQuota', {
+            quota: plan.dailyLimit ?? 0,
+          }),
+        },
       )
     }
 
     if (plan.stackQuotaOnly !== false) {
-      features.push(t('plans.features.stackQuotaOnly'))
+      features.push({
+        type: 'normal',
+        text: t('plans.features.stackQuotaOnly'),
+      })
     }
 
     return features
