@@ -10,7 +10,7 @@ import {
   updatePlanVisible,
 } from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
-import { formatDateTime, formatStatus, summarizeJsonArray } from '@/utils/format'
+import { formatDateTime, formatStatus } from '@/utils/format'
 
 const toastStore = useToastStore()
 
@@ -19,6 +19,9 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const currentId = ref(null)
+const modelDetailVisible = ref(false)
+const modelDetailTitle = ref('')
+const modelDetailItems = ref([])
 const records = ref([])
 const modelOptions = ref([])
 
@@ -81,6 +84,46 @@ const parseAllowedModels = (value) => {
   } catch (error) {
     return []
   }
+}
+
+const modelOptionMap = computed(() =>
+  modelOptions.value.reduce((result, item) => {
+    if (item?.modelCode) {
+      result[item.modelCode] = item
+    }
+    return result
+  }, {}),
+)
+
+const getAllowedModelItems = (allowedModels) => {
+  const selectedCodes = parseAllowedModels(allowedModels)
+  if (!selectedCodes.length) {
+    return modelOptions.value.map((item) => ({
+      modelCode: item.modelCode,
+      modelName: item.modelName || item.modelCode,
+    }))
+  }
+  return selectedCodes.map((code) => {
+    const matched = modelOptionMap.value[code]
+    return {
+      modelCode: code,
+      modelName: matched?.modelName || code,
+    }
+  })
+}
+
+const getAllowedModelSummary = (record) => {
+  const items = getAllowedModelItems(record.allowedModels)
+  if (!parseAllowedModels(record.allowedModels).length) {
+    return items.length ? `全部模型（${items.length} 个）` : '全部模型'
+  }
+  return `${items.length} 个模型`
+}
+
+const openModelDetail = (record) => {
+  modelDetailTitle.value = `${record.planName || '套餐'}可用模型`
+  modelDetailItems.value = getAllowedModelItems(record.allowedModels)
+  modelDetailVisible.value = true
 }
 
 const selectAllModels = () => {
@@ -382,7 +425,11 @@ onMounted(async () => {
                 <td>{{ record.totalQuota ?? 0 }}</td>
                 <td>{{ record.multiplier ?? 1 }}</td>
                 <td>{{ record.maxPurchaseCount == null ? '不限购' : record.maxPurchaseCount }}</td>
-                <td class="max-w-[220px] break-words">{{ summarizeJsonArray(record.allowedModels) }}</td>
+                <td>
+                  <button class="text-left text-primary hover:underline" @click="openModelDetail(record)">
+                    {{ getAllowedModelSummary(record) }}
+                  </button>
+                </td>
                 <td>
                   <span class="badge" :class="Number(record.visible) === 1 ? 'badge-success' : 'badge-warning'">
                     {{ Number(record.visible) === 1 ? '展示' : '隐藏' }}
@@ -530,6 +577,43 @@ onMounted(async () => {
           <button class="btn-primary" :disabled="submitting" @click="handleSubmit">
             {{ submitting ? '提交中...' : dialogMode === 'create' ? '确认新增' : '确认保存' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="modelDetailVisible" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div class="absolute inset-0 bg-slate-900/50" @click="modelDetailVisible = false"></div>
+      <div class="modal-panel max-w-3xl">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800">{{ modelDetailTitle }}</h3>
+            <p class="text-sm text-slate-400 mt-1">共 {{ modelDetailItems.length }} 个模型</p>
+          </div>
+          <button class="btn-text" @click="modelDetailVisible = false">关闭</button>
+        </div>
+
+        <div class="mt-6 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-200">
+          <table class="table min-w-full">
+            <thead>
+              <tr>
+                <th>模型名称</th>
+                <th>模型编码</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!modelDetailItems.length">
+                <td colspan="2" class="empty-state">暂无模型数据</td>
+              </tr>
+              <tr v-for="item in modelDetailItems" :key="item.modelCode">
+                <td>{{ item.modelName }}</td>
+                <td class="text-slate-500">{{ item.modelCode }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button class="btn-outline" @click="modelDetailVisible = false">关闭</button>
         </div>
       </div>
     </div>
