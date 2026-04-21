@@ -10,6 +10,7 @@ import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.service.ProviderTokenSelectService;
 import site.xlinks.ai.router.service.RouteCacheService;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,11 +24,13 @@ public class ProviderRouteResolver {
     private final RouteCacheService routeCacheService;
     private final ProviderTokenSelectService providerTokenSelectService;
 
-    public ResolvedProviderRoute resolve(Long modelId, String modelCode, ProxyProtocol protocol) {
+    public ResolvedProviderRoute resolve(Long accountId, Long modelId, String modelCode, ProxyProtocol protocol) {
         List<ProviderModel> providerModels = routeCacheService.listProviderModelsByPriority(modelId, protocol);
         if (providerModels == null || providerModels.isEmpty()) {
             throw ProxyErrors.noProviderMapping(modelCode);
         }
+
+        providerModels = prioritizeMerchantConfiguredProvider(accountId, modelId, providerModels);
 
         for (ProviderModel candidate : providerModels) {
             if (candidate == null || candidate.getProviderId() == null) {
@@ -50,6 +53,39 @@ public class ProviderRouteResolver {
         }
 
         throw ProxyErrors.noProviderToken(modelCode);
+    }
+
+    private List<ProviderModel> prioritizeMerchantConfiguredProvider(Long accountId,
+                                                                     Long modelId,
+                                                                     List<ProviderModel> providerModels) {
+        if (accountId == null || modelId == null || providerModels == null || providerModels.isEmpty()) {
+            return providerModels;
+        }
+        Long preferredProviderId = routeCacheService.getMerchantPreferredProviderId(accountId, modelId);
+        if (preferredProviderId == null) {
+            return providerModels;
+        }
+
+        List<ProviderModel> preferred = new ArrayList<>();
+        List<ProviderModel> others = new ArrayList<>();
+        for (ProviderModel providerModel : providerModels) {
+            if (providerModel == null) {
+                continue;
+            }
+            if (preferredProviderId.equals(providerModel.getProviderId())) {
+                preferred.add(providerModel);
+            } else {
+                others.add(providerModel);
+            }
+        }
+        if (preferred.isEmpty()) {
+            return providerModels;
+        }
+
+        List<ProviderModel> ordered = new ArrayList<>(providerModels.size());
+        ordered.addAll(preferred);
+        ordered.addAll(others);
+        return ordered;
     }
 
     public record ResolvedProviderRoute(Provider provider, ProviderModel providerModel, ProviderToken providerToken) {

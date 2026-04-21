@@ -57,6 +57,7 @@ public class UsageEntitlementService {
                 .currentUsageType(currentUsageType)
                 .packageAllowedModels(packageAllowedModels)
                 .unlimited(false)
+                .multiplier(plan == null ? BigDecimal.ONE : defaultMultiplier(plan.getMultiplier()))
                 .build();
     }
 
@@ -176,5 +177,9 @@ public class UsageEntitlementService {
             log.warn("Failed to parse allowed models: {}", allowedModels, e);
             return new ArrayList<>();
         }
+    }
+
+    private BigDecimal defaultMultiplier(BigDecimal multiplier) {
+        return multiplier == null || multiplier.compareTo(BigDecimal.ZERO) <= 0 ? BigDecimal.ONE : multiplier;
     }
 }

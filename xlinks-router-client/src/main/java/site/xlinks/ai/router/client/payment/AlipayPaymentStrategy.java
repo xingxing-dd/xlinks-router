@@ -101,6 +101,7 @@ public class AlipayPaymentStrategy implements PaymentStrategy {
             snapshot.put("durationDays", request.getPlan().getDurationDays());
             snapshot.put("dailyQuota", request.getPlan().getDailyQuota());
             snapshot.put("totalQuota", request.getPlan().getTotalQuota());
+            snapshot.put("multiplier", request.getPlan().getMultiplier());
             snapshot.put("paymentMethod", request.getPaymentMethod());
             snapshot.put("expiredAt", request.getExpiredAt() == null ? null : request.getExpiredAt().toString());
             return objectMapper.writeValueAsString(snapshot);

@@ -33,6 +33,10 @@ public class PlanUpdateDTO {
     @DecimalMin(value = "0.00", message = "Total quota must not be negative")
     private BigDecimal totalQuota;
 
+    @Schema(description = "Cache-hit billing multiplier")
+    @DecimalMin(value = "0.000001", message = "Multiplier must be greater than 0")
+    private BigDecimal multiplier;
+
     @Schema(description = "Max purchase count per account; null means unlimited")
     @Min(value = 1, message = "Max purchase count must be at least 1")
     private Integer maxPurchaseCount;

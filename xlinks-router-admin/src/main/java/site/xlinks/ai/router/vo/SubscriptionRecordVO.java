@@ -34,6 +34,8 @@ public class SubscriptionRecordVO {
 
     private BigDecimal totalQuota;
 
+    private BigDecimal multiplier;
+
     private BigDecimal usedQuota;
 
     private BigDecimal totalUsedQuota;

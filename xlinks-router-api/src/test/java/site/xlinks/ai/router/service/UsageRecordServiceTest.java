@@ -38,6 +38,7 @@ class UsageRecordServiceTest {
                 .inputPrice(new BigDecimal("2"))
                 .cacheHitPrice(new BigDecimal("0.5"))
                 .outputPrice(new BigDecimal("8"))
+                .multiplier(new BigDecimal("1.5"))
                 .modelProvider("OPENAI")
                 .build();
 
@@ -59,9 +60,9 @@ class UsageRecordServiceTest {
         assertEquals(20, record.getCompletionTokens());
         assertEquals(120, record.getTotalTokens());
         assertDecimalEquals("0.000120", record.getPromptCost());
-        assertDecimalEquals("0.000020", record.getCacheHitCost());
+        assertDecimalEquals("0.000030", record.getCacheHitCost());
         assertDecimalEquals("0.000160", record.getCompletionCost());
-        assertDecimalEquals("0.000300", record.getTotalCost());
+        assertDecimalEquals("0.000310", record.getTotalCost());
     }
 
     @Test

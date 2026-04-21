@@ -10,12 +10,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.entity.MerchantProviderRoute;
 import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Plan;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
+import site.xlinks.ai.router.mapper.MerchantProviderRouteMapper;
 import site.xlinks.ai.router.mapper.ModelMapper;
 import site.xlinks.ai.router.mapper.PlanMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
@@ -58,6 +60,7 @@ public class RouteCacheService {
     private final ProviderModelMapper providerModelMapper;
     private final ProviderTokenMapper providerTokenMapper;
     private final CustomerTokenMapper customerTokenMapper;
+    private final MerchantProviderRouteMapper merchantProviderRouteMapper;
     private final ObjectMapper objectMapper;
 
     private final ReentrantLock refreshLock = new ReentrantLock();
@@ -75,6 +78,7 @@ public class RouteCacheService {
     private volatile Map<Long, ProviderProtocolMatcher> providerProtocolCache = Collections.emptyMap();
     private volatile Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache = Collections.emptyMap();
     private volatile Map<Long, PlanModelMatcher> planModelCache = Collections.emptyMap();
+    private volatile Map<String, Long> merchantProviderRouteCache = Collections.emptyMap();
     private volatile List<Model> modelListCache = Collections.emptyList();
 
     @PostConstruct
@@ -93,11 +97,12 @@ public class RouteCacheService {
             CacheSnapshot snapshot = buildFullSnapshot();
             applySnapshot(snapshot);
             log.info(
-                    "Route cache refreshed: models={}, providers={}, modelMappings={}, planRules={}, routingKeys={}, providerTokens={}, customerTokens={}",
+                    "Route cache refreshed: models={}, providers={}, modelMappings={}, planRules={}, merchantRoutes={}, routingKeys={}, providerTokens={}, customerTokens={}",
                     snapshot.modelCache().size(),
                     snapshot.providerCache().size(),
                     snapshot.providerModelCache().size(),
                     snapshot.planModelCache().size(),
+                    snapshot.merchantProviderRouteCache().size(),
                     snapshot.providerModelByModelAndProtocolCache().size(),
                     snapshot.providerTokenByIdCache().size(),
                     snapshot.customerTokenByValueCache().size()
@@ -126,6 +131,10 @@ public class RouteCacheService {
     }
 
     public void refreshCustomerTokens() {
+        refreshAll();
+    }
+
+    public void refreshMerchantRoutes() {
         refreshAll();
     }
 
@@ -210,6 +219,16 @@ public class RouteCacheService {
         });
     }
 
+    public void refreshMerchantRoutesOnly() {
+        withRefreshLock("refreshMerchantRoutesOnly", () -> {
+            cleanupExpiredProviderFailures();
+            List<MerchantProviderRoute> routes = merchantProviderRouteMapper.selectList(new LambdaQueryWrapper<>());
+            Map<String, Long> nextMerchantRouteCache = buildMerchantProviderRouteCache(routes);
+            merchantProviderRouteCache = nextMerchantRouteCache;
+            log.info("Merchant route cache refreshed: routeRules={}", nextMerchantRouteCache.size());
+        });
+    }
+
     public void refreshCustomerTokensByAccountId(Long accountId) {
         if (accountId == null) {
             return;
@@ -289,6 +308,13 @@ public class RouteCacheService {
             return false;
         }
         return matcher.matches(modelCode);
+    }
+
+    public Long getMerchantPreferredProviderId(Long accountId, Long modelId) {
+        if (accountId == null || modelId == null) {
+            return null;
+        }
+        return merchantProviderRouteCache.get(buildMerchantRouteKey(accountId, modelId));
     }
 
     public List<ProviderModel> listProviderModelsByPriority(Long modelId, ProxyProtocol protocol) {
@@ -522,6 +548,7 @@ public class RouteCacheService {
                 new LambdaQueryWrapper<ProviderToken>().eq(ProviderToken::getTokenStatus, 1)
         );
         List<CustomerToken> customerTokens = customerTokenMapper.selectList(new LambdaQueryWrapper<>());
+        List<MerchantProviderRoute> merchantProviderRoutes = merchantProviderRouteMapper.selectList(new LambdaQueryWrapper<>());
 
         Map<String, Model> nextModelCache = buildModelCache(models);
         Map<Long, Provider> nextProviderCache = buildProviderCache(providers);
@@ -537,6 +564,7 @@ public class RouteCacheService {
         );
         Map<String, CustomerToken> nextCustomerTokenByValueCache = buildCustomerTokenByValueCache(customerTokens);
         Map<Long, CustomerToken> nextCustomerTokenByIdCache = buildCustomerTokenByIdCache(customerTokens);
+        Map<String, Long> nextMerchantProviderRouteCache = buildMerchantProviderRouteCache(merchantProviderRoutes);
 
         return new CacheSnapshot(
                 nextModelCache,
@@ -549,7 +577,8 @@ public class RouteCacheService {
                 nextCustomerTokenByIdCache,
                 nextProviderProtocolCache,
                 nextRoutingIndex,
-                nextPlanModelCache
+                nextPlanModelCache,
+                nextMerchantProviderRouteCache
         );
     }
 
@@ -565,6 +594,7 @@ public class RouteCacheService {
         providerProtocolCache = snapshot.providerProtocolCache();
         providerModelByModelAndProtocolCache = snapshot.providerModelByModelAndProtocolCache();
         planModelCache = snapshot.planModelCache();
+        merchantProviderRouteCache = snapshot.merchantProviderRouteCache();
     }
 
     private void withRefreshLock(String operation, Runnable runnable) {
@@ -699,6 +729,20 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(map);
     }
 
+    private Map<String, Long> buildMerchantProviderRouteCache(List<MerchantProviderRoute> routes) {
+        if (routes == null || routes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, Long> map = new HashMap<>();
+        for (MerchantProviderRoute route : routes) {
+            if (route == null || route.getAccountId() == null || route.getModelId() == null || route.getProviderId() == null) {
+                continue;
+            }
+            map.put(buildMerchantRouteKey(route.getAccountId(), route.getModelId()), route.getProviderId());
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
     private Map<String, List<ProviderModel>> buildRoutingIndex(Map<Long, List<ProviderModel>> providerModelsByModel,
                                                                Map<Long, Provider> providers,
                                                                Map<Long, ProviderProtocolMatcher> protocolMatchers) {
@@ -800,6 +844,10 @@ public class RouteCacheService {
         return modelId + "#" + protocol.getCode();
     }
 
+    private String buildMerchantRouteKey(Long accountId, Long modelId) {
+        return accountId + "#" + modelId;
+    }
+
     private boolean supportsProtocol(Provider provider, ProxyProtocol protocol) {
         if (provider == null) {
             return false;
@@ -822,7 +870,8 @@ public class RouteCacheService {
                                  Map<Long, CustomerToken> customerTokenByIdCache,
                                  Map<Long, ProviderProtocolMatcher> providerProtocolCache,
                                  Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache,
-                                 Map<Long, PlanModelMatcher> planModelCache) {
+                                 Map<Long, PlanModelMatcher> planModelCache,
+                                 Map<String, Long> merchantProviderRouteCache) {
     }
 
     private record PlanModelMatcher(boolean allowAll, Set<String> allowedModels) {

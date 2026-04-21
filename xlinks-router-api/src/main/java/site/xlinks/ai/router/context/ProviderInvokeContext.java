@@ -50,6 +50,11 @@ public class ProviderInvokeContext {
     private BigDecimal outputPrice;
 
     /**
+     * Cache-hit billing multiplier resolved from the active plan snapshot.
+     */
+    private BigDecimal multiplier;
+
+    /**
      * Real upstream model provider, e.g. OPENAI / ANTHROPIC.
      */
     private String modelProvider;

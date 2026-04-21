@@ -15,6 +15,7 @@ public class ProviderRouteSelectionStep implements RoutingStep {
     @Override
     public void apply(RoutingBuildContext context) {
         ProviderRouteResolver.ResolvedProviderRoute route = providerRouteResolver.resolve(
+                context.getCustomerToken().getAccountId(),
                 context.getModel().getId(),
                 context.getModel().getModelCode(),
                 context.getRequest().getProtocol()

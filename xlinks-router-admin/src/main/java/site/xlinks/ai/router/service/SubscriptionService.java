@@ -98,6 +98,7 @@ public class SubscriptionService extends ServiceImpl<CustomerPlanMapper, Custome
         customerPlan.setDurationDays(plan.getDurationDays());
         customerPlan.setDailyQuota(defaultDecimal(plan.getDailyQuota()));
         customerPlan.setTotalQuota(defaultDecimal(plan.getTotalQuota()));
+        customerPlan.setMultiplier(defaultMultiplier(plan.getMultiplier()));
         customerPlan.setUsedQuota(BigDecimal.ZERO);
         customerPlan.setTotalUsedQuota(BigDecimal.ZERO);
         customerPlan.setQuotaRefreshTime(now);
@@ -182,5 +183,9 @@ public class SubscriptionService extends ServiceImpl<CustomerPlanMapper, Custome
 
     private BigDecimal defaultDecimal(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private BigDecimal defaultMultiplier(BigDecimal value) {
+        return value == null || value.compareTo(BigDecimal.ZERO) <= 0 ? BigDecimal.ONE : value;
     }
 }

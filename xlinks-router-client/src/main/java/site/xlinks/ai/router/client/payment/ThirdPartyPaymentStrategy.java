@@ -89,6 +89,7 @@ public class ThirdPartyPaymentStrategy implements PaymentStrategy {
             snapshot.put("durationDays", request.getPlan().getDurationDays());
             snapshot.put("dailyQuota", request.getPlan().getDailyQuota());
             snapshot.put("totalQuota", request.getPlan().getTotalQuota());
+            snapshot.put("multiplier", request.getPlan().getMultiplier());
             snapshot.put("payLinkId", payLink.getId());
             snapshot.put("payUrl", payLink.getPayUrl());
             snapshot.put("paymentMethod", request.getPaymentMethod());

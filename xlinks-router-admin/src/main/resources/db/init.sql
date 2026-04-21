@@ -239,6 +239,7 @@ CREATE TABLE IF NOT EXISTS `plans` (
   `duration_days` int(11) NOT NULL,
   `daily_quota` decimal(12,2) NOT NULL,
   `total_quota` decimal(12,2) NOT NULL,
+  `multiplier` decimal(10,4) NOT NULL DEFAULT '1.0000' COMMENT 'Cache-hit billing multiplier',
   `max_purchase_count` int(11) DEFAULT NULL COMMENT 'Maximum purchase count per account, NULL means unlimited',
   `allowed_models` json DEFAULT NULL,
   `status` tinyint(4) NOT NULL DEFAULT '1',
@@ -263,6 +264,7 @@ CREATE TABLE IF NOT EXISTS `customer_plans` (
   `duration_days` int(11) NOT NULL,
   `daily_quota` decimal(12,2) NOT NULL,
   `total_quota` decimal(12,2) NOT NULL,
+  `multiplier` decimal(10,4) NOT NULL DEFAULT '1.0000' COMMENT 'Cache-hit billing multiplier snapshot',
   `used_quota` decimal(12,2) NOT NULL DEFAULT '0.00',
   `total_used_quota` decimal(12,2) NOT NULL DEFAULT '0.00',
   `quota_refresh_time` datetime DEFAULT NULL,
@@ -280,6 +282,21 @@ CREATE TABLE IF NOT EXISTS `customer_plans` (
   KEY `idx_account_plan_source` (`account_id`,`plan_id`,`source`),
   KEY `idx_status` (`status`),
   KEY `idx_plan_expire_time` (`plan_expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `merchant_provider_routes` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) NOT NULL,
+  `model_id` bigint(20) NOT NULL,
+  `provider_id` bigint(20) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_account_model` (`account_id`,`model_id`),
+  KEY `idx_account_id` (`account_id`),
+  KEY `idx_provider_id` (`provider_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 12. Activation code stocks

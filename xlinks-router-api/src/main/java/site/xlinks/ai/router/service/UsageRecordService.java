@@ -145,7 +145,10 @@ public class UsageRecordService {
         record.setCacheHitTokens(cacheHitTokens);
 
         BigDecimal promptCost = calculateCost(context.getInputPrice(), promptBillableTokens);
-        BigDecimal cacheHitCost = calculateCost(resolveCacheHitPrice(context), cacheHitTokens);
+        BigDecimal cacheHitCost = applyMultiplier(
+                calculateCost(resolveCacheHitPrice(context), cacheHitTokens),
+                context.getMultiplier()
+        );
         BigDecimal completionCost = calculateCost(context.getOutputPrice(), completionTokens);
 
         record.setPromptCost(promptCost);
@@ -226,6 +229,16 @@ public class UsageRecordService {
         return pricePerMillion
                 .multiply(BigDecimal.valueOf(tokens))
                 .divide(BigDecimal.valueOf(1_000_000), 6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal applyMultiplier(BigDecimal cost, BigDecimal multiplier) {
+        if (cost == null || cost.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal normalized = multiplier == null || multiplier.compareTo(BigDecimal.ZERO) <= 0
+                ? BigDecimal.ONE
+                : multiplier;
+        return cost.multiply(normalized).setScale(6, RoundingMode.HALF_UP);
     }
 
     private int normalizeDurationMs(long durationMs) {

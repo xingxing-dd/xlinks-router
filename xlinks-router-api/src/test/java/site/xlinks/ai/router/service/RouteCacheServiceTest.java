@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
+import site.xlinks.ai.router.mapper.MerchantProviderRouteMapper;
 import site.xlinks.ai.router.mapper.ModelMapper;
 import site.xlinks.ai.router.mapper.PlanMapper;
 import site.xlinks.ai.router.mapper.ProviderMapper;
@@ -95,6 +96,7 @@ class RouteCacheServiceTest {
                 mock(ProviderModelMapper.class),
                 mock(ProviderTokenMapper.class),
                 mock(CustomerTokenMapper.class),
+                mock(MerchantProviderRouteMapper.class),
                 new ObjectMapper()
         );
     }

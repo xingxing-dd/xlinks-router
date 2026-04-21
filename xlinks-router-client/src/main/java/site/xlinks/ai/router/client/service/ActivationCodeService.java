@@ -160,6 +160,7 @@ public class ActivationCodeService {
             snapshot.put("durationDays", plan.getDurationDays());
             snapshot.put("dailyQuota", plan.getDailyQuota());
             snapshot.put("totalQuota", plan.getTotalQuota());
+            snapshot.put("multiplier", plan.getMultiplier());
             snapshot.put("source", "activation_code");
             return objectMapper.writeValueAsString(snapshot);
         } catch (Exception ignored) {

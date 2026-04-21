@@ -47,7 +47,7 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
                 .eq(CustomerPlan::getSource, source)
                 .last("limit 1"));
         if (existing != null) {
-            return OrderFulfillmentResult.fulfilled(ORDER_TYPE, existing.getId(), "已完成过履约");
+            return OrderFulfillmentResult.fulfilled(ORDER_TYPE, existing.getId(), "Already fulfilled");
         }
 
         Snapshot snapshot = parseSnapshot(order.getOrderInfo());
@@ -55,19 +55,20 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
 
         Long accountId = order.getAccountId();
         if (accountId == null) {
-            log.warn("订单缺少 accountId，无法履约, orderNo={}", order.getOrderNo());
-            return OrderFulfillmentResult.skipped(ORDER_TYPE, "订单缺少 accountId");
+            log.warn("Skip fulfillment because accountId is missing. orderNo={}", order.getOrderNo());
+            return OrderFulfillmentResult.skipped(ORDER_TYPE, "Missing accountId");
         }
 
         Long planId = firstNonNull(snapshot.planId, dbPlan == null ? null : dbPlan.getId(), null);
         if (planId == null) {
-            log.warn("订单快照缺少 planId 且无法回退套餐数据，无法履约, orderNo={}", order.getOrderNo());
-            return OrderFulfillmentResult.skipped(ORDER_TYPE, "缺少 planId");
+            log.warn("Skip fulfillment because planId is missing. orderNo={}", order.getOrderNo());
+            return OrderFulfillmentResult.skipped(ORDER_TYPE, "Missing planId");
         }
 
         Integer durationDays = firstNonNull(snapshot.durationDays, dbPlan == null ? null : dbPlan.getDurationDays(), 30);
         BigDecimal dailyQuota = firstNonNull(snapshot.dailyQuota, dbPlan == null ? null : dbPlan.getDailyQuota(), BigDecimal.ZERO);
         BigDecimal totalQuota = firstNonNull(snapshot.totalQuota, dbPlan == null ? null : dbPlan.getTotalQuota(), BigDecimal.ZERO);
+        BigDecimal multiplier = firstNonNull(snapshot.multiplier, dbPlan == null ? null : dbPlan.getMultiplier(), BigDecimal.ONE);
 
         CustomerPlan customerPlan = new CustomerPlan();
         customerPlan.setAccountId(accountId);
@@ -77,6 +78,7 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
         customerPlan.setDurationDays(durationDays);
         customerPlan.setDailyQuota(dailyQuota);
         customerPlan.setTotalQuota(totalQuota);
+        customerPlan.setMultiplier(defaultMultiplier(multiplier));
         customerPlan.setUsedQuota(BigDecimal.ZERO);
         customerPlan.setTotalUsedQuota(BigDecimal.ZERO);
 
@@ -85,11 +87,11 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
         customerPlan.setPlanExpireTime(now.plusDays(durationDays));
         customerPlan.setStatus(1);
         customerPlan.setSource(source);
-        customerPlan.setRemark("订单支付成功自动开通");
+        customerPlan.setRemark("Subscription activated after payment");
         customerPlan.setCreateBy(String.valueOf(accountId));
         customerPlan.setUpdateBy(String.valueOf(accountId));
         customerPlanMapper.insert(customerPlan);
-        return OrderFulfillmentResult.fulfilled(ORDER_TYPE, customerPlan.getId(), "履约成功");
+        return OrderFulfillmentResult.fulfilled(ORDER_TYPE, customerPlan.getId(), "Fulfilled");
     }
 
     private Snapshot parseSnapshot(String orderInfo) {
@@ -104,8 +106,9 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
             snapshot.durationDays = toInteger(map.get("durationDays"));
             snapshot.dailyQuota = toBigDecimal(map.get("dailyQuota"));
             snapshot.totalQuota = toBigDecimal(map.get("totalQuota"));
+            snapshot.multiplier = toBigDecimal(map.get("multiplier"));
         } catch (Exception ex) {
-            log.warn("解析订单快照失败, orderInfo={}", orderInfo, ex);
+            log.warn("Failed to parse order snapshot. orderInfo={}", orderInfo, ex);
         }
         return snapshot;
     }
@@ -169,12 +172,16 @@ public class SubscriptionPurchaseFulfillmentStrategy implements OrderFulfillment
         return fallback;
     }
 
+    private BigDecimal defaultMultiplier(BigDecimal multiplier) {
+        return multiplier == null || multiplier.compareTo(BigDecimal.ZERO) <= 0 ? BigDecimal.ONE : multiplier;
+    }
+
     private static class Snapshot {
         private Long planId;
         private String planName;
         private Integer durationDays;
         private BigDecimal dailyQuota;
         private BigDecimal totalQuota;
+        private BigDecimal multiplier;
     }
 }
-

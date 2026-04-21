@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -45,10 +47,26 @@ public class ApiCacheRefreshNotifier {
         if (id != null) {
             payload.put("id", id);
         }
-        sendAsync(payload);
+        dispatch(payload);
     }
 
-    private void sendAsync(Map<String, Object> payload) {
+    private void dispatch(Map<String, Object> payload) {
+        Map<String, Object> immutablePayload = Map.copyOf(payload);
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send(immutablePayload);
+                }
+            });
+            log.debug("Cache refresh notify deferred until transaction commit. payload={}", immutablePayload);
+            return;
+        }
+        send(immutablePayload);
+    }
+
+    private void send(Map<String, Object> payload) {
         if (!enabled) {
             log.debug("Skip cache refresh notify because feature is disabled. payload={}", payload);
             return;
@@ -67,21 +85,18 @@ public class ApiCacheRefreshNotifier {
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .build();
 
-            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                    .whenComplete((response, throwable) -> {
-                        if (throwable != null) {
-                            log.warn("Cache refresh notify failed. payload={}", payload, throwable);
-                            return;
-                        }
-                        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                            log.warn("Cache refresh notify returned non-success status={} payload={}",
-                                    response.statusCode(), payload);
-                            return;
-                        }
-                        log.debug("Cache refresh notify succeeded. payload={}", payload);
-                    });
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Cache refresh notify returned non-success status={} payload={} body={}",
+                        response.statusCode(), payload, response.body());
+                return;
+            }
+            log.info("Cache refresh notify succeeded. payload={}", payload);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Cache refresh notify interrupted. payload={}", payload, ex);
         } catch (Exception ex) {
-            log.warn("Failed to submit cache refresh notify request. payload={}", payload, ex);
+            log.warn("Failed to send cache refresh notify request. payload={}", payload, ex);
         }
     }
 }

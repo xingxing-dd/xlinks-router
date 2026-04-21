@@ -41,6 +41,7 @@ const form = reactive({
   durationDays: 30,
   dailyQuota: '',
   totalQuota: '',
+  multiplier: 1,
   maxPurchaseCount: '',
   selectedModels: [],
   status: 1,
@@ -59,6 +60,7 @@ const resetForm = () => {
     durationDays: 30,
     dailyQuota: '',
     totalQuota: '',
+    multiplier: 1,
     maxPurchaseCount: '',
     selectedModels: [],
     status: 1,
@@ -82,9 +84,7 @@ const parseAllowedModels = (value) => {
 }
 
 const selectAllModels = () => {
-  form.selectedModels = Array.from(
-    new Set(modelOptions.value.map((item) => item.modelCode).filter(Boolean)),
-  )
+  form.selectedModels = Array.from(new Set(modelOptions.value.map((item) => item.modelCode).filter(Boolean)))
 }
 
 const clearSelectedModels = () => {
@@ -93,7 +93,7 @@ const clearSelectedModels = () => {
 
 const loadModelOptions = async () => {
   try {
-    const data = await listModels({ page: 1, pageSize: 200, status: 1 })
+    const data = await listModels({ page: 1, pageSize: 500, status: 1 })
     modelOptions.value = data.records || []
   } catch (error) {
     toastStore.push(error.message || '加载模型列表失败', 'error')
@@ -140,6 +140,7 @@ const openEdit = (record) => {
     durationDays: record.durationDays ?? 30,
     dailyQuota: record.dailyQuota ?? '',
     totalQuota: record.totalQuota ?? '',
+    multiplier: record.multiplier ?? 1,
     maxPurchaseCount: record.maxPurchaseCount ?? '',
     selectedModels: parseAllowedModels(record.allowedModels),
     status: Number(record.status ?? 1),
@@ -164,6 +165,7 @@ const buildPayload = () => ({
   durationDays: Number(form.durationDays),
   dailyQuota: Number(form.dailyQuota),
   totalQuota: Number(form.totalQuota),
+  multiplier: Number(form.multiplier),
   maxPurchaseCount: toOptionalInteger(form.maxPurchaseCount),
   allowedModels: form.selectedModels.length ? JSON.stringify(form.selectedModels) : null,
   status: Number(form.status),
@@ -192,6 +194,10 @@ const validateForm = () => {
   }
   if (Number.isNaN(Number(form.totalQuota)) || Number(form.totalQuota) < Number(form.dailyQuota)) {
     toastStore.push('总额度必须大于等于每日额度', 'warning')
+    return false
+  }
+  if (Number.isNaN(Number(form.multiplier)) || Number(form.multiplier) <= 0) {
+    toastStore.push('倍率必须大于 0', 'warning')
     return false
   }
   if (form.maxPurchaseCount !== '' && form.maxPurchaseCount !== null && form.maxPurchaseCount !== undefined) {
@@ -287,7 +293,7 @@ onMounted(async () => {
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">套餐管理</h1>
-        <p class="text-slate-500">支持配置套餐基础信息、可见性、允许模型和购买次数上限。</p>
+        <p class="text-slate-500">配置套餐额度、支付链接、可用模型，以及缓存命中价格倍率。</p>
       </div>
       <button class="btn-primary" @click="openCreate">新增套餐</button>
     </div>
@@ -337,11 +343,13 @@ onMounted(async () => {
           <h2 class="card-title">套餐列表</h2>
           <p class="text-sm text-slate-400 mt-1">共 {{ page.total }} 条记录</p>
         </div>
-        <button class="btn-outline" :disabled="loading" @click="loadPlans">{{ loading ? '刷新中...' : '刷新' }}</button>
+        <button class="btn-outline" :disabled="loading" @click="loadPlans">
+          {{ loading ? '刷新中...' : '刷新' }}
+        </button>
       </div>
       <div class="card-body">
         <div class="table-wrap">
-          <table class="table min-w-[1240px]">
+          <table class="table min-w-[1320px]">
             <thead>
               <tr>
                 <th>套餐</th>
@@ -349,6 +357,7 @@ onMounted(async () => {
                 <th>时长</th>
                 <th>每日额度</th>
                 <th>总额度</th>
+                <th>倍率</th>
                 <th>购买次数上限</th>
                 <th>可用模型</th>
                 <th>展示</th>
@@ -360,7 +369,7 @@ onMounted(async () => {
             </thead>
             <tbody>
               <tr v-if="!records.length && !loading">
-                <td colspan="12" class="empty-state">暂无套餐数据</td>
+                <td colspan="13" class="empty-state">暂无套餐数据</td>
               </tr>
               <tr v-for="record in records" :key="record.id">
                 <td>
@@ -371,7 +380,8 @@ onMounted(async () => {
                 <td>{{ record.durationDays }} 天</td>
                 <td>{{ record.dailyQuota ?? 0 }}</td>
                 <td>{{ record.totalQuota ?? 0 }}</td>
-                <td>{{ record.maxPurchaseCount == null ? '不限制' : record.maxPurchaseCount }}</td>
+                <td>{{ record.multiplier ?? 1 }}</td>
+                <td>{{ record.maxPurchaseCount == null ? '不限购' : record.maxPurchaseCount }}</td>
                 <td class="max-w-[220px] break-words">{{ summarizeJsonArray(record.allowedModels) }}</td>
                 <td>
                   <span class="badge" :class="Number(record.visible) === 1 ? 'badge-success' : 'badge-warning'">
@@ -418,7 +428,7 @@ onMounted(async () => {
         <div class="flex items-center justify-between gap-4">
           <div>
             <h3 class="text-lg font-semibold text-slate-800">{{ dialogMode === 'create' ? '新增套餐' : '编辑套餐' }}</h3>
-            <p class="text-sm text-slate-400 mt-1">支持为空的购买次数上限，空值表示不限制。</p>
+            <p class="text-sm text-slate-400 mt-1">倍率仅作用于缓存命中价格，默认值为 1。</p>
           </div>
           <button class="btn-text" @click="dialogVisible = false">关闭</button>
         </div>
@@ -437,6 +447,10 @@ onMounted(async () => {
             <input v-model.number="form.durationDays" type="number" min="1" class="input mt-2" placeholder="30" />
           </div>
           <div>
+            <label class="text-sm text-slate-500">缓存命中倍率</label>
+            <input v-model.number="form.multiplier" type="number" min="0.0001" step="0.0001" class="input mt-2" placeholder="1" />
+          </div>
+          <div>
             <label class="text-sm text-slate-500">每日额度</label>
             <input v-model.number="form.dailyQuota" type="number" min="0" step="0.01" class="input mt-2" placeholder="100" />
           </div>
@@ -451,7 +465,7 @@ onMounted(async () => {
               type="number"
               min="1"
               class="input mt-2"
-              placeholder="留空表示不限制"
+              placeholder="留空表示不限购"
             />
           </div>
           <div>
@@ -492,12 +506,7 @@ onMounted(async () => {
                   :key="model.id"
                   class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700"
                 >
-                  <input
-                    v-model="form.selectedModels"
-                    :value="model.modelCode"
-                    type="checkbox"
-                    class="mt-1 accent-primary"
-                  />
+                  <input v-model="form.selectedModels" :value="model.modelCode" type="checkbox" class="mt-1 accent-primary" />
                   <span>
                     <span class="block font-medium text-slate-800">{{ model.modelName }}</span>
                     <span class="block text-xs text-slate-400 mt-1">{{ model.modelCode }}</span>

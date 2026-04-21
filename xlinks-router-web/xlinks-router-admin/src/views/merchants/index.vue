@@ -1,6 +1,13 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { listMerchants, updateMerchant, updateMerchantStatus } from '@/api/admin'
+import {
+  getMerchantDetail,
+  listMerchants,
+  listModels,
+  listProviders,
+  updateMerchant,
+  updateMerchantStatus,
+} from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatStatus } from '@/utils/format'
 
@@ -11,6 +18,8 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const currentRecord = ref(null)
 const records = ref([])
+const modelOptions = ref([])
+const providerOptions = ref([])
 
 const filters = reactive({
   keyword: '',
@@ -25,10 +34,16 @@ const page = reactive({
 
 const form = reactive({
   remark: '',
+  providerRoutes: [],
 })
 
 const pageCount = computed(() => Math.max(1, Math.ceil((page.total || 0) / page.pageSize)))
 const enabledCount = computed(() => records.value.filter((item) => Number(item.status) === 1).length)
+
+const createEmptyRoute = () => ({
+  modelId: '',
+  providerId: '',
+})
 
 const loadMerchants = async () => {
   loading.value = true
@@ -48,6 +63,19 @@ const loadMerchants = async () => {
   }
 }
 
+const loadOptions = async () => {
+  try {
+    const [models, providers] = await Promise.all([
+      listModels({ page: 1, pageSize: 500, status: 1 }),
+      listProviders({ page: 1, pageSize: 500, status: 1 }),
+    ])
+    modelOptions.value = models.records || []
+    providerOptions.value = providers.records || []
+  } catch (error) {
+    toastStore.push(error.message || '加载模型或渠道选项失败', 'error')
+  }
+}
+
 const resetFilters = async () => {
   Object.assign(filters, { keyword: '', status: '' })
   page.page = 1
@@ -62,24 +90,72 @@ const changePage = async (nextPage) => {
   await loadMerchants()
 }
 
-const openEdit = (record) => {
-  currentRecord.value = record
-  form.remark = record.remark || ''
-  dialogVisible.value = true
+const addRouteRow = () => {
+  form.providerRoutes.push(createEmptyRoute())
+}
+
+const removeRouteRow = (index) => {
+  form.providerRoutes.splice(index, 1)
+}
+
+const openEdit = async (record) => {
+  try {
+    const detail = await getMerchantDetail(record.id)
+    currentRecord.value = detail
+    form.remark = detail.remark || ''
+    form.providerRoutes = (detail.providerRoutes || []).map((item) => ({
+      modelId: item.modelId,
+      providerId: item.providerId,
+    }))
+    dialogVisible.value = true
+  } catch (error) {
+    toastStore.push(error.message || '加载商户详情失败', 'error')
+  }
+}
+
+const buildPayload = () => ({
+  remark: form.remark,
+  providerRoutes: form.providerRoutes
+    .filter((item) => item.modelId && item.providerId)
+    .map((item) => ({
+      modelId: Number(item.modelId),
+      providerId: Number(item.providerId),
+    })),
+})
+
+const validateForm = () => {
+  const activeRoutes = buildPayload().providerRoutes
+  const duplicateModels = new Set()
+  for (const route of activeRoutes) {
+    if (duplicateModels.has(route.modelId)) {
+      toastStore.push('同一个模型只能绑定一个指定渠道', 'warning')
+      return false
+    }
+    duplicateModels.add(route.modelId)
+  }
+
+  const hasIncompleteRoute = form.providerRoutes.some(
+    (item) => (item.modelId && !item.providerId) || (!item.modelId && item.providerId),
+  )
+  if (hasIncompleteRoute) {
+    toastStore.push('请完整选择模型和指定渠道，或删除空行', 'warning')
+    return false
+  }
+  return true
 }
 
 const handleSubmit = async () => {
-  if (!currentRecord.value) {
+  if (!currentRecord.value || !validateForm()) {
     return
   }
   submitting.value = true
   try {
-    await updateMerchant(currentRecord.value.id, { remark: form.remark })
-    toastStore.push('商户备注已更新', 'success')
+    await updateMerchant(currentRecord.value.id, buildPayload())
+    toastStore.push('商户配置已更新', 'success')
     dialogVisible.value = false
     await loadMerchants()
   } catch (error) {
-    toastStore.push(error.message || '保存商户备注失败', 'error')
+    toastStore.push(error.message || '保存商户配置失败', 'error')
   } finally {
     submitting.value = false
   }
@@ -95,7 +171,9 @@ const handleToggleStatus = async (record) => {
   }
 }
 
-onMounted(loadMerchants)
+onMounted(async () => {
+  await Promise.all([loadMerchants(), loadOptions()])
+})
 </script>
 
 <template>
@@ -103,14 +181,16 @@ onMounted(loadMerchants)
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">商户管理</h1>
-        <p class="text-slate-500">集中维护商户账号的基础资料、启用状态和运营备注。</p>
+        <p class="text-slate-500">维护商户基础信息，并为指定商户设置“模型优先走指定渠道”的路由规则。</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div class="text-xs text-slate-400">当前页启用商户</div>
           <div class="mt-2 text-2xl font-semibold text-slate-900">{{ enabledCount }}</div>
         </div>
-        <button class="btn-outline" :disabled="loading" @click="loadMerchants">{{ loading ? '刷新中...' : '刷新' }}</button>
+        <button class="btn-outline" :disabled="loading" @click="loadMerchants">
+          {{ loading ? '刷新中...' : '刷新' }}
+        </button>
       </div>
     </div>
 
@@ -163,7 +243,7 @@ onMounted(loadMerchants)
               <tr v-for="record in records" :key="record.id">
                 <td>
                   <div class="font-medium text-slate-800">{{ record.username || `#${record.id}` }}</div>
-                  <div class="text-xs text-slate-400 mt-1">商户 ID：{{ record.id }}</div>
+                  <div class="text-xs text-slate-400 mt-1">商户 ID: {{ record.id }}</div>
                 </td>
                 <td>
                   <div>{{ record.phone || '-' }}</div>
@@ -179,7 +259,7 @@ onMounted(loadMerchants)
                 <td>{{ formatDateTime(record.createdAt) }}</td>
                 <td>
                   <div class="flex items-center justify-end gap-2">
-                    <button class="btn-outline" @click="openEdit(record)">编辑备注</button>
+                    <button class="btn-outline" @click="openEdit(record)">编辑配置</button>
                     <button class="btn-outline" @click="handleToggleStatus(record)">
                       {{ Number(record.status) === 1 ? '停用' : '启用' }}
                     </button>
@@ -202,18 +282,71 @@ onMounted(loadMerchants)
 
     <div v-if="dialogVisible" class="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div class="absolute inset-0 bg-slate-900/50" @click="dialogVisible = false"></div>
-      <div class="modal-panel max-w-xl">
+      <div class="modal-panel max-w-4xl">
         <div class="flex items-center justify-between gap-4">
           <div>
-            <h3 class="text-lg font-semibold text-slate-800">编辑商户备注</h3>
-            <p class="text-sm text-slate-400 mt-1">{{ currentRecord?.username || `商户 #${currentRecord?.id || ''}` }}</p>
+            <h3 class="text-lg font-semibold text-slate-800">编辑商户配置</h3>
+            <p class="text-sm text-slate-400 mt-1">
+              {{ currentRecord?.username || `商户 #${currentRecord?.id || ''}` }}
+            </p>
           </div>
           <button class="btn-text" @click="dialogVisible = false">关闭</button>
         </div>
 
-        <div class="mt-6">
-          <label class="text-sm text-slate-500">备注</label>
-          <textarea v-model.trim="form.remark" class="input mt-2 min-h-28" placeholder="填写运营跟进、风险提示或客服备注"></textarea>
+        <div class="mt-6 grid gap-6">
+          <div>
+            <label class="text-sm text-slate-500">备注</label>
+            <textarea
+              v-model.trim="form.remark"
+              class="input mt-2 min-h-28"
+              placeholder="填写运营跟进、风险提示或客服备注"
+            ></textarea>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <label class="text-sm text-slate-500">模型指定渠道</label>
+                <p class="text-xs text-slate-400 mt-1">
+                  命中规则后会优先尝试指定渠道，不再按全局优先级排序；若指定渠道不可用，则回退到默认路由。
+                </p>
+              </div>
+              <button class="btn-outline" type="button" @click="addRouteRow">新增规则</button>
+            </div>
+
+            <div class="mt-3 space-y-3">
+              <div
+                v-for="(route, index) in form.providerRoutes"
+                :key="`${index}-${route.modelId}-${route.providerId}`"
+                class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1fr_1fr_auto]"
+              >
+                <div>
+                  <label class="text-xs text-slate-400">模型</label>
+                  <select v-model="route.modelId" class="input mt-2">
+                    <option value="">请选择模型</option>
+                    <option v-for="model in modelOptions" :key="model.id" :value="model.id">
+                      {{ model.modelName }} ({{ model.modelCode }})
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-400">指定渠道</label>
+                  <select v-model="route.providerId" class="input mt-2">
+                    <option value="">请选择渠道</option>
+                    <option v-for="provider in providerOptions" :key="provider.id" :value="provider.id">
+                      {{ provider.providerName }} ({{ provider.providerCode }})
+                    </option>
+                  </select>
+                </div>
+                <div class="flex items-end justify-end">
+                  <button class="btn-danger" type="button" @click="removeRouteRow(index)">删除</button>
+                </div>
+              </div>
+              <p v-if="!form.providerRoutes.length" class="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">
+                暂未配置定向路由规则。
+              </p>
+            </div>
+          </div>
         </div>
 
         <div class="mt-6 flex justify-end gap-3">

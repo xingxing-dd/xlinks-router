@@ -52,6 +52,10 @@ public class CacheRefreshService {
                 routeCacheService.refreshPlansOnly();
                 yield "full";
             }
+            case "merchantroute" -> {
+                routeCacheService.refreshMerchantRoutesOnly();
+                yield "full";
+            }
             case "customertoken" -> {
                 if (request.getAccountId() == null) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR, "accountId is required for customerToken refresh");

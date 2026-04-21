@@ -181,6 +181,7 @@ public class ProtocolProxyService {
                 .inputPrice(model.getInputPrice())
                 .cacheHitPrice(model.getCacheHitPrice())
                 .outputPrice(model.getOutputPrice())
+                .multiplier(usageDecision.getMultiplier())
                 .modelProvider(model.getModelProvider())
                 .providerModel(upstreamModelCode)
                 .planId(usageDecision.getPlanId())

@@ -21,6 +21,7 @@ import site.xlinks.ai.router.dto.ProviderModelBatchCreateDTO;
 import site.xlinks.ai.router.vo.ProviderModelBatchCreateVO;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,24 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
 
     public boolean save(ProviderModel providerModel) {
         validateReferences(providerModel.getProviderId(), providerModel.getModelId());
-        validateUnique(providerModel.getProviderId(), providerModel.getModelId(), providerModel.getProviderModelCode(), null);
+        ProviderModel existing = baseMapper.selectIncludingDeletedByProviderAndModel(
+                providerModel.getProviderId(),
+                providerModel.getModelId()
+        );
+        if (existing != null) {
+            if (isDeleted(existing)) {
+                boolean restored = restoreDeletedMapping(existing, providerModel);
+                if (restored) {
+                    providerModel.setId(existing.getId());
+                    log.info("Provider model mapping restored: id={}, providerId={}, modelId={}",
+                            existing.getId(), existing.getProviderId(), existing.getModelId());
+                    apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "updated", existing.getId());
+                }
+                return restored;
+            }
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider and standard model mapping already exists");
+        }
+
         boolean saved = super.save(providerModel);
         if (saved) {
             log.info("Provider model mapping created: id={}, providerId={}, modelId={}",
@@ -144,19 +162,36 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Standard model not found: " + missingModelIds);
         }
 
-        List<ProviderModel> existingMappings = this.list(
-                new LambdaQueryWrapper<ProviderModel>()
-                        .eq(ProviderModel::getProviderId, dto.getProviderId())
-                        .in(ProviderModel::getModelId, normalizedModelIds)
+        List<ProviderModel> existingMappings = baseMapper.selectIncludingDeletedByProviderAndModels(
+                dto.getProviderId(),
+                normalizedModelIds
         );
-        Set<Long> existingModelIds = existingMappings.stream()
-                .map(ProviderModel::getModelId)
-                .collect(Collectors.toSet());
+        Map<Long, ProviderModel> existingMappingByModelId = new HashMap<>();
+        for (ProviderModel existingMapping : existingMappings) {
+            if (existingMapping != null && existingMapping.getModelId() != null) {
+                existingMappingByModelId.putIfAbsent(existingMapping.getModelId(), existingMapping);
+            }
+        }
 
         Integer targetStatus = dto.getStatus() == null ? 1 : dto.getStatus();
         List<ProviderModel> toCreate = new ArrayList<>();
+        int restoredCount = 0;
         for (Long modelId : normalizedModelIds) {
-            if (existingModelIds.contains(modelId)) {
+            ProviderModel existingMapping = existingMappingByModelId.get(modelId);
+            if (existingMapping != null) {
+                if (isDeleted(existingMapping)) {
+                    Model model = modelMap.get(modelId);
+                    ProviderModel mapping = new ProviderModel();
+                    mapping.setProviderId(dto.getProviderId());
+                    mapping.setModelId(modelId);
+                    mapping.setProviderModelCode(model.getModelCode());
+                    mapping.setProviderModelName(StringUtils.hasText(model.getModelName()) ? model.getModelName() : model.getModelCode());
+                    mapping.setStatus(targetStatus);
+                    mapping.setRemark(dto.getRemark());
+                    if (restoreDeletedMapping(existingMapping, mapping)) {
+                        restoredCount++;
+                    }
+                }
                 continue;
             }
             Model model = modelMap.get(modelId);
@@ -172,26 +207,26 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
 
         if (!toCreate.isEmpty()) {
             super.saveBatch(toCreate);
+        }
+        if (!toCreate.isEmpty() || restoredCount > 0) {
             apiCacheRefreshNotifier.notifyAdminCacheChanged("providerModel", "batchCreated", dto.getProviderId());
         }
 
         int requestedCount = normalizedModelIds.size();
-        int createdCount = toCreate.size();
+        int createdCount = toCreate.size() + restoredCount;
         int skippedCount = requestedCount - createdCount;
-        log.info("Provider model mappings batch create finished: providerId={}, requested={}, created={}, skipped={}",
-                dto.getProviderId(), requestedCount, createdCount, skippedCount);
+        log.info("Provider model mappings batch create finished: providerId={}, requested={}, created={}, restored={}, skipped={}",
+                dto.getProviderId(), requestedCount, createdCount, restoredCount, skippedCount);
 
         return new ProviderModelBatchCreateVO(requestedCount, createdCount, skippedCount);
     }
 
     private void validateUnique(Long providerId, Long modelId, String providerModelCode, Long excludeId) {
-        LambdaQueryWrapper<ProviderModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(providerId != null, ProviderModel::getProviderId, providerId)
-                .eq(modelId != null, ProviderModel::getModelId, modelId);
-        if (excludeId != null) {
-            wrapper.ne(ProviderModel::getId, excludeId);
-        }
-        if (this.count(wrapper) > 0) {
+        ProviderModel existing = baseMapper.selectIncludingDeletedByProviderAndModel(providerId, modelId);
+        if (existing != null && (excludeId == null || !excludeId.equals(existing.getId()))) {
+            if (isDeleted(existing)) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider and standard model mapping already exists in deleted state, please recreate it from add flow");
+            }
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Provider and standard model mapping already exists");
         }
 
@@ -214,5 +249,26 @@ public class ProviderModelService extends ServiceImpl<ProviderModelMapper, Provi
         if (model == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Standard model not found");
         }
+    }
+
+    private boolean restoreDeletedMapping(ProviderModel existing, ProviderModel incoming) {
+        Integer targetStatus = incoming.getStatus() == null ? 1 : incoming.getStatus();
+        String providerModelName = incoming.getProviderModelName();
+        if (!StringUtils.hasText(providerModelName)) {
+            providerModelName = incoming.getProviderModelCode();
+        }
+        int updated = baseMapper.restoreDeleted(
+                existing.getId(),
+                incoming.getProviderModelCode(),
+                providerModelName,
+                targetStatus,
+                incoming.getRemark(),
+                incoming.getUpdateBy()
+        );
+        return updated > 0;
+    }
+
+    private boolean isDeleted(ProviderModel providerModel) {
+        return providerModel != null && providerModel.getDeleted() != null && providerModel.getDeleted() == 1;
     }
 }

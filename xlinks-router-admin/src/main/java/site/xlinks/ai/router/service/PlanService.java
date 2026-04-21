@@ -93,6 +93,7 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         plan.setDurationDays(dto.getDurationDays());
         plan.setDailyQuota(defaultDecimal(dto.getDailyQuota()));
         plan.setTotalQuota(defaultDecimal(dto.getTotalQuota()));
+        plan.setMultiplier(normalizeMultiplier(dto.getMultiplier()));
         plan.setMaxPurchaseCount(dto.getMaxPurchaseCount());
         plan.setAllowedModels(normalizeAllowedModels(dto.getAllowedModels()));
         plan.setStatus(normalizeBinaryStatus(dto.getStatus(), "Plan status"));
@@ -126,6 +127,9 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         }
         if (dto.getTotalQuota() != null) {
             plan.setTotalQuota(defaultDecimal(dto.getTotalQuota()));
+        }
+        if (dto.getMultiplier() != null) {
+            plan.setMultiplier(normalizeMultiplier(dto.getMultiplier()));
         }
         // null means unlimited. update API uses full-form submission, so allow explicit clear.
         plan.setMaxPurchaseCount(dto.getMaxPurchaseCount());
@@ -260,6 +264,14 @@ public class PlanService extends ServiceImpl<PlanMapper, Plan> {
         if (maxPurchaseCount < 1) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Max purchase count must be at least 1");
         }
+    }
+
+    private BigDecimal normalizeMultiplier(BigDecimal multiplier) {
+        BigDecimal normalized = multiplier == null ? BigDecimal.ONE : multiplier;
+        if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Multiplier must be greater than 0");
+        }
+        return normalized;
     }
 
     private String normalizeAllowedModels(String allowedModels) {

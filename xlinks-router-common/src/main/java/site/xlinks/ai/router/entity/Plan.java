@@ -30,6 +30,11 @@ public class Plan extends BaseEntity {
     private BigDecimal totalQuota;
 
     /**
+     * Multiplier used for cache-hit billing adjustments.
+     */
+    private BigDecimal multiplier;
+
+    /**
      * Max purchase count per account. Null means unlimited.
      */
     private Integer maxPurchaseCount;

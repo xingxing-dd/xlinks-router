@@ -52,6 +52,7 @@ class ProviderRouteResolverTest {
         when(providerTokenSelectService.selectTokenOrNull(200L)).thenReturn(secondToken);
 
         ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
+                999L,
                 10L,
                 "gpt-4o",
                 ProxyProtocol.CHAT_COMPLETIONS
@@ -61,6 +62,52 @@ class ProviderRouteResolverTest {
         assertEquals(200L, route.provider().getId());
         assertEquals(2L, route.providerModel().getId());
         assertEquals(300L, route.providerToken().getId());
+        verify(routeCacheService, never()).getProvider(100L);
+        verify(providerTokenSelectService, never()).selectTokenOrNull(100L);
+    }
+
+    @Test
+    void shouldPrioritizeMerchantConfiguredProviderOverPriorityOrder() {
+        RouteCacheService routeCacheService = mock(RouteCacheService.class);
+        ProviderTokenSelectService providerTokenSelectService = mock(ProviderTokenSelectService.class);
+        ProviderRouteResolver resolver = new ProviderRouteResolver(routeCacheService, providerTokenSelectService);
+
+        ProviderModel highPriority = new ProviderModel();
+        highPriority.setId(1L);
+        highPriority.setModelId(10L);
+        highPriority.setProviderId(100L);
+
+        ProviderModel preferred = new ProviderModel();
+        preferred.setId(2L);
+        preferred.setModelId(10L);
+        preferred.setProviderId(200L);
+
+        Provider preferredProvider = new Provider();
+        preferredProvider.setId(200L);
+        preferredProvider.setStatus(1);
+
+        ProviderToken preferredToken = new ProviderToken();
+        preferredToken.setId(300L);
+        preferredToken.setProviderId(200L);
+        preferredToken.setTokenStatus(1);
+
+        when(routeCacheService.listProviderModelsByPriority(10L, ProxyProtocol.CHAT_COMPLETIONS))
+                .thenReturn(List.of(highPriority, preferred));
+        when(routeCacheService.getMerchantPreferredProviderId(500L, 10L)).thenReturn(200L);
+        when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
+        when(routeCacheService.getProvider(200L)).thenReturn(preferredProvider);
+        when(providerTokenSelectService.selectTokenOrNull(200L)).thenReturn(preferredToken);
+
+        ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
+                500L,
+                10L,
+                "gpt-5",
+                ProxyProtocol.CHAT_COMPLETIONS
+        );
+
+        assertNotNull(route);
+        assertEquals(200L, route.provider().getId());
+        assertEquals(2L, route.providerModel().getId());
         verify(routeCacheService, never()).getProvider(100L);
         verify(providerTokenSelectService, never()).selectTokenOrNull(100L);
     }
