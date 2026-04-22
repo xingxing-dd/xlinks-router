@@ -13,6 +13,7 @@ import ActivationUsage from '../views/activation-usage/index.vue'
 import UsageRecords from '../views/usage-records/index.vue'
 import PaymentMethods from '../views/payment-methods/index.vue'
 import PayLinks from '../views/pay-links/index.vue'
+import Wallets from '../views/wallets/index.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -36,6 +37,7 @@ const routes = [
       { path: 'usage-records', name: 'UsageRecords', component: UsageRecords },
       { path: 'payment-methods', name: 'PaymentMethods', component: PaymentMethods },
       { path: 'pay-links', name: 'PayLinks', component: PayLinks },
+      { path: 'wallets', name: 'Wallets', component: Wallets },
       { path: 'tokens', redirect: '/customer-tokens' },
       { path: 'trades', redirect: '/dashboard' },
     ],

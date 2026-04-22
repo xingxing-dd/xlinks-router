@@ -49,21 +49,25 @@ const {
   usageTotal,
   usageTotalPages,
   loading,
+  rechargeSubmitting,
   isRechargeModalOpen,
-  usdAmount,
+  rechargeAmount,
   selectedPayment,
-  calculateCnyAmount,
+  payableAmount,
   loadDashboard,
   handleUsagePageChange,
   handleUsageRefresh,
   handleConfirmRecharge,
+  resetRechargeForm,
   formatChange,
 } = useDashboard()
 
 const paymentMethods = [
-  { id: 'alipay', name: t('plans.alipay'), icon: '💳' },
-  { id: 'wechat', name: t('plans.wechat'), icon: '💚' },
+  { id: 'alipay', name: t('plans.alipay'), icon: '💳', isDefault: true },
+  { id: 'wechat', name: t('plans.wechat'), icon: '💚', enabled: false, isDefault: false },
 ]
+
+const isPaymentMethodEnabled = (method) => method.enabled !== false
 
 const lineOption = computed(() => ({
   tooltip: {
@@ -223,7 +227,7 @@ const getInputTokenTagClass = (inputTokens) => {
 
 <template>
   <div class="w-full max-w-[90rem] mx-auto px-4 py-4 md:px-6 md:py-8 xl:px-8">
-    <!-- 统计卡片 -->
+    <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
         <div class="flex items-center justify-between mb-4">
@@ -301,7 +305,7 @@ const getInputTokenTagClass = (inputTokens) => {
       </div>
     </div>
 
-    <!-- 图表区域 -->
+    <!-- Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg transition-shadow">
         <h2 class="text-lg font-semibold text-slate-900 mb-6">{{ t('dashboard.usageTrend') }}</h2>
@@ -425,11 +429,8 @@ const getInputTokenTagClass = (inputTokens) => {
                   <p class="text-sm text-slate-500">{{ formatDateTime(record.time) }}</p>
                   <div class="flex flex-wrap items-center gap-2 mt-2">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/15">
-                      {{ t('dashboard.usageTable.token') }}：{{ record.token }}
+                      {{ t('dashboard.usageTable.token') }}: {{ record.token }}
                     </span>
-                    <!-- <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200/60 text-slate-700 border border-slate-200">
-                      {{ t('dashboard.usageTable.channel') }}：{{ record.channel }}
-                    </span> -->
                   </div>
                 </div>
                 <div class="text-right">
@@ -509,7 +510,7 @@ const getInputTokenTagClass = (inputTokens) => {
       </div>
     </div>
 
-    <!-- 充值弹窗 -->
+    <!-- Recharge Modal -->
     <div v-if="isRechargeModalOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
         <div class="flex items-center gap-3 mb-6">
@@ -531,12 +532,15 @@ const getInputTokenTagClass = (inputTokens) => {
             <label class="block text-sm font-semibold text-slate-900 mb-2">
               {{ t('dashboard.rechargeAmount') }} ({{ t('dashboard.usd') }})
             </label>
+            <p class="text-xs text-slate-500 mb-2">
+              {{ t('dashboard.rechargeRateHint') }}
+            </p>
             <div class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
                 $
               </span>
               <input
-                v-model="usdAmount"
+                v-model="rechargeAmount"
                 type="number"
                 :placeholder="t('dashboard.inputAmountPlaceholder')"
                 min="0"
@@ -547,27 +551,24 @@ const getInputTokenTagClass = (inputTokens) => {
           </div>
 
           <div class="flex items-center justify-between mb-2">
-            <span class="text-slate-600">{{ t('dashboard.rechargeAmount') }}</span>
+            <span class="text-slate-600">{{ t('dashboard.rechargeAmount') }} ({{ t('dashboard.usd') }})</span>
             <span class="font-semibold text-slate-900">
-              ${{ usdAmount || "0.00" }}
+              ${{ rechargeAmount || "0.00" }}
             </span>
           </div>
           <div class="flex items-center justify-between mb-2">
-            <span class="text-slate-600 text-sm">
-              {{ t('dashboard.exchangeRate') }}
-            </span>
-            <span class="text-sm text-slate-600">
-              $1 = ¥0.2
-            </span>
+            <span class="text-slate-600">{{ t('dashboard.exchangeRate') }}</span>
+            <span class="font-semibold text-slate-900">1 : 0.2</span>
           </div>
           <div class="flex items-center justify-between pt-2 border-t border-slate-200">
             <span class="text-slate-900 font-semibold">
-              {{ t('dashboard.payAmount') }}
+              {{ t('dashboard.payAmount') }} ({{ t('dashboard.cny') }})
             </span>
             <span class="text-2xl font-bold text-slate-900">
-              ¥{{ calculateCnyAmount.toFixed(2) }}
+              &yen;{{ payableAmount.toFixed(2) }}
             </span>
           </div>
+
         </div>
 
         <div class="mb-6">
@@ -578,11 +579,13 @@ const getInputTokenTagClass = (inputTokens) => {
             <label
               v-for="method in paymentMethods"
               :key="method.id"
-              class="flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors"
+              class="flex items-center gap-3 p-3 border-2 rounded-xl transition-colors"
               :class="[
-                selectedPayment === method.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-slate-200 hover:border-slate-300'
+                isPaymentMethodEnabled(method)
+                  ? (selectedPayment === method.id
+                    ? 'border-primary bg-primary/5 cursor-pointer'
+                    : 'border-slate-200 hover:border-slate-300 cursor-pointer')
+                  : 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
               ]"
             >
               <input
@@ -590,11 +593,13 @@ const getInputTokenTagClass = (inputTokens) => {
                 name="payment"
                 :value="method.id"
                 v-model="selectedPayment"
-                class="w-4 h-4 text-primary"
+                :disabled="!isPaymentMethodEnabled(method)"
+                class="w-4 h-4 text-primary disabled:opacity-50"
               />
               <span class="text-2xl">{{ method.icon }}</span>
-              <span class="font-medium text-slate-900">
-                {{ method.name }}
+              <span class="font-medium" :class="isPaymentMethodEnabled(method) ? 'text-slate-900' : 'text-slate-400'">{{ method.name }}</span>
+              <span v-if="!isPaymentMethodEnabled(method)" class="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                {{ t('models.status.unavailable') }}
               </span>
             </label>
           </div>
@@ -602,16 +607,17 @@ const getInputTokenTagClass = (inputTokens) => {
 
         <div class="flex gap-3">
           <button
-            @click="() => { isRechargeModalOpen = false; usdAmount = '' }"
+            @click="() => { isRechargeModalOpen = false; resetRechargeForm() }"
             class="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
           >
             {{ t('common.cancel') }}
           </button>
           <button
             @click="handleConfirmRecharge"
+            :disabled="rechargeSubmitting"
             class="flex-1 px-4 py-3 bg-gradient-button text-white rounded-xl hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 font-medium"
           >
-            {{ t('common.confirm') }}
+            {{ rechargeSubmitting ? t('plans.creatingOrder') : t('plans.confirmPay') }}
           </button>
         </div>
       </div>

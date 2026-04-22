@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import site.xlinks.ai.router.common.constants.WalletConstants;
 import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.UsageMetrics;
@@ -22,6 +23,7 @@ public class UsageRecordService {
     private final site.xlinks.ai.router.mapper.UsageRecordMapper usageRecordMapper;
     private final CustomerPlanService customerPlanService;
     private final CustomerTokenQuotaService customerTokenQuotaService;
+    private final WalletService walletService;
 
     public void record(ProviderInvokeContext context,
                        UsageMetrics usageMetrics,
@@ -50,7 +52,7 @@ public class UsageRecordService {
         record.setErrorMessage(errorMessage);
         try {
             usageRecordMapper.insert(record);
-            consumePlanQuota(context, record);
+            consumeUsageBalanceOrPlan(context, record);
             syncCustomerTokenQuotaUsage(context, record);
             log.debug("Usage record saved: {}", context.getRequestId());
         } catch (Exception e) {
@@ -158,18 +160,28 @@ public class UsageRecordService {
         return record;
     }
 
-    private void consumePlanQuota(ProviderInvokeContext context, UsageRecord record) {
+    private void consumeUsageBalanceOrPlan(ProviderInvokeContext context, UsageRecord record) {
         if (context == null || record == null) {
-            return;
-        }
-        Long planId = context.getPlanId();
-        if (planId == null) {
             return;
         }
         if (record.getTotalCost() == null || record.getTotalCost().compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        customerPlanService.consumeQuota(planId, record.getTotalCost());
+        Long planId = context.getPlanId();
+        if (planId != null) {
+            customerPlanService.consumeQuota(planId, record.getTotalCost());
+            return;
+        }
+        if (context.getAccountId() == null) {
+            return;
+        }
+        walletService.debitBasic(
+                context.getAccountId(),
+                record.getTotalCost(),
+                WalletConstants.BIZ_TYPE_API_USAGE,
+                context.getRequestId(),
+                "API usage completed: " + context.getModelCode()
+        );
     }
 
     private void syncCustomerTokenQuotaUsage(ProviderInvokeContext context, UsageRecord record) {

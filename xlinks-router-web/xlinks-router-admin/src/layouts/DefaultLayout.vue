@@ -22,6 +22,7 @@ import {
   Link2,
   Layers3,
   FolderKanban,
+  WalletCards,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -80,6 +81,7 @@ const navGroups = computed(() => [
     children: [
       { path: '/payment-methods', label: t('nav.paymentMethods'), icon: ReceiptText },
       { path: '/pay-links', label: t('nav.payLinks'), icon: Link2 },
+      { path: '/wallets', label: '钱包管理', icon: WalletCards },
     ],
   },
 ])

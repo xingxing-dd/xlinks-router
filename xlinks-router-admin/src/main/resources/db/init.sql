@@ -215,10 +215,10 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
   `status` tinyint(4) NOT NULL DEFAULT '1',
   `expire_time` datetime DEFAULT NULL,
   `allowed_models` json DEFAULT NULL,
-  `daily_quota` decimal(12,2) DEFAULT NULL,
-  `used_quota` decimal(12,2) DEFAULT NULL,
-  `total_quota` decimal(12,2) DEFAULT NULL,
-  `total_used_quota` decimal(12,2) DEFAULT NULL,
+  `daily_quota` decimal(12,6) DEFAULT NULL,
+  `used_quota` decimal(12,6) DEFAULT NULL,
+  `total_quota` decimal(12,6) DEFAULT NULL,
+  `total_used_quota` decimal(12,6) DEFAULT NULL,
   `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -235,10 +235,10 @@ CREATE TABLE IF NOT EXISTS `customer_tokens` (
 CREATE TABLE IF NOT EXISTS `plans` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `plan_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `price` decimal(12,2) NOT NULL,
+  `price` decimal(12,6) NOT NULL,
   `duration_days` int(11) NOT NULL,
-  `daily_quota` decimal(12,2) NOT NULL,
-  `total_quota` decimal(12,2) NOT NULL,
+  `daily_quota` decimal(12,6) NOT NULL,
+  `total_quota` decimal(12,6) NOT NULL,
   `multiplier` decimal(10,4) NOT NULL DEFAULT '1.0000' COMMENT 'Cache-hit billing multiplier',
   `max_purchase_count` int(11) DEFAULT NULL COMMENT 'Maximum purchase count per account, NULL means unlimited',
   `allowed_models` json DEFAULT NULL,
@@ -260,13 +260,13 @@ CREATE TABLE IF NOT EXISTS `customer_plans` (
   `account_id` bigint(20) NOT NULL,
   `plan_id` bigint(20) NOT NULL,
   `plan_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `price` decimal(12,2) NOT NULL,
+  `price` decimal(12,6) NOT NULL,
   `duration_days` int(11) NOT NULL,
-  `daily_quota` decimal(12,2) NOT NULL,
-  `total_quota` decimal(12,2) NOT NULL,
+  `daily_quota` decimal(12,6) NOT NULL,
+  `total_quota` decimal(12,6) NOT NULL,
   `multiplier` decimal(10,4) NOT NULL DEFAULT '1.0000' COMMENT 'Cache-hit billing multiplier snapshot',
-  `used_quota` decimal(12,2) NOT NULL DEFAULT '0.00',
-  `total_used_quota` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `used_quota` decimal(12,6) NOT NULL DEFAULT '0.000000',
+  `total_used_quota` decimal(12,6) NOT NULL DEFAULT '0.000000',
   `quota_refresh_time` datetime DEFAULT NULL,
   `plan_expire_time` datetime DEFAULT NULL,
   `status` tinyint(4) NOT NULL DEFAULT '1',
@@ -389,7 +389,102 @@ CREATE TABLE IF NOT EXISTS `customer_orders` (
   KEY `idx_expired_at` (`expired_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 16. Usage records
+-- 16. Customer main wallets
+CREATE TABLE IF NOT EXISTS `customer_main_wallets` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) NOT NULL,
+  `wallet_no` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `total_balance` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `available_balance` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `allow_in` tinyint(4) NOT NULL DEFAULT '1',
+  `allow_out` tinyint(4) NOT NULL DEFAULT '1',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `deleted` tinyint(4) NOT NULL DEFAULT '0',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wallet_account_id` (`account_id`),
+  UNIQUE KEY `uk_wallet_no` (`wallet_no`),
+  KEY `idx_wallet_status` (`status`),
+  KEY `idx_wallet_deleted` (`deleted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 17. Customer sub wallets
+CREATE TABLE IF NOT EXISTS `customer_sub_wallets` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `main_wallet_id` bigint(20) NOT NULL,
+  `wallet_no` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `wallet_type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `balance` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `deleted` tinyint(4) NOT NULL DEFAULT '0',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_sub_wallet_no` (`wallet_no`),
+  UNIQUE KEY `uk_main_wallet_type` (`main_wallet_id`,`wallet_type`),
+  KEY `idx_sub_wallet_status` (`status`),
+  KEY `idx_sub_wallet_deleted` (`deleted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18. Customer main wallet flows
+CREATE TABLE IF NOT EXISTS `customer_main_wallet_flows` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `main_wallet_id` bigint(20) NOT NULL,
+  `account_id` bigint(20) NOT NULL,
+  `order_no` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `biz_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `direction` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `change_amount` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `total_balance_before` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `total_balance_after` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `available_balance_before` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `available_balance_after` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wallet_order_biz` (`main_wallet_id`,`order_no`,`biz_type`),
+  KEY `idx_wallet_flow_account_id` (`account_id`),
+  KEY `idx_wallet_flow_created_at` (`created_at`),
+  KEY `idx_wallet_flow_biz_type` (`biz_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 19. Customer sub wallet flows
+CREATE TABLE IF NOT EXISTS `customer_sub_wallet_flows` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `sub_wallet_id` bigint(20) NOT NULL,
+  `main_wallet_id` bigint(20) NOT NULL,
+  `account_id` bigint(20) NOT NULL,
+  `order_no` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `wallet_type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `biz_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `direction` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `change_amount` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `balance_before` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `balance_after` decimal(18,6) NOT NULL DEFAULT '0.000000',
+  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_sub_wallet_order_biz` (`sub_wallet_id`,`order_no`,`biz_type`),
+  KEY `idx_sub_wallet_flow_account_id` (`account_id`),
+  KEY `idx_sub_wallet_flow_created_at` (`created_at`),
+  KEY `idx_sub_wallet_flow_biz_type` (`biz_type`),
+  KEY `idx_sub_wallet_flow_type` (`wallet_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 20. Usage records
 CREATE TABLE IF NOT EXISTS `usage_records` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `request_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,

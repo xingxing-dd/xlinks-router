@@ -1,28 +1,46 @@
 package site.xlinks.ai.router.client.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import site.xlinks.ai.router.client.context.CustomerAccountContext;
 import site.xlinks.ai.router.client.dto.user.UserInfoResponse;
 import site.xlinks.ai.router.client.dto.user.UserSubscriptionResponse;
+import site.xlinks.ai.router.client.service.CustomerAccountService;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.entity.CustomerAccount;
+import site.xlinks.ai.router.service.WalletService;
 
 import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
 
 @RestController
 @RequestMapping("/api/v1/user")
+@RequiredArgsConstructor
 public class UserController {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private final CustomerAccountService customerAccountService;
+    private final WalletService walletService;
 
     @GetMapping("/info")
     public Result<UserInfoResponse> getUserInfo() {
+        Long accountId = CustomerAccountContext.requireAccount().getId();
+        CustomerAccount account = customerAccountService.getById(accountId);
+
         UserInfoResponse response = new UserInfoResponse();
-        response.setId(1L);
-        response.setEmail("user@example.com");
-        response.setNickname("张三");
-        response.setAvatar("https://example.com/avatar.jpg");
-        response.setBalance(new BigDecimal("1258.00"));
-        response.setStatus(1);
-        response.setCreatedAt("2026-02-15 10:30:00");
+        if (account == null) {
+            return Result.success(response);
+        }
+        response.setId(account.getId());
+        response.setEmail(account.getEmail());
+        response.setNickname(account.getUsername());
+        response.setAvatar(null);
+        response.setBalance(walletService.ensureWallet(accountId).getMainWallet().getAvailableBalance());
+        response.setStatus(account.getStatus());
+        response.setCreatedAt(account.getCreatedAt() == null ? null : account.getCreatedAt().format(DATE_TIME_FORMATTER));
         return Result.success(response);
     }
 

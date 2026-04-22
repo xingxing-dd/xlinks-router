@@ -48,6 +48,10 @@ public final class ProxyErrors {
         return new BusinessException(ErrorCode.FORBIDDEN, "Customer plan is unavailable");
     }
 
+    public static BusinessException noUsableEntitlement() {
+        return new BusinessException(ErrorCode.FORBIDDEN, "No available plan or wallet balance");
+    }
+
     public static BusinessException customerTokenTotalQuotaReached() {
         return new BusinessException(ErrorCode.FORBIDDEN, "Customer token total quota reached");
     }

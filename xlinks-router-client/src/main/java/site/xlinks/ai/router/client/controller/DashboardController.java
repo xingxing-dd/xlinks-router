@@ -14,6 +14,7 @@ import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.entity.UsageRecord;
 import site.xlinks.ai.router.mapper.UsageRecordMapper;
+import site.xlinks.ai.router.service.WalletService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,6 +33,7 @@ import java.util.Map;
 public class DashboardController {
 
     private final UsageRecordMapper usageRecordMapper;
+    private final WalletService walletService;
 
     @GetMapping("/stats")
     public Result<DashboardStatsResponse> getStats() {
@@ -63,7 +65,7 @@ public class DashboardController {
         response.setTodayTokensChange(calcChangePercent(todaySummary.tokens, yesterdaySummary.tokens));
         response.setTodayCost(todaySummary.cost);
         response.setTodayCostChange(calcChangePercent(todaySummary.cost, yesterdaySummary.cost));
-        response.setBalance(BigDecimal.ZERO);
+        response.setBalance(walletService.ensureWallet(accountId).getMainWallet().getAvailableBalance());
         return Result.success(response);
     }
 

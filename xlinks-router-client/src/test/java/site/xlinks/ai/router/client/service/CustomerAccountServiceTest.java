@@ -13,11 +13,13 @@ import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
+import site.xlinks.ai.router.service.WalletService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +38,9 @@ class CustomerAccountServiceTest {
     @Mock
     private VerifyCodeService verifyCodeService;
 
+    @Mock
+    private WalletService walletService;
+
     private CustomerAccountService customerAccountService;
 
     @BeforeEach
@@ -44,13 +49,19 @@ class CustomerAccountServiceTest {
                 customerAccountMapper,
                 promotionService,
                 tokenService,
-                verifyCodeService
+                verifyCodeService,
+                walletService
         );
     }
 
     @Test
     void shouldRegisterAfterVerifyingCode() {
         when(customerAccountMapper.selectOne(any())).thenReturn(null);
+        doAnswer(invocation -> {
+            CustomerAccount account = invocation.getArgument(0);
+            account.setId(1001L);
+            return 1;
+        }).when(customerAccountMapper).insert(any(CustomerAccount.class));
 
         AuthRegisterRequest request = new AuthRegisterRequest();
         request.setTarget("13800138000");
@@ -64,6 +75,7 @@ class CustomerAccountServiceTest {
         ArgumentCaptor<CustomerAccount> accountCaptor = ArgumentCaptor.forClass(CustomerAccount.class);
         verify(verifyCodeService).verifyOrThrow("register", "phone", "13800138000", "123456");
         verify(customerAccountMapper).insert(accountCaptor.capture());
+        verify(walletService).ensureWallet(1001L);
         verify(promotionService).bindInviterAndInitReward(accountCaptor.getValue(), "INVITE2026");
 
         CustomerAccount saved = accountCaptor.getValue();

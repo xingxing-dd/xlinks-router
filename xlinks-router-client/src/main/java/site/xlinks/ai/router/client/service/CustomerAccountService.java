@@ -13,6 +13,7 @@ import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
+import site.xlinks.ai.router.service.WalletService;
 
 import java.util.Locale;
 
@@ -34,6 +35,7 @@ public class CustomerAccountService {
     private final PromotionService promotionService;
     private final TokenService tokenService;
     private final VerifyCodeService verifyCodeService;
+    private final WalletService walletService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /**
@@ -61,6 +63,7 @@ public class CustomerAccountService {
         account.setStatus(1);
 
         customerAccountMapper.insert(account);
+        walletService.ensureWallet(account.getId());
         promotionService.bindInviterAndInitReward(account, request.getInviteCode());
 
         log.info("New customer account registered: {}", account.getId());

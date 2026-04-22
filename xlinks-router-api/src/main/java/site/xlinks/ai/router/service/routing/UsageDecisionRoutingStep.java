@@ -20,8 +20,8 @@ public class UsageDecisionRoutingStep implements RoutingStep {
                 context.getCustomerToken(),
                 context.getRequest().getModel()
         );
-        if (usageDecision == null || !usageDecision.isPackageEnabled()) {
-            throw ProxyErrors.customerPlanUnavailable();
+        if (usageDecision == null || (!usageDecision.isPackageEnabled() && !usageDecision.isBalanceEnabled())) {
+            throw ProxyErrors.noUsableEntitlement();
         }
         context.setUsageDecision(usageDecision);
     }

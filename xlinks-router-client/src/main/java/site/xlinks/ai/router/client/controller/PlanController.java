@@ -231,9 +231,17 @@ public class PlanController {
     }
 
     private Integer calculateOpenedPercentage(CustomerPlan plan) {
-        BigDecimal ratio = (plan.getTotalUsedQuota() == null ? BigDecimal.ZERO : plan.getTotalUsedQuota())
+        BigDecimal totalQuota = defaultDecimal(plan.getTotalQuota());
+        if (totalQuota.compareTo(BigDecimal.ZERO) <= 0) {
+            return 0;
+        }
+
+        BigDecimal ratio = defaultDecimal(plan.getTotalUsedQuota())
                 .multiply(new BigDecimal("100"))
-                .divide(plan.getTotalQuota(), 0, RoundingMode.HALF_UP);
+                .divide(totalQuota, 0, RoundingMode.HALF_UP);
+        if (ratio.compareTo(BigDecimal.ZERO) < 0) {
+            return 0;
+        }
         if (ratio.compareTo(new BigDecimal("100")) > 0) {
             return 100;
         }

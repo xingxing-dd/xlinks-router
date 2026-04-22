@@ -7,9 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.context.UsageDecision;
+import site.xlinks.ai.router.entity.CustomerMainWallet;
 import site.xlinks.ai.router.entity.CustomerPlan;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerPlanMapper;
+import site.xlinks.ai.router.model.wallet.WalletBundle;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,6 +31,7 @@ public class UsageEntitlementService {
     private final ObjectMapper objectMapper;
     private final CustomerPlanMapper customerPlanMapper;
     private final RouteCacheService routeCacheService;
+    private final WalletService walletService;
 
     /**
      * Decide available usage strategy for current request.
@@ -39,11 +42,9 @@ public class UsageEntitlementService {
 
         List<String> packageAllowedModels = parseAllowedModels(customerToken.getAllowedModels());
 
-        // Balance mode is reserved and currently disabled.
-        boolean balanceEnabled = false;
-
         CustomerPlan plan = selectAvailablePlan(customerToken.getAccountId(), requestModel);
         boolean packageEnabled = plan != null;
+        boolean balanceEnabled = !packageEnabled && hasUsableBalance(customerToken.getAccountId());
 
         int currentUsageType = calculateUsageType(packageEnabled, balanceEnabled,
                 packageAllowedModels, requestModel);
@@ -124,6 +125,30 @@ public class UsageEntitlementService {
         }
 
         return true;
+    }
+
+    private boolean hasUsableBalance(Long accountId) {
+        if (accountId == null) {
+            return false;
+        }
+        try {
+            WalletBundle bundle = walletService.ensureWallet(accountId);
+            CustomerMainWallet wallet = bundle == null ? null : bundle.getMainWallet();
+            if (wallet == null) {
+                return false;
+            }
+            if (wallet.getStatus() == null || wallet.getStatus() != 1) {
+                return false;
+            }
+            if (wallet.getAllowOut() == null || wallet.getAllowOut() != 1) {
+                return false;
+            }
+            BigDecimal availableBalance = wallet.getAvailableBalance() == null ? BigDecimal.ZERO : wallet.getAvailableBalance();
+            return availableBalance.compareTo(BigDecimal.ZERO) > 0;
+        } catch (Exception ex) {
+            log.warn("Failed to check wallet balance for account={}", accountId, ex);
+            return false;
+        }
     }
 
     /**

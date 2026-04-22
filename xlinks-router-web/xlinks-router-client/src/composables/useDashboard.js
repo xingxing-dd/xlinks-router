@@ -1,11 +1,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getApi } from '@/utils/request'
+import { getApi, postApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
+
+const DEFAULT_USAGE_PAGE_SIZE = 20
+const RECHARGE_PAYMENT_RATE = 0.2
 
 export function useDashboard() {
   const { t } = useI18n()
-  const DEFAULT_USAGE_PAGE_SIZE = 20
 
   const usageData = ref([])
   const modelUsage = ref([])
@@ -26,14 +28,15 @@ export function useDashboard() {
   const usagePageSize = ref(DEFAULT_USAGE_PAGE_SIZE)
   const usageTotal = ref(0)
   const loading = ref(false)
+  const rechargeSubmitting = ref(false)
   const isRechargeModalOpen = ref(false)
-  const usdAmount = ref('')
+  const rechargeAmount = ref('')
   const selectedPayment = ref('alipay')
 
-  const calculateCnyAmount = computed(() => {
-    const amount = parseFloat(usdAmount.value)
+  const payableAmount = computed(() => {
+    const amount = parseFloat(rechargeAmount.value)
     if (isNaN(amount) || amount <= 0) return 0
-    return amount * 0.2
+    return amount * RECHARGE_PAYMENT_RATE
   })
 
   const usageTotalPages = computed(() => {
@@ -88,7 +91,7 @@ export function useDashboard() {
     const page = Math.max(1, Number(payload?.page ?? payload?.current ?? fallbackPage) || fallbackPage)
     const pageSize = Math.min(
       DEFAULT_USAGE_PAGE_SIZE,
-      Math.max(1, Number(payload?.pageSize ?? payload?.size ?? DEFAULT_USAGE_PAGE_SIZE) || DEFAULT_USAGE_PAGE_SIZE)
+      Math.max(1, Number(payload?.pageSize ?? payload?.size ?? DEFAULT_USAGE_PAGE_SIZE) || DEFAULT_USAGE_PAGE_SIZE),
     )
 
     return { records, total, page, pageSize }
@@ -152,15 +155,71 @@ export function useDashboard() {
     await loadRecentActivities(usageCurrentPage.value)
   }
 
-  const handleConfirmRecharge = () => {
-    const amount = parseFloat(usdAmount.value)
+  const resetRechargeForm = () => {
+    rechargeAmount.value = ''
+    selectedPayment.value = 'alipay'
+  }
+
+  const openPayPage = (payUrl) => {
+    const normalizedPayUrl = String(payUrl || '')
+      .trim()
+      .replace(/`/g, '')
+      .replace(/^"+|"+$/g, '')
+      .replace(/^'+|'+$/g, '')
+
+    if (!normalizedPayUrl) {
+      return false
+    }
+
+    if (normalizedPayUrl.includes('<form') && normalizedPayUrl.includes('submit')) {
+      const payWindow = window.open('', '_blank')
+      if (!payWindow) {
+        throw new Error('支付窗口被浏览器拦截，请允许弹窗后重试')
+      }
+      payWindow.document.open()
+      payWindow.document.write(normalizedPayUrl)
+      payWindow.document.close()
+      return true
+    }
+
+    window.open(normalizedPayUrl, '_blank', 'noopener,noreferrer')
+    return true
+  }
+
+  const handleConfirmRecharge = async () => {
+    const amount = parseFloat(rechargeAmount.value)
     if (isNaN(amount) || amount <= 0) {
       toast.error(t('common.error'), t('dashboard.inputAmountPlaceholder'))
       return
     }
-    toast.info(t('common.loading'))
-    isRechargeModalOpen.value = false
-    usdAmount.value = ''
+
+    if (selectedPayment.value !== 'alipay') {
+      toast.warning(t('common.error'), t('dashboard.wechatUnavailable'))
+      return
+    }
+
+    rechargeSubmitting.value = true
+
+    try {
+      const result = await postApi('/v1/wallet/recharge-orders', {
+        amount,
+        paymentMethod: selectedPayment.value,
+      })
+
+      const opened = openPayPage(result?.payUrl)
+      if (!opened) {
+        toast.error(t('common.error'), t('dashboard.orderCreationFailed'))
+        return
+      }
+
+      toast.success(t('common.success'), t('dashboard.rechargeOrderCreated'))
+      isRechargeModalOpen.value = false
+      resetRechargeForm()
+    } catch (error) {
+      toast.error(t('common.error'), error.message || t('dashboard.orderCreationFailed'))
+    } finally {
+      rechargeSubmitting.value = false
+    }
   }
 
   const formatChange = (value) => `${Math.abs(Number(value || 0)).toFixed(1)}%`
@@ -177,14 +236,16 @@ export function useDashboard() {
     usageTotal,
     usageTotalPages,
     loading,
+    rechargeSubmitting,
     isRechargeModalOpen,
-    usdAmount,
+    rechargeAmount,
     selectedPayment,
-    calculateCnyAmount,
+    payableAmount,
     loadDashboard,
     handleUsagePageChange,
     handleUsageRefresh,
     handleConfirmRecharge,
+    resetRechargeForm,
     formatChange,
   }
 }
