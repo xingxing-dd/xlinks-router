@@ -25,6 +25,8 @@ public class UsageRecord extends BaseEntity {
 
     private String providerToken;
 
+    private Long providerTokenId;
+
     /**
      * balance / plan
      */
@@ -89,5 +91,7 @@ public class UsageRecord extends BaseEntity {
     private String errorCode;
 
     private String errorMessage;
+
+    private String finishReason;
 
 }

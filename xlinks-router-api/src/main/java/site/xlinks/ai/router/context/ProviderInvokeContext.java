@@ -24,6 +24,12 @@ public class ProviderInvokeContext {
 
     private String providerToken;
 
+    private Long providerTokenId;
+
+    private String providerTokenName;
+
+    private String providerPermitId;
+
     private String customerToken;
 
     private String endpointCode;
@@ -74,4 +80,14 @@ public class ProviderInvokeContext {
      * Customer request model code.
      */
     private String customerModel;
+
+    private Integer requestTimeoutMs;
+
+    private Integer streamFirstResponseTimeoutMs;
+
+    private Integer streamIdleTimeoutMs;
+
+    private Integer sessionLeaseMs;
+
+    private Integer sessionRenewIntervalMs;
 }

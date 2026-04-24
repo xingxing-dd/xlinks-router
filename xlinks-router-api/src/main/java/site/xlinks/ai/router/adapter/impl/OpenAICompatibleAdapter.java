@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -18,8 +19,11 @@ import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
+import site.xlinks.ai.router.service.StreamFirstResponseTimeoutException;
+import site.xlinks.ai.router.service.UpstreamTimeoutException;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.function.Consumer;
 
 /**
@@ -46,7 +50,8 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
     public JsonNode forwardDirect(ProxyRequest request, ProviderInvokeContext context) {
         try {
             Request httpRequest = buildRequest(request, context);
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
+            Call call = createScopedClient(context, false).newCall(httpRequest);
+            try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response);
                 }
@@ -60,6 +65,8 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
                 log.debug("Upstream {} response: {}", request.getProtocol(), responseJson);
                 return parseResponseBody(request, responseJson, contentType);
             }
+        } catch (InterruptedIOException e) {
+            throw new UpstreamTimeoutException("Upstream request timed out", e);
         } catch (IOException e) {
             log.error("Error calling provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
@@ -72,7 +79,8 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
                               Consumer<StreamEvent> onEvent) {
         try {
             Request httpRequest = buildRequest(request, context);
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
+            Call call = createScopedClient(context, true).newCall(httpRequest);
+            try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response);
                 }
@@ -119,6 +127,8 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
                 onEvent.accept(StreamEvent.builder().dataLine(fallbackData).build());
                 onEvent.accept(StreamEvent.builder().dataLine("[DONE]").build());
             }
+        } catch (InterruptedIOException e) {
+            throw new StreamFirstResponseTimeoutException("Stream first response timeout", e);
         } catch (IOException e) {
             log.error("Error calling provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
@@ -393,4 +403,3 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
         }
     }
 }
-

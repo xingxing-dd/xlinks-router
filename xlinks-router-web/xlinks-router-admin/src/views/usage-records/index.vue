@@ -1,6 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { getUsageAccountSummary, getUsageModelSummary, listUsageRecords } from '@/api/admin'
+import {
+  getUsageAccountSummary,
+  getUsageModelSummary,
+  listModels,
+  listProviders,
+  listUsageRecords,
+} from '@/api/admin'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime } from '@/utils/format'
 
@@ -9,15 +15,24 @@ const toastStore = useToastStore()
 const activeTab = ref('flow')
 const loading = ref(false)
 const records = ref([])
+const modelOptions = ref([])
+const providerOptions = ref([])
+
+const getTodayStartDateTime = () => {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const offset = now.getTimezoneOffset()
+  const localDate = new Date(now.getTime() - offset * 60 * 1000)
+  return localDate.toISOString().slice(0, 16)
+}
 
 const filters = reactive({
   accountKeyword: '',
   modelCode: '',
   providerCode: '',
   usageType: '',
-  requestId: '',
   responseStatus: '',
-  startAt: '',
+  startAt: getTodayStartDateTime(),
   endAt: '',
 })
 
@@ -36,11 +51,23 @@ const buildQuery = () => ({
   modelCode: filters.modelCode,
   providerCode: filters.providerCode,
   usageType: filters.usageType,
-  requestId: activeTab.value === 'flow' ? filters.requestId : undefined,
   responseStatus: activeTab.value === 'flow' ? filters.responseStatus : undefined,
   startAt: normalizeDateTime(filters.startAt),
   endAt: normalizeDateTime(filters.endAt),
 })
+
+const loadFilterOptions = async () => {
+  try {
+    const [modelData, providerData] = await Promise.all([
+      listModels({ page: 1, pageSize: 200 }),
+      listProviders({ page: 1, pageSize: 200 }),
+    ])
+    modelOptions.value = modelData.records || []
+    providerOptions.value = providerData.records || []
+  } catch (error) {
+    toastStore.push(error.message || '加载筛选项失败', 'error')
+  }
+}
 
 const loadRecords = async () => {
   loading.value = true
@@ -57,7 +84,7 @@ const loadRecords = async () => {
     records.value = data.records || []
     page.total = data.total || 0
   } catch (error) {
-    toastStore.push(error.message || 'Failed to load usage records', 'error')
+    toastStore.push(error.message || '加载使用记录失败', 'error')
   } finally {
     loading.value = false
   }
@@ -69,9 +96,8 @@ const resetFilters = async () => {
     modelCode: '',
     providerCode: '',
     usageType: '',
-    requestId: '',
     responseStatus: '',
-    startAt: '',
+    startAt: getTodayStartDateTime(),
     endAt: '',
   })
   page.page = 1
@@ -128,15 +154,28 @@ const formatDuration = (value) => {
   return Number(value).toFixed(2)
 }
 
-onMounted(loadRecords)
+const formatResponseStatus = (value) => {
+  if (value === 200) {
+    return '成功'
+  }
+  if (value === 500) {
+    return '失败'
+  }
+  return value ?? '-'
+}
+
+onMounted(async () => {
+  await loadFilterOptions()
+  await loadRecords()
+})
 </script>
 
 <template>
   <div class="p-6 space-y-6">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Token使用记录</h1>
-        <p class="text-slate-500">支持查询流水、按账户汇总、按模型汇总（含平均响应时间）。</p>
+        <h1 class="text-2xl font-bold text-slate-900">Token 使用记录</h1>
+        <p class="text-slate-500">支持查询流水、按账户汇总、按模型汇总，并按时间范围筛选。</p>
       </div>
       <div class="flex gap-2">
         <button class="btn-outline" :class="{ 'btn-primary': activeTab === 'flow' }" @click="changeTab('flow')">流水</button>
@@ -149,15 +188,25 @@ onMounted(loadRecords)
       <div class="card-body grid gap-4 md:grid-cols-4 lg:grid-cols-6">
         <div>
           <label class="text-sm text-slate-500">账户</label>
-          <input v-model.trim="filters.accountKeyword" class="input mt-2" placeholder="用户名/手机号/邮箱" />
+          <input v-model.trim="filters.accountKeyword" class="input mt-2" placeholder="用户名、手机号、邮箱" />
         </div>
         <div>
           <label class="text-sm text-slate-500">模型编码</label>
-          <input v-model.trim="filters.modelCode" class="input mt-2" placeholder="例如 gpt-4o-mini" />
+          <select v-model="filters.modelCode" class="input mt-2">
+            <option value="">全部</option>
+            <option v-for="model in modelOptions" :key="model.id" :value="model.modelCode">
+              {{ model.modelName ? `${model.modelName} (${model.modelCode})` : model.modelCode }}
+            </option>
+          </select>
         </div>
         <div>
           <label class="text-sm text-slate-500">服务商编码</label>
-          <input v-model.trim="filters.providerCode" class="input mt-2" placeholder="例如 openai" />
+          <select v-model="filters.providerCode" class="input mt-2">
+            <option value="">全部</option>
+            <option v-for="provider in providerOptions" :key="provider.id" :value="provider.providerCode">
+              {{ provider.providerName ? `${provider.providerName} (${provider.providerCode})` : provider.providerCode }}
+            </option>
+          </select>
         </div>
         <div>
           <label class="text-sm text-slate-500">使用类型</label>
@@ -168,12 +217,12 @@ onMounted(loadRecords)
           </select>
         </div>
         <div v-if="activeTab === 'flow'">
-          <label class="text-sm text-slate-500">请求ID</label>
-          <input v-model.trim="filters.requestId" class="input mt-2" placeholder="request_id" />
-        </div>
-        <div v-if="activeTab === 'flow'">
-          <label class="text-sm text-slate-500">响应状态</label>
-          <input v-model.trim="filters.responseStatus" type="number" class="input mt-2" placeholder="200" />
+          <label class="text-sm text-slate-500">响应码</label>
+          <select v-model="filters.responseStatus" class="input mt-2">
+            <option value="">全部</option>
+            <option :value="200">成功</option>
+            <option :value="500">失败</option>
+          </select>
         </div>
         <div>
           <label class="text-sm text-slate-500">开始时间</label>
@@ -203,16 +252,15 @@ onMounted(loadRecords)
           <table v-if="activeTab === 'flow'" class="table min-w-[1680px]">
             <thead>
               <tr>
-                <!-- <th>请求ID</th> -->
                 <th>账户</th>
                 <th>模型</th>
                 <th>服务商</th>
                 <th>类型</th>
-                <th>状态</th>
+                <th>响应码</th>
                 <th>输入</th>
                 <th>缓存命中</th>
                 <th>输出</th>
-                <th>总Token</th>
+                <th>总 Token</th>
                 <th>总费用</th>
                 <th>首次响应</th>
                 <th>会话耗时</th>
@@ -221,10 +269,9 @@ onMounted(loadRecords)
             </thead>
             <tbody>
               <tr v-if="!records.length && !loading">
-                <td colspan="14" class="empty-state">暂无数据</td>
+                <td colspan="13" class="empty-state">暂无数据</td>
               </tr>
               <tr v-for="item in records" :key="item.id">
-                <!-- <td class="font-mono text-xs break-all">{{ item.requestId || '-' }}</td> -->
                 <td>
                   <div class="font-medium text-slate-800">{{ item.accountName || item.accountId }}</div>
                   <div class="text-xs text-slate-400 mt-1">{{ item.accountEmail || item.accountPhone || '-' }}</div>
@@ -235,7 +282,7 @@ onMounted(loadRecords)
                 </td>
                 <td>{{ item.providerCode || '-' }}</td>
                 <td>{{ item.usageType || '-' }}</td>
-                <td>{{ item.responseStatus ?? '-' }}</td>
+                <td>{{ formatResponseStatus(item.responseStatus) }}</td>
                 <td>{{ formatNumber(item.promptTokens) }}</td>
                 <td>{{ formatNumber(item.cacheHitTokens) }}</td>
                 <td>{{ formatNumber(item.completionTokens) }}</td>
@@ -256,7 +303,7 @@ onMounted(loadRecords)
                 <th>输入</th>
                 <th>缓存命中</th>
                 <th>输出</th>
-                <th>总Token</th>
+                <th>总 Token</th>
                 <th>总费用</th>
                 <th>平均响应时间(ms)</th>
               </tr>
@@ -289,7 +336,7 @@ onMounted(loadRecords)
                 <th>输入</th>
                 <th>缓存命中</th>
                 <th>输出</th>
-                <th>总Token</th>
+                <th>总 Token</th>
                 <th>总费用</th>
                 <th>平均响应时间(ms)</th>
               </tr>

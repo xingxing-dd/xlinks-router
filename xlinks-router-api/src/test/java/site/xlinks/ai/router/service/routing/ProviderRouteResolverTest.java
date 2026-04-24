@@ -49,13 +49,15 @@ class ProviderRouteResolverTest {
         when(routeCacheService.isProviderTemporarilyUnavailable(100L)).thenReturn(true);
         when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(secondProvider);
-        when(providerTokenSelectService.selectTokenOrNull(200L)).thenReturn(secondToken);
+        when(providerTokenSelectService.selectTokenLeaseOrNull(secondProvider, "req-1"))
+                .thenReturn(new ProviderTokenSelectService.SelectionResult(secondToken, null, false));
 
         ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
                 999L,
                 10L,
                 "gpt-4o",
-                ProxyProtocol.CHAT_COMPLETIONS
+                ProxyProtocol.CHAT_COMPLETIONS,
+                "req-1"
         );
 
         assertNotNull(route);
@@ -63,7 +65,8 @@ class ProviderRouteResolverTest {
         assertEquals(2L, route.providerModel().getId());
         assertEquals(300L, route.providerToken().getId());
         verify(routeCacheService, never()).getProvider(100L);
-        verify(providerTokenSelectService, never()).selectTokenOrNull(100L);
+        verify(providerTokenSelectService, never()).selectTokenLeaseOrNull(org.mockito.ArgumentMatchers.argThat(provider ->
+                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -96,19 +99,22 @@ class ProviderRouteResolverTest {
         when(routeCacheService.getMerchantPreferredProviderId(500L, 10L)).thenReturn(200L);
         when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(preferredProvider);
-        when(providerTokenSelectService.selectTokenOrNull(200L)).thenReturn(preferredToken);
+        when(providerTokenSelectService.selectTokenLeaseOrNull(preferredProvider, "req-2"))
+                .thenReturn(new ProviderTokenSelectService.SelectionResult(preferredToken, null, false));
 
         ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
                 500L,
                 10L,
                 "gpt-5",
-                ProxyProtocol.CHAT_COMPLETIONS
+                ProxyProtocol.CHAT_COMPLETIONS,
+                "req-2"
         );
 
         assertNotNull(route);
         assertEquals(200L, route.provider().getId());
         assertEquals(2L, route.providerModel().getId());
         verify(routeCacheService, never()).getProvider(100L);
-        verify(providerTokenSelectService, never()).selectTokenOrNull(100L);
+        verify(providerTokenSelectService, never()).selectTokenLeaseOrNull(org.mockito.ArgumentMatchers.argThat(provider ->
+                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString());
     }
 }

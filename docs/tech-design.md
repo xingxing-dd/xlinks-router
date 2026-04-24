@@ -126,6 +126,7 @@ The endpoint is inferred from the request protocol and filtered by provider capa
 - `docs/admin-api.md`: admin APIs for routing resources
 - `docs/openapi.md`: public gateway behavior
 - `docs/db-script.md`: core schema notes
+- `docs/provider-token-concurrency-and-timeout-design.md`: provider token concurrency control, timeout governance, and implementation plan
 - `xlinks-router-admin/src/main/resources/db/init.sql`: bootstrap SQL
 - `docs/client-email.md`: client mail verification delivery and Mailtrap configuration
 

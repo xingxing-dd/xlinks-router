@@ -40,6 +40,10 @@ public class AnthropicErrorResponse {
         return new AnthropicErrorResponse("error", new Error("permission_error", message));
     }
 
+    public static AnthropicErrorResponse rateLimitError(String message) {
+        return new AnthropicErrorResponse("error", new Error("rate_limit_error", message));
+    }
+
     public static AnthropicErrorResponse apiError(String message) {
         return new AnthropicErrorResponse("error", new Error("api_error", message));
     }

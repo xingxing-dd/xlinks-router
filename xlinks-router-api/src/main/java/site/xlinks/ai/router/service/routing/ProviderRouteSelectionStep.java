@@ -18,10 +18,12 @@ public class ProviderRouteSelectionStep implements RoutingStep {
                 context.getCustomerToken().getAccountId(),
                 context.getModel().getId(),
                 context.getModel().getModelCode(),
-                context.getRequest().getProtocol()
+                context.getRequest().getProtocol(),
+                context.getRequestId()
         );
         context.setProvider(route.provider());
         context.setProviderModel(route.providerModel());
         context.setProviderToken(route.providerToken());
+        context.setProviderPermitLease(route.providerPermitLease());
     }
 }

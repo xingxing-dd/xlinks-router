@@ -22,6 +22,8 @@ public class OpenAIExceptionHandler {
         HttpStatus status = resolveHttpStatus(e.getCode());
         OpenAIErrorResponse body = switch (status) {
             case UNAUTHORIZED -> OpenAIErrorResponse.unauthorized(e.getMessage());
+            case TOO_MANY_REQUESTS -> OpenAIErrorResponse.rateLimited(e.getMessage());
+            case GATEWAY_TIMEOUT -> OpenAIErrorResponse.upstreamTimeout(e.getMessage());
             case INTERNAL_SERVER_ERROR -> OpenAIErrorResponse.internalError(e.getMessage());
             default -> OpenAIErrorResponse.invalidRequest(e.getMessage());
         };
@@ -41,6 +43,12 @@ public class OpenAIExceptionHandler {
         }
         if (code == ErrorCode.FORBIDDEN.getCode()) {
             return HttpStatus.FORBIDDEN;
+        }
+        if (code == ErrorCode.RATE_LIMITED.getCode()) {
+            return HttpStatus.TOO_MANY_REQUESTS;
+        }
+        if (code == ErrorCode.UPSTREAM_TIMEOUT.getCode()) {
+            return HttpStatus.GATEWAY_TIMEOUT;
         }
         if (code >= 5000) {
             return HttpStatus.INTERNAL_SERVER_ERROR;

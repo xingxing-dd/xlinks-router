@@ -4,15 +4,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.mapper.ProviderTokenMapper;
 import site.xlinks.ai.router.service.routing.ProxyErrors;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 
 /**
- * Selects available provider tokens under a provider.
+ * Selects available provider tokens and acquires concurrency permits when needed.
  */
 @Slf4j
 @Service
@@ -21,6 +23,7 @@ public class ProviderTokenSelectService {
 
     private final ProviderTokenMapper providerTokenMapper;
     private final RouteCacheService routeCacheService;
+    private final ProviderConcurrencyGuard providerConcurrencyGuard;
 
     public ProviderToken selectToken(Long providerId) {
         ProviderToken selected = selectTokenOrNull(providerId);
@@ -34,47 +37,35 @@ public class ProviderTokenSelectService {
         if (providerId == null) {
             return null;
         }
-        log.debug("Selecting token for provider: {}", providerId);
-        List<ProviderToken> tokens = routeCacheService.getProviderTokens(providerId);
-        if (tokens == null || tokens.isEmpty()) {
-            return null;
-        }
-
         LocalDateTime now = LocalDateTime.now();
-        ProviderToken selected = null;
-        for (ProviderToken token : tokens) {
-            if (!isAvailable(token, now)) {
-                continue;
-            }
-            if (isBetterCandidate(token, selected)) {
-                selected = token;
-            }
-        }
-        if (selected == null) {
-            return null;
-        }
-
-        // Keep routing hot path read-heavy: update in-memory last-used instead of DB per request.
-        selected.setLastUsedAt(now);
-        routeCacheService.touchProviderToken(selected.getId(), now);
-        log.debug("Selected token: {} for provider: {}", selected.getId(), providerId);
-        return selected;
+        return listAvailableTokens(providerId, now).stream().findFirst().orElse(null);
     }
 
-    private boolean isAvailable(ProviderToken token, LocalDateTime now) {
-        if (token == null) {
-            return false;
+    public SelectionResult selectTokenLeaseOrNull(Provider provider, String requestId) {
+        if (provider == null || provider.getId() == null) {
+            return SelectionResult.none(false);
         }
-        if (token.getTokenStatus() == null || token.getTokenStatus() != 1) {
-            return false;
+        log.debug("Selecting token lease for provider: {}, requestId={}", provider.getId(), requestId);
+
+        LocalDateTime now = LocalDateTime.now();
+        List<ProviderToken> candidates = listAvailableTokens(provider.getId(), now);
+        if (candidates.isEmpty()) {
+            return SelectionResult.none(false);
         }
-        LocalDateTime expireTime = token.getExpireTime();
-        if (expireTime != null && now.isAfter(expireTime)) {
-            return false;
+
+        boolean concurrencyLimited = false;
+        for (ProviderToken token : candidates) {
+            ProviderPermitLease lease = providerConcurrencyGuard.tryAcquire(provider, token, requestId);
+            if (lease == null) {
+                concurrencyLimited = true;
+                continue;
+            }
+            token.setLastUsedAt(now);
+            routeCacheService.touchProviderToken(token.getId(), now);
+            log.debug("Selected token: {} for provider: {}, requestId={}", token.getId(), provider.getId(), requestId);
+            return new SelectionResult(token, lease, false);
         }
-        Long quotaTotal = token.getQuotaTotal();
-        Long quotaUsed = token.getQuotaUsed();
-        return quotaTotal == null || quotaUsed == null || quotaUsed < quotaTotal;
+        return SelectionResult.none(concurrencyLimited);
     }
 
     @Transactional
@@ -95,6 +86,41 @@ public class ProviderTokenSelectService {
         routeCacheService.updateProviderTokenQuota(tokenId, token.getQuotaUsed());
     }
 
+    private List<ProviderToken> listAvailableTokens(Long providerId, LocalDateTime now) {
+        List<ProviderToken> tokens = routeCacheService.getProviderTokens(providerId);
+        if (tokens == null || tokens.isEmpty()) {
+            return List.of();
+        }
+        return tokens.stream()
+                .filter(token -> isAvailable(token, now))
+                .sorted(tokenComparator())
+                .toList();
+    }
+
+    private boolean isAvailable(ProviderToken token, LocalDateTime now) {
+        if (token == null) {
+            return false;
+        }
+        if (token.getTokenStatus() == null || token.getTokenStatus() != 1) {
+            return false;
+        }
+        LocalDateTime expireTime = token.getExpireTime();
+        if (expireTime != null && now.isAfter(expireTime)) {
+            return false;
+        }
+        Long quotaTotal = token.getQuotaTotal();
+        Long quotaUsed = token.getQuotaUsed();
+        return quotaTotal == null || quotaUsed == null || quotaUsed < quotaTotal;
+    }
+
+    private Comparator<ProviderToken> tokenComparator() {
+        return Comparator
+                .comparingLong(this::remainingQuota)
+                .reversed()
+                .thenComparing(ProviderToken::getLastUsedAt, this::compareLastUsed)
+                .thenComparing(token -> normalizeId(token.getId()));
+    }
+
     private long remainingQuota(ProviderToken token) {
         if (token == null) {
             return Long.MIN_VALUE;
@@ -107,42 +133,26 @@ public class ProviderTokenSelectService {
         return total - used;
     }
 
-    private boolean isBetterCandidate(ProviderToken candidate, ProviderToken currentBest) {
-        if (candidate == null) {
-            return false;
-        }
-        if (currentBest == null) {
-            return true;
-        }
-
-        long candidateRemaining = remainingQuota(candidate);
-        long bestRemaining = remainingQuota(currentBest);
-        if (candidateRemaining != bestRemaining) {
-            return candidateRemaining > bestRemaining;
-        }
-
-        int lastUsedCompare = compareLastUsed(candidate.getLastUsedAt(), currentBest.getLastUsedAt());
-        if (lastUsedCompare != 0) {
-            return lastUsedCompare < 0;
-        }
-
-        return normalizeId(candidate.getId()) < normalizeId(currentBest.getId());
-    }
-
-    private int compareLastUsed(LocalDateTime candidate, LocalDateTime best) {
-        if (candidate == null && best == null) {
+    private int compareLastUsed(LocalDateTime left, LocalDateTime right) {
+        if (left == null && right == null) {
             return 0;
         }
-        if (candidate == null) {
+        if (left == null) {
             return -1;
         }
-        if (best == null) {
+        if (right == null) {
             return 1;
         }
-        return candidate.compareTo(best);
+        return left.compareTo(right);
     }
 
     private long normalizeId(Long id) {
         return id == null ? Long.MAX_VALUE : id;
+    }
+
+    public record SelectionResult(ProviderToken token, ProviderPermitLease lease, boolean concurrencyLimited) {
+        static SelectionResult none(boolean concurrencyLimited) {
+            return new SelectionResult(null, null, concurrencyLimited);
+        }
     }
 }

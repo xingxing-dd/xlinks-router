@@ -20,19 +20,20 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
-import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
 import site.xlinks.ai.router.service.routing.ProxyErrors;
+import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
 import site.xlinks.ai.router.service.routing.RoutingBuildContext;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Orchestrates routing, provider invocation, and usage recording.
+ * Orchestrates routing, provider invocation, permit lifecycle, and usage recording.
  */
 @Slf4j
 @Service
@@ -40,13 +41,12 @@ import java.util.stream.Collectors;
 public class ProtocolProxyService {
 
     private final CustomerTokenAuthService customerTokenAuthService;
-    private final ProviderTokenSelectService providerTokenSelectService;
     private final ProviderProtocolAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
     private final UsageRecordService usageRecordService;
-    private final UsageEntitlementService usageEntitlementService;
     private final UsageExtractor usageExtractor;
     private final ProxyRoutingPipeline proxyRoutingPipeline;
+    private final ProviderConcurrencyGuard providerConcurrencyGuard;
 
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
@@ -55,25 +55,42 @@ public class ProtocolProxyService {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
+        ScheduledFuture<?> renewFuture = null;
         try {
             context = buildContext(token, request, requestId);
+            renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             JsonNode response;
             try {
                 response = adapter.forwardDirect(request, context);
+            } catch (UpstreamTimeoutException ex) {
+                routeCacheService.recordProviderFailure(context.getProviderId());
+                throw ex;
             } catch (Exception ex) {
                 routeCacheService.recordProviderFailure(context.getProviderId());
                 throw ex;
             }
             routeCacheService.clearProviderFailure(context.getProviderId());
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
-            usageRecordService.recordAsync(context, usageMetrics, System.currentTimeMillis() - startAt, null, null);
+            usageRecordService.recordAsync(
+                    context,
+                    usageMetrics,
+                    System.currentTimeMillis() - startAt,
+                    null,
+                    null,
+                    "success"
+            );
             return response;
         } catch (BusinessException e) {
             recordBusinessError(context, e, startAt);
             throw e;
+        } catch (UpstreamTimeoutException e) {
+            throw handleTimeoutError(context, e, startAt);
         } catch (Exception e) {
             throw handleUnexpectedError("Proxy request failed", context, e, startAt);
+        } finally {
+            providerConcurrencyGuard.cancelAutoRenew(renewFuture);
+            providerConcurrencyGuard.releaseQuietly(context);
         }
     }
 
@@ -83,10 +100,12 @@ public class ProtocolProxyService {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
+        ScheduledFuture<?> renewFuture = null;
         boolean captureUpstreamStreamPayload = shouldCaptureUpstreamResponsesStreamPayload(request);
         StringBuilder upstreamStreamPayloadBuilder = captureUpstreamStreamPayload ? new StringBuilder() : null;
         try {
             context = buildContext(token, request, requestId);
+            renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
@@ -105,6 +124,11 @@ public class ProtocolProxyService {
                     }
                     onEvent.accept(event);
                 });
+            } catch (ClientAbortException ex) {
+                throw ex;
+            } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                routeCacheService.recordProviderFailure(context.getProviderId());
+                throw ex;
             } catch (Exception ex) {
                 routeCacheService.recordProviderFailure(context.getProviderId());
                 throw ex;
@@ -116,16 +140,36 @@ public class ProtocolProxyService {
                     System.currentTimeMillis() - startAt,
                     responseMsRef.get(),
                     null,
-                    null
+                    null,
+                    "success"
             );
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+        } catch (ClientAbortException e) {
+            log.info("Client disconnected during stream. requestId={}, providerId={}, msg={}",
+                    context == null ? null : context.getRequestId(),
+                    context == null ? null : context.getProviderId(),
+                    e.getMessage());
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            recordError(context, 500, "CLIENT_ABORT", e.getMessage(), startAt, "client_abort");
         } catch (BusinessException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             recordBusinessError(context, e, startAt);
             throw e;
+        } catch (StreamFirstResponseTimeoutException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            throw handleStreamTimeoutError(context, e, startAt, "stream_first_event_timeout");
+        } catch (StreamIdleTimeoutException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            throw handleStreamTimeoutError(context, e, startAt, "stream_idle_timeout");
+        } catch (UpstreamTimeoutException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            throw handleTimeoutError(context, e, startAt);
         } catch (Exception e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             throw handleUnexpectedError("Proxy stream failed", context, e, startAt);
+        } finally {
+            providerConcurrencyGuard.cancelAutoRenew(renewFuture);
+            providerConcurrencyGuard.releaseQuietly(context);
         }
     }
 
@@ -160,12 +204,16 @@ public class ProtocolProxyService {
         Provider provider = routingContext.getProvider();
         ProviderModel providerModel = routingContext.getProviderModel();
         ProviderToken providerToken = routingContext.getProviderToken();
+        ProviderPermitLease permitLease = routingContext.getProviderPermitLease();
         String endpointCode = request.getProtocol().getCode();
 
         String upstreamModelCode = providerModel.getProviderModelCode();
         if (upstreamModelCode == null || upstreamModelCode.isBlank()) {
             upstreamModelCode = model.getModelCode();
         }
+        ProxyRuntimePolicy runtimePolicy = permitLease == null
+                ? new ProxyRuntimePolicy(false, 0, 0, 20000, 20000, 20000, 30000, 10000)
+                : permitLease.runtimePolicy();
         return ProviderInvokeContext.builder()
                 .requestId(requestId)
                 .providerId(provider.getId())
@@ -173,6 +221,9 @@ public class ProtocolProxyService {
                 .providerName(provider.getProviderName())
                 .baseUrl(provider.getBaseUrl())
                 .providerToken(providerToken.getTokenValue())
+                .providerTokenId(providerToken.getId())
+                .providerTokenName(providerToken.getTokenName())
+                .providerPermitId(permitLease == null ? null : permitLease.permitId())
                 .customerToken(token)
                 .endpointCode(endpointCode)
                 .modelId(model.getId())
@@ -188,6 +239,11 @@ public class ProtocolProxyService {
                 .customerTokenId(customerToken.getId())
                 .accountId(customerToken.getAccountId())
                 .customerModel(request.getModel())
+                .requestTimeoutMs(runtimePolicy.requestTimeoutMs())
+                .streamFirstResponseTimeoutMs(runtimePolicy.streamFirstResponseTimeoutMs())
+                .streamIdleTimeoutMs(runtimePolicy.streamIdleTimeoutMs())
+                .sessionLeaseMs(runtimePolicy.sessionLeaseMs())
+                .sessionRenewIntervalMs(runtimePolicy.sessionRenewIntervalMs())
                 .build();
     }
 
@@ -204,7 +260,23 @@ public class ProtocolProxyService {
     }
 
     private void recordBusinessError(ProviderInvokeContext context, BusinessException e, long startAt) {
-        recordError(context, resolveHttpStatus(e.getCode()), String.valueOf(e.getCode()), e.getMessage(), startAt);
+        String finishReason = e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
+        recordError(context, 500, String.valueOf(e.getCode()), e.getMessage(), startAt, finishReason);
+    }
+
+    private BusinessException handleTimeoutError(ProviderInvokeContext context,
+                                                 UpstreamTimeoutException e,
+                                                 long startAt) {
+        recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, "upstream_timeout");
+        return ProxyErrors.upstreamTimeout();
+    }
+
+    private BusinessException handleStreamTimeoutError(ProviderInvokeContext context,
+                                                       RuntimeException e,
+                                                       long startAt,
+                                                       String finishReason) {
+        recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, finishReason);
+        return ProxyErrors.upstreamTimeout();
     }
 
     private BusinessException handleUnexpectedError(String logMessage,
@@ -212,7 +284,7 @@ public class ProtocolProxyService {
                                                     Exception e,
                                                     long startAt) {
         log.error(logMessage, e);
-        recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), startAt);
+        recordError(context, 500, ErrorCode.INTERNAL_ERROR.name(), e.getMessage(), startAt, "internal_error");
         return ProxyErrors.requestProcessingFailed(e.getMessage());
     }
 
@@ -220,7 +292,8 @@ public class ProtocolProxyService {
                              int responseStatus,
                              String errorCode,
                              String errorMessage,
-                             long startAt) {
+                             long startAt,
+                             String finishReason) {
         if (context == null) {
             return;
         }
@@ -229,21 +302,9 @@ public class ProtocolProxyService {
                 responseStatus,
                 errorCode,
                 errorMessage,
-                System.currentTimeMillis() - startAt
+                System.currentTimeMillis() - startAt,
+                finishReason
         );
-    }
-
-    private int resolveHttpStatus(int businessCode) {
-        if (businessCode == ErrorCode.UNAUTHORIZED.getCode()) {
-            return 401;
-        }
-        if (businessCode == ErrorCode.FORBIDDEN.getCode()) {
-            return 403;
-        }
-        if (businessCode >= 5000) {
-            return 500;
-        }
-        return 400;
     }
 
     private boolean isFirstResponseDataEvent(StreamEvent event) {
@@ -317,5 +378,3 @@ public class ProtocolProxyService {
                 payloadBuilder);
     }
 }
-
-

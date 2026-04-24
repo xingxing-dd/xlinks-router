@@ -29,8 +29,9 @@ public class UsageRecordService {
                        UsageMetrics usageMetrics,
                        long sessionMs,
                        String errorCode,
-                       String errorMessage) {
-        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage);
+                       String errorMessage,
+                       String finishReason) {
+        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage, finishReason);
     }
 
     public void record(ProviderInvokeContext context,
@@ -38,7 +39,8 @@ public class UsageRecordService {
                        long sessionMs,
                        Integer responseMs,
                        String errorCode,
-                       String errorMessage) {
+                       String errorMessage,
+                       String finishReason) {
         if (context == null) {
             return;
         }
@@ -50,6 +52,7 @@ public class UsageRecordService {
         record.setResponseMs(responseMs == null ? normalizedSessionMs : normalizeDurationMs(responseMs.longValue()));
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
+        record.setFinishReason(finishReason);
         try {
             usageRecordMapper.insert(record);
             consumeUsageBalanceOrPlan(context, record);
@@ -65,8 +68,9 @@ public class UsageRecordService {
                             UsageMetrics usageMetrics,
                             long sessionMs,
                             String errorCode,
-                            String errorMessage) {
-        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage);
+                            String errorMessage,
+                            String finishReason) {
+        record(context, usageMetrics, sessionMs, normalizeDurationMs(sessionMs), errorCode, errorMessage, finishReason);
     }
 
     @Async("usageTaskExecutor")
@@ -75,15 +79,17 @@ public class UsageRecordService {
                             long sessionMs,
                             Integer responseMs,
                             String errorCode,
-                            String errorMessage) {
-        record(context, usageMetrics, sessionMs, responseMs, errorCode, errorMessage);
+                            String errorMessage,
+                            String finishReason) {
+        record(context, usageMetrics, sessionMs, responseMs, errorCode, errorMessage, finishReason);
     }
 
     public void recordError(ProviderInvokeContext context,
                             int responseStatus,
                             String errorCode,
                             String errorMessage,
-                            long sessionMs) {
+                            long sessionMs,
+                            String finishReason) {
         if (context == null) {
             return;
         }
@@ -93,6 +99,7 @@ public class UsageRecordService {
         record.setResponseMs(null);
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
+        record.setFinishReason(finishReason);
         try {
             usageRecordMapper.insert(record);
             log.debug("Error usage record saved: {}", context.getRequestId());
@@ -107,6 +114,7 @@ public class UsageRecordService {
         record.setAccountId(context.getAccountId());
         record.setCustomerToken(context.getCustomerToken());
         record.setProviderToken(context.getProviderToken());
+        record.setProviderTokenId(context.getProviderTokenId());
         record.setUsageType(context.getPlanId() == null ? "balance" : "plan");
         record.setUsageFrom(context.getPlanId() == null ? null : String.valueOf(context.getPlanId()));
         record.setProviderId(context.getProviderId());

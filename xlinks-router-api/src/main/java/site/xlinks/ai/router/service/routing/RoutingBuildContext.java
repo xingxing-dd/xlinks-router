@@ -8,6 +8,7 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.service.ProviderPermitLease;
 
 /**
  * Mutable state shared across routing pipeline steps.
@@ -25,4 +26,5 @@ public class RoutingBuildContext {
     private Provider provider;
     private ProviderModel providerModel;
     private ProviderToken providerToken;
+    private ProviderPermitLease providerPermitLease;
 }

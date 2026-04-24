@@ -22,6 +22,7 @@ import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.ClientAbortException;
 import site.xlinks.ai.router.service.ProtocolProxyService;
 
 import java.nio.charset.StandardCharsets;
@@ -139,6 +140,9 @@ public class AnthropicProxyController {
             try {
                 proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
+            } catch (ClientAbortException e) {
+                log.info("Client disconnected from Anthropic SSE stream: {}", e.getMessage());
+                emitter.complete();
             } catch (Exception e) {
                 log.warn("Anthropic SSE forwarding failed: {}", e.getMessage(), e);
                 sendErrorEventQuietly(emitter, e);
@@ -175,7 +179,7 @@ public class AnthropicProxyController {
             }
             emitter.send(builder);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to write anthropic SSE event", e);
+            throw new ClientAbortException("Failed to write anthropic SSE event", e);
         }
     }
 
@@ -204,10 +208,15 @@ public class AnthropicProxyController {
         if (code == ErrorCode.FORBIDDEN.getCode()) {
             return AnthropicErrorResponse.permissionError(message);
         }
+        if (code == ErrorCode.RATE_LIMITED.getCode()) {
+            return AnthropicErrorResponse.rateLimitError(message);
+        }
+        if (code == ErrorCode.UPSTREAM_TIMEOUT.getCode()) {
+            return AnthropicErrorResponse.apiError(message);
+        }
         if (code >= 5000) {
             return AnthropicErrorResponse.apiError(message);
         }
         return AnthropicErrorResponse.invalidRequest(message);
     }
 }
-

@@ -37,6 +37,14 @@ public class OpenAIErrorResponse {
         return new OpenAIErrorResponse(new Error(message, "invalid_request_error", null, "invalid_request"));
     }
 
+    public static OpenAIErrorResponse rateLimited(String message) {
+        return new OpenAIErrorResponse(new Error(message, "rate_limit_error", null, "rate_limit_exceeded"));
+    }
+
+    public static OpenAIErrorResponse upstreamTimeout(String message) {
+        return new OpenAIErrorResponse(new Error(message, "server_error", null, "upstream_timeout"));
+    }
+
     public static OpenAIErrorResponse internalError(String message) {
         return new OpenAIErrorResponse(new Error(message, "server_error", null, "internal_error"));
     }

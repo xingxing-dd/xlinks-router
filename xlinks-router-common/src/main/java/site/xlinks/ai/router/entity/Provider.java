@@ -74,4 +74,44 @@ public class Provider extends BaseEntity {
      * 备注
      */
     private String remark;
+
+    /**
+     * Whether provider-token concurrency limit is enabled.
+     */
+    private Integer concurrencyLimitEnabled;
+
+    /**
+     * Max concurrent sessions allowed per provider token.
+     */
+    private Integer maxConcurrentPerToken;
+
+    /**
+     * Wait time when acquiring permit.
+     */
+    private Integer acquireTimeoutMs;
+
+    /**
+     * Non-stream request timeout.
+     */
+    private Integer requestTimeoutMs;
+
+    /**
+     * Max wait time for first stream event.
+     */
+    private Integer streamFirstResponseTimeoutMs;
+
+    /**
+     * Max idle time between stream events.
+     */
+    private Integer streamIdleTimeoutMs;
+
+    /**
+     * Permit lease duration.
+     */
+    private Integer sessionLeaseMs;
+
+    /**
+     * Permit renew interval.
+     */
+    private Integer sessionRenewIntervalMs;
 }

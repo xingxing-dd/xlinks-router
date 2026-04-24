@@ -25,6 +25,7 @@ import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.interceptor.BearerTokenInterceptor;
 import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
+import site.xlinks.ai.router.service.ClientAbortException;
 import site.xlinks.ai.router.service.ProtocolProxyService;
 
 import java.nio.charset.StandardCharsets;
@@ -135,6 +136,9 @@ public class OpenAIProxyController {
             try {
                 proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
+            } catch (ClientAbortException e) {
+                log.info("Client disconnected from OpenAI SSE stream: {}", e.getMessage());
+                emitter.complete();
             } catch (Exception e) {
                 log.warn("SSE forwarding failed for endpointCode={}, protocol={}: {}",
                         request.getProtocol().getCode(), request.getProtocol(), e.getMessage(), e);
@@ -187,7 +191,7 @@ public class OpenAIProxyController {
             }
             emitter.send(builder);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to write SSE event", e);
+            throw new ClientAbortException("Failed to write SSE event", e);
         }
     }
 
@@ -225,6 +229,12 @@ public class OpenAIProxyController {
         if (code == ErrorCode.UNAUTHORIZED.getCode()) {
             return OpenAIErrorResponse.unauthorized(message);
         }
+        if (code == ErrorCode.RATE_LIMITED.getCode()) {
+            return OpenAIErrorResponse.rateLimited(message);
+        }
+        if (code == ErrorCode.UPSTREAM_TIMEOUT.getCode()) {
+            return OpenAIErrorResponse.upstreamTimeout(message);
+        }
         if (code >= 5000) {
             return OpenAIErrorResponse.internalError(message);
         }
@@ -243,4 +253,3 @@ public class OpenAIProxyController {
         }
     }
 }
-

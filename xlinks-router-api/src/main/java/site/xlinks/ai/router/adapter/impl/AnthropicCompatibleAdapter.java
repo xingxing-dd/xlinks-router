@@ -3,6 +3,7 @@ package site.xlinks.ai.router.adapter.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -15,8 +16,11 @@ import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.StreamFirstResponseTimeoutException;
+import site.xlinks.ai.router.service.UpstreamTimeoutException;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -47,7 +51,8 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
     public JsonNode forwardDirect(ProxyRequest request, ProviderInvokeContext context) {
         try {
             Request httpRequest = buildRequest(request, context);
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
+            Call call = createScopedClient(context, false).newCall(httpRequest);
+            try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response);
                 }
@@ -59,6 +64,8 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
                 log.debug("Anthropic upstream response: {}", responseJson);
                 return parseJsonResponseBody(responseJson, response.header("Content-Type", ""), httpRequest.url().toString());
             }
+        } catch (InterruptedIOException e) {
+            throw new UpstreamTimeoutException("Upstream request timed out", e);
         } catch (IOException e) {
             log.error("Error calling anthropic provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
@@ -71,7 +78,8 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
                               Consumer<StreamEvent> onEvent) {
         try {
             Request httpRequest = buildRequest(request, context);
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
+            Call call = createScopedClient(context, true).newCall(httpRequest);
+            try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response);
                 }
@@ -97,6 +105,8 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
                 throw new IOException("Upstream provider did not return SSE for stream request. contentType="
                         + contentType + ", bodyPreview=" + abbreviate(responseBody, 600));
             }
+        } catch (InterruptedIOException e) {
+            throw new StreamFirstResponseTimeoutException("Stream first response timeout", e);
         } catch (IOException e) {
             log.error("Error calling anthropic provider API", e);
             throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
@@ -157,4 +167,3 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
         }
     }
 }
-

@@ -82,6 +82,14 @@ public final class ProxyErrors {
         return new BusinessException(ErrorCode.ROUTE_ERROR, "No available Provider Token");
     }
 
+    public static BusinessException providerTokenRateLimited() {
+        return new BusinessException(ErrorCode.RATE_LIMITED, "Provider token concurrency limit reached");
+    }
+
+    public static BusinessException upstreamTimeout() {
+        return new BusinessException(ErrorCode.UPSTREAM_TIMEOUT, "Upstream provider timeout");
+    }
+
     public static BusinessException requestProcessingFailed(String detail) {
         return new BusinessException(ErrorCode.INTERNAL_ERROR, "Request processing failed: " + detail);
     }

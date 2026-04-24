@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -34,6 +35,9 @@ public class TaskExecutorConfig implements AsyncConfigurer {
     @Value("${xlinks.router.async.sse.queue-capacity:2000}")
     private int sseQueueCapacity;
 
+    @Value("${xlinks.router.async.permit-renew.pool-size:4}")
+    private int permitRenewPoolSize;
+
     @Bean("usageTaskExecutor")
     public ThreadPoolTaskExecutor usageTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -56,6 +60,15 @@ public class TaskExecutorConfig implements AsyncConfigurer {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
+    }
+
+    @Bean("providerPermitRenewScheduler")
+    public ThreadPoolTaskScheduler providerPermitRenewScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(permitRenewPoolSize);
+        scheduler.setThreadNamePrefix("permit-renew-");
+        scheduler.initialize();
+        return scheduler;
     }
 
     @Override

@@ -10,12 +10,16 @@ import okio.BufferedSource;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.StreamFirstResponseTimeoutException;
+import site.xlinks.ai.router.service.StreamIdleTimeoutException;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -34,6 +38,22 @@ public abstract class AbstractSseHttpAdapter {
         this.objectMapper = objectMapper;
     }
 
+    protected OkHttpClient createScopedClient(ProviderInvokeContext context, boolean stream) {
+        OkHttpClient.Builder builder = httpClient.newBuilder();
+        if (stream) {
+            long readTimeoutMs = normalizeTimeout(streamTimeoutMs(context), 20_000L);
+            builder.callTimeout(0, TimeUnit.MILLISECONDS)
+                    .readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS);
+            return builder.build();
+        }
+        long requestTimeoutMs = normalizeTimeout(requestTimeoutMs(context), 20_000L);
+        return builder
+                .callTimeout(requestTimeoutMs, TimeUnit.MILLISECONDS)
+                .readTimeout(requestTimeoutMs, TimeUnit.MILLISECONDS)
+                .writeTimeout(requestTimeoutMs, TimeUnit.MILLISECONDS)
+                .build();
+    }
+
     protected StreamReadResult readSseFrames(ResponseBody body,
                                              Consumer<StreamEvent> onEvent) throws IOException {
         if (body == null) {
@@ -44,7 +64,15 @@ public abstract class AbstractSseHttpAdapter {
         List<String> rawLines = new ArrayList<>();
         boolean emittedAnyEvent = false;
         while (!source.exhausted()) {
-            String line = source.readUtf8Line();
+            String line;
+            try {
+                line = source.readUtf8Line();
+            } catch (InterruptedIOException e) {
+                if (emittedAnyEvent) {
+                    throw new StreamIdleTimeoutException("Stream idle timeout", e);
+                }
+                throw new StreamFirstResponseTimeoutException("Stream first response timeout", e);
+            }
             if (line == null) {
                 break;
             }
@@ -239,7 +267,21 @@ public abstract class AbstractSseHttpAdapter {
         return value.substring(0, maxLen - 3) + "...";
     }
 
+    private long requestTimeoutMs(ProviderInvokeContext context) {
+        return context == null || context.getRequestTimeoutMs() == null ? 20_000L : context.getRequestTimeoutMs();
+    }
+
+    private long streamTimeoutMs(ProviderInvokeContext context) {
+        return context == null || context.getStreamIdleTimeoutMs() == null ? 20_000L : context.getStreamIdleTimeoutMs();
+    }
+
+    private long normalizeTimeout(long value, long fallback) {
+        if (value <= 0) {
+            return fallback;
+        }
+        return value;
+    }
+
     protected record StreamReadResult(boolean emittedAnyEvent, String rawPayload) {
     }
 }
-

@@ -7,6 +7,7 @@ import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.service.ProviderPermitLease;
 import site.xlinks.ai.router.service.ProviderTokenSelectService;
 import site.xlinks.ai.router.service.RouteCacheService;
 
@@ -24,13 +25,18 @@ public class ProviderRouteResolver {
     private final RouteCacheService routeCacheService;
     private final ProviderTokenSelectService providerTokenSelectService;
 
-    public ResolvedProviderRoute resolve(Long accountId, Long modelId, String modelCode, ProxyProtocol protocol) {
+    public ResolvedProviderRoute resolve(Long accountId,
+                                         Long modelId,
+                                         String modelCode,
+                                         ProxyProtocol protocol,
+                                         String requestId) {
         List<ProviderModel> providerModels = routeCacheService.listProviderModelsByPriority(modelId, protocol);
         if (providerModels == null || providerModels.isEmpty()) {
             throw ProxyErrors.noProviderMapping(modelCode);
         }
 
         providerModels = prioritizeMerchantConfiguredProvider(accountId, modelId, providerModels);
+        boolean concurrencyLimited = false;
 
         for (ProviderModel candidate : providerModels) {
             if (candidate == null || candidate.getProviderId() == null) {
@@ -45,13 +51,23 @@ public class ProviderRouteResolver {
             if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
                 continue;
             }
-            ProviderToken candidateToken = providerTokenSelectService.selectTokenOrNull(candidateProvider.getId());
-            if (candidateToken == null) {
+            ProviderTokenSelectService.SelectionResult selectionResult =
+                    providerTokenSelectService.selectTokenLeaseOrNull(candidateProvider, requestId);
+            if (selectionResult.token() == null) {
+                concurrencyLimited = concurrencyLimited || selectionResult.concurrencyLimited();
                 continue;
             }
-            return new ResolvedProviderRoute(candidateProvider, candidate, candidateToken);
+            return new ResolvedProviderRoute(
+                    candidateProvider,
+                    candidate,
+                    selectionResult.token(),
+                    selectionResult.lease()
+            );
         }
 
+        if (concurrencyLimited) {
+            throw ProxyErrors.providerTokenRateLimited();
+        }
         throw ProxyErrors.noProviderToken(modelCode);
     }
 
@@ -88,6 +104,9 @@ public class ProviderRouteResolver {
         return ordered;
     }
 
-    public record ResolvedProviderRoute(Provider provider, ProviderModel providerModel, ProviderToken providerToken) {
+    public record ResolvedProviderRoute(Provider provider,
+                                        ProviderModel providerModel,
+                                        ProviderToken providerToken,
+                                        ProviderPermitLease providerPermitLease) {
     }
 }

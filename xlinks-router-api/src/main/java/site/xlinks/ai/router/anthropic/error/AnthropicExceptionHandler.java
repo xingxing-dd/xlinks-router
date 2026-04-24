@@ -23,6 +23,8 @@ public class AnthropicExceptionHandler {
         AnthropicErrorResponse body = switch (status) {
             case UNAUTHORIZED -> AnthropicErrorResponse.authenticationError(e.getMessage());
             case FORBIDDEN -> AnthropicErrorResponse.permissionError(e.getMessage());
+            case TOO_MANY_REQUESTS -> AnthropicErrorResponse.rateLimitError(e.getMessage());
+            case GATEWAY_TIMEOUT -> AnthropicErrorResponse.apiError(e.getMessage());
             case INTERNAL_SERVER_ERROR -> AnthropicErrorResponse.apiError(e.getMessage());
             default -> AnthropicErrorResponse.invalidRequest(e.getMessage());
         };
@@ -42,6 +44,12 @@ public class AnthropicExceptionHandler {
         }
         if (code == ErrorCode.FORBIDDEN.getCode()) {
             return HttpStatus.FORBIDDEN;
+        }
+        if (code == ErrorCode.RATE_LIMITED.getCode()) {
+            return HttpStatus.TOO_MANY_REQUESTS;
+        }
+        if (code == ErrorCode.UPSTREAM_TIMEOUT.getCode()) {
+            return HttpStatus.GATEWAY_TIMEOUT;
         }
         if (code >= 5000) {
             return HttpStatus.INTERNAL_SERVER_ERROR;
