@@ -102,17 +102,17 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
                 }
                 if (rawPayload.length() > MAX_FALLBACK_STREAM_PAYLOAD_CHARS) {
                     log.warn("Fallback stream payload too large, protocol={}, size={}",
-                            request == null ? null : request.getProtocol(), rawPayload.length());
+                            request.getProtocol(), rawPayload.length());
                     emitFallbackErrorEvent(request, onEvent, "Upstream payload too large in stream mode");
                     return;
                 }
 
                 log.warn("Upstream returned non-SSE payload in stream mode. protocol={}, contentType={}, bodyPreview={}",
-                        request == null ? null : request.getProtocol(),
+                        request.getProtocol(),
                         contentType,
                         abbreviate(rawPayload, 600));
                 String fallbackData = buildFallbackStreamData(request, rawPayload);
-                ProxyProtocol protocol = request == null ? null : request.getProtocol();
+                ProxyProtocol protocol = request.getProtocol();
                 if (protocol == ProxyProtocol.RESPONSES) {
                     String eventName = extractResponsesEventName(fallbackData);
                     StreamEvent.StreamEventBuilder builder = StreamEvent.builder()

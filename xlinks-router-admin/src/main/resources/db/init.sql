@@ -126,6 +126,14 @@ CREATE TABLE IF NOT EXISTS `providers` (
   `status` tinyint(4) NOT NULL DEFAULT '1',
   `deleted` tinyint(4) NOT NULL DEFAULT '0',
   `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `concurrency_limit_enabled` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否启用 provider token 并发限制',
+  `max_concurrent_per_token` int(11) NOT NULL DEFAULT '0' COMMENT '每个 provider token 最大并发会话数',
+  `acquire_timeout_ms` int(11) NOT NULL DEFAULT '0' COMMENT '获取 permit 等待时间',
+  `request_timeout_ms` int(11) NOT NULL DEFAULT '20000' COMMENT '非流式请求超时',
+  `stream_first_response_timeout_ms` int(11) NOT NULL DEFAULT '20000' COMMENT '流式首包超时',
+  `stream_idle_timeout_ms` int(11) NOT NULL DEFAULT '20000' COMMENT '流式空闲超时',
+  `session_lease_ms` int(11) NOT NULL DEFAULT '30000' COMMENT 'permit 租约时长',
+  `session_renew_interval_ms` int(11) NOT NULL DEFAULT '10000' COMMENT 'permit 续租周期',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -491,6 +499,7 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   `account_id` bigint(20) NOT NULL,
   `customer_token` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_token` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_token_id` bigint(20) DEFAULT NULL COMMENT 'Provider Token ID',
   `usage_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `usage_from` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_id` bigint(20) NOT NULL,
@@ -513,6 +522,7 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   `session_ms` int(11) DEFAULT '0' COMMENT 'Session duration in milliseconds',
   `error_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `error_message` text COLLATE utf8mb4_unicode_ci,
+  `finish_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '结束原因',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -521,10 +531,12 @@ CREATE TABLE IF NOT EXISTS `usage_records` (
   KEY `idx_request_id` (`request_id`),
   KEY `idx_account_id` (`account_id`),
   KEY `idx_provider_id` (`provider_id`),
+  KEY `idx_provider_token_id` (`provider_token_id`),
   KEY `idx_model_id` (`model_id`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_model_code` (`model_code`),
-  KEY `idx_endpoint_code` (`endpoint_code`)
+  KEY `idx_endpoint_code` (`endpoint_code`),
+  KEY `idx_finish_reason` (`finish_reason`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 17. Contact messages 联系我们问题记录表

@@ -25,8 +25,11 @@ import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.service.ClientAbortException;
 import site.xlinks.ai.router.service.ProtocolProxyService;
 
+import java.io.EOFException;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -179,8 +182,49 @@ public class AnthropicProxyController {
             }
             emitter.send(builder);
         } catch (Exception e) {
-            throw new ClientAbortException("Failed to write anthropic SSE event", e);
+            if (isClientDisconnected(e)) {
+                throw new ClientAbortException("Failed to write anthropic SSE event", e);
+            }
+            throw new RuntimeException("Failed to write anthropic SSE event", e);
         }
+    }
+
+    private boolean isClientDisconnected(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof ClientAbortException || current instanceof EOFException) {
+                return true;
+            }
+            if (current instanceof IOException ioException) {
+                String msg = ioException.getMessage();
+                if (containsDisconnectKeywords(msg)) {
+                    return true;
+                }
+            }
+            String className = current.getClass().getName();
+            if (className != null && className.toLowerCase(Locale.ROOT).contains("clientabortexception")) {
+                return true;
+            }
+            String msg = current.getMessage();
+            if (containsDisconnectKeywords(msg)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean containsDisconnectKeywords(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String lower = message.toLowerCase(Locale.ROOT);
+        return lower.contains("broken pipe")
+                || lower.contains("connection reset")
+                || lower.contains("connection aborted")
+                || lower.contains("connection closed")
+                || lower.contains("forcibly closed")
+                || lower.contains("stream closed");
     }
 
     private void sendErrorEventQuietly(SseEmitter emitter, Exception e) {

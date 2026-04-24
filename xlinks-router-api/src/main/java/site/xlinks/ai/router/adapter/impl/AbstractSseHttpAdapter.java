@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 public abstract class AbstractSseHttpAdapter {
 
     protected static final String EVENT_STREAM_CONTENT_TYPE = "text/event-stream";
+    private static final int MAX_RAW_PAYLOAD_CAPTURE_CHARS = 32 * 1024;
 
     protected final OkHttpClient httpClient;
     protected final ObjectMapper objectMapper;
@@ -61,7 +62,7 @@ public abstract class AbstractSseHttpAdapter {
         }
         BufferedSource source = body.source();
         List<String> frameLines = new ArrayList<>();
-        List<String> rawLines = new ArrayList<>();
+        StringBuilder rawPayloadPreview = new StringBuilder();
         boolean emittedAnyEvent = false;
         while (!source.exhausted()) {
             String line;
@@ -76,12 +77,15 @@ public abstract class AbstractSseHttpAdapter {
             if (line == null) {
                 break;
             }
-            rawLines.add(line);
+            if (!emittedAnyEvent) {
+                appendRawPreview(rawPayloadPreview, line);
+            }
             if (line.isEmpty()) {
                 StreamEvent event = parseEvent(frameLines);
                 if (event != null) {
                     onEvent.accept(event);
                     emittedAnyEvent = true;
+                    rawPayloadPreview.setLength(0);
                 }
                 if (event != null && event.isDoneSignal()) {
                     break;
@@ -97,9 +101,28 @@ public abstract class AbstractSseHttpAdapter {
             if (event != null) {
                 onEvent.accept(event);
                 emittedAnyEvent = true;
+                rawPayloadPreview.setLength(0);
             }
         }
-        return new StreamReadResult(emittedAnyEvent, String.join("\n", rawLines).trim());
+        return new StreamReadResult(emittedAnyEvent, emittedAnyEvent ? "" : rawPayloadPreview.toString().trim());
+    }
+
+    private void appendRawPreview(StringBuilder rawPayloadPreview, String line) {
+        if (rawPayloadPreview == null || rawPayloadPreview.length() >= MAX_RAW_PAYLOAD_CAPTURE_CHARS) {
+            return;
+        }
+        int remaining = MAX_RAW_PAYLOAD_CAPTURE_CHARS - rawPayloadPreview.length();
+        if (remaining <= 0) {
+            return;
+        }
+        String safeLine = line == null ? "" : line;
+        if (safeLine.length() + 1 <= remaining) {
+            rawPayloadPreview.append(safeLine).append('\n');
+            return;
+        }
+        if (remaining > 1) {
+            rawPayloadPreview.append(safeLine, 0, remaining - 1).append('\n');
+        }
     }
 
     protected String rewriteModelAndStream(ProxyRequest request, ProviderInvokeContext context) {

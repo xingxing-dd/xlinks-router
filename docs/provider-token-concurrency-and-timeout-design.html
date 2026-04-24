@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Provider Token &#x5e76;&#x53d1;&#x9650;&#x6d41;&#x4e0e;&#x8d85;&#x65f6;&#x6cbb;&#x7406;&#x65b9;&#x6848;</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="provider-token-并发限流与超时治理方案">Provider Token 并发限流与超时治理方案</h1>
+<h2 id="1-背景">1. 背景</h2>
+<p>当前 <code>xlinks-router-api</code> 的上游请求链路已经具备：</p>
+<ul>
+<li>标准模型解析</li>
+<li>provider / provider_model 路由</li>
+<li>provider token 选择</li>
+<li>上游直连与流式转发</li>
+<li>usage 记录与 provider 故障标记</li>
+</ul>
+<p>但还缺少以下关键能力：</p>
+<ul>
+<li><code>providerToken</code> 维度的分布式并发限流</li>
+<li>会话开始占用、结束释放的统一资源管理</li>
+<li>流式与非流式的首包/空闲超时治理</li>
+<li>进程异常、网络中断、客户端断开时的 permit 自动回收</li>
+</ul>
+<p>这会导致：</p>
+<ul>
+<li>同一个上游 token 被瞬时打爆</li>
+<li>多实例部署下并发控制不一致</li>
+<li>上游长时间无响应时请求悬挂过久</li>
+<li>流式请求在首包无响应、流中断流时缺少统一失败策略</li>
+</ul>
+<h2 id="2-目标">2. 目标</h2>
+<p>本次方案目标：</p>
+<ol>
+<li>限流配置放在 <code>provider</code> 上。</li>
+<li>实际限流维度是 <code>providerToken</code>。</li>
+<li>每个会话开始时占用一个并发名额，结束或异常时释放。</li>
+<li>多实例部署下并发控制必须一致。</li>
+<li>非流式请求 20 秒内未完成则直接失败。</li>
+<li>流式请求：
+<ul>
+<li>20 秒内未收到首个有效事件则失败</li>
+<li>流过程中任意 20 秒没有新事件则失败</li>
+</ul>
+</li>
+<li>超时、异常、客户端断开时必须释放 permit，避免资源泄漏。</li>
+<li>失败原因应可观测、可落 usage 记录、可支持后台查询。</li>
+</ol>
+<h2 id="3-为什么不用纯令牌桶做主方案">3. 为什么不用纯令牌桶做主方案</h2>
+<p>需求语义是：</p>
+<ul>
+<li>会话开始消耗一个令牌</li>
+<li>会话结束恢复一个令牌</li>
+</ul>
+<p>这更接近“并发占坑”，不是典型的速率限制。</p>
+<p>典型令牌桶适合：</p>
+<ul>
+<li>每秒允许多少次请求</li>
+<li>每分钟允许多少次请求</li>
+</ul>
+<p>而本需求更适合：</p>
+<ul>
+<li>每个 <code>providerToken</code> 同时允许多少个活跃会话</li>
+</ul>
+<p>因此主方案采用：</p>
+<ul>
+<li>分布式 expirable semaphore 作为并发控制</li>
+</ul>
+<p>后续如果要增加真正的 QPS 限制，可以再叠加：</p>
+<ul>
+<li><code>provider</code> 维度 QPS</li>
+<li><code>providerToken</code> 维度 QPS</li>
+<li>单账户 / 单 customer token 维度 QPS</li>
+</ul>
+<h2 id="4-技术选型">4. 技术选型</h2>
+<h3 id="41-主方案">4.1 主方案</h3>
+<p>推荐引入 Redisson，使用：</p>
+<ul>
+<li><code>RPermitExpirableSemaphore</code></li>
+</ul>
+<p>原因：</p>
+<ul>
+<li>基于 Redis，天然支持多实例共享状态</li>
+<li>支持 permit lease time，进程崩溃后可自动回收</li>
+<li>每个 permit 有独立 permitId，便于精确释放</li>
+<li>适合“会话开始 acquire，结束 release”的语义</li>
+</ul>
+<h3 id="42-为什么优先选-redisson-而不是-bucket4j">4.2 为什么优先选 Redisson 而不是 Bucket4j</h3>
+<p>Bucket4j 本身是成熟方案，适合做分布式令牌桶和速率限制。</p>
+<p>但当前核心需求是：</p>
+<ul>
+<li>活跃会话并发数限制</li>
+<li>异常自动回收</li>
+<li>会话级 permit 生命周期管理</li>
+</ul>
+<p>这类场景用 Redisson 的 expirable semaphore 更直接。</p>
+<p>结论：</p>
+<ul>
+<li>并发控制主用 Redisson</li>
+<li>如果后续要做 QPS 限流，再叠加 <code>RRateLimiter</code> 或 Bucket4j</li>
+</ul>
+<h2 id="5-配置模型">5. 配置模型</h2>
+<p>限流配置放在 <code>providers</code> 表，建议新增字段：</p>
+<ul>
+<li><code>concurrency_limit_enabled</code> <code>tinyint</code> 默认 <code>0</code></li>
+<li><code>max_concurrent_per_token</code> <code>int</code> 默认 <code>0</code></li>
+<li><code>acquire_timeout_ms</code> <code>int</code> 默认 <code>0</code></li>
+<li><code>request_timeout_ms</code> <code>int</code> 默认 <code>20000</code></li>
+<li><code>first_response_timeout_ms</code> <code>int</code> 默认 <code>20000</code></li>
+<li><code>stream_idle_timeout_ms</code> <code>int</code> 默认 <code>20000</code></li>
+<li><code>session_lease_ms</code> <code>int</code> 默认 <code>30000</code></li>
+<li><code>session_renew_interval_ms</code> <code>int</code> 默认 <code>10000</code></li>
+</ul>
+<p>语义说明：</p>
+<ul>
+<li><code>concurrency_limit_enabled</code>
+<ul>
+<li>是否启用 provider 级并发控制</li>
+</ul>
+</li>
+<li><code>max_concurrent_per_token</code>
+<ul>
+<li>provider 下每个 token 的最大并发会话数</li>
+</ul>
+</li>
+<li><code>acquire_timeout_ms</code>
+<ul>
+<li>申请 permit 时的等待上限，建议第一版先用 <code>0</code>，不等待，立即尝试下一个 token / provider</li>
+</ul>
+</li>
+<li><code>request_timeout_ms</code>
+<ul>
+<li>非流式请求完整响应超时阈值</li>
+</ul>
+</li>
+<li><code>first_response_timeout_ms</code>
+<ul>
+<li>首包超时阈值</li>
+</ul>
+</li>
+<li><code>stream_idle_timeout_ms</code>
+<ul>
+<li>流式空闲超时阈值</li>
+</ul>
+</li>
+<li><code>session_lease_ms</code>
+<ul>
+<li>permit 初始租约</li>
+</ul>
+</li>
+<li><code>session_renew_interval_ms</code>
+<ul>
+<li>permit 续租周期</li>
+</ul>
+</li>
+</ul>
+<h2 id="6-上下文与记录字段">6. 上下文与记录字段</h2>
+<p>建议补充以下字段：</p>
+<h3 id="61-providerinvokecontext">6.1 ProviderInvokeContext</h3>
+<p>新增：</p>
+<ul>
+<li><code>providerTokenId</code></li>
+<li><code>providerTokenName</code></li>
+<li><code>providerPermitId</code></li>
+</ul>
+<p>用途：</p>
+<ul>
+<li>内部逻辑统一用 <code>providerTokenId</code> 做限流与审计</li>
+<li><code>providerPermitId</code> 用于精确释放 permit</li>
+</ul>
+<h3 id="62-usage_records">6.2 usage_records</h3>
+<p>建议新增：</p>
+<ul>
+<li><code>provider_token_id</code></li>
+<li><code>finish_reason</code></li>
+</ul>
+<p><code>finish_reason</code> 建议枚举：</p>
+<ul>
+<li><code>success</code></li>
+<li><code>provider_error</code></li>
+<li><code>upstream_timeout</code></li>
+<li><code>stream_first_event_timeout</code></li>
+<li><code>stream_idle_timeout</code></li>
+<li><code>client_abort</code></li>
+<li><code>internal_error</code></li>
+<li><code>rate_limited</code></li>
+</ul>
+<p>说明：</p>
+<ul>
+<li><code>response_status</code> 继续保留，方便后台成功/失败筛选</li>
+<li><code>finish_reason</code> 用于更细粒度分析</li>
+</ul>
+<h2 id="7-redis-key-设计">7. Redis Key 设计</h2>
+<p>每个 <code>providerToken</code> 一个 semaphore key：</p>
+<pre><code class="language-text">xlinks:router:provider:{providerId}:token:{providerTokenId}:permits
+</code></pre>
+<p>可选的心跳或调试 key：</p>
+<pre><code class="language-text">xlinks:router:session:{requestId}
+</code></pre>
+<p>第一版不是必须写独立 session key，只要 permit lease 与续租健全即可。</p>
+<h2 id="8-核心流程设计">8. 核心流程设计</h2>
+<h3 id="81-路由与-acquire">8.1 路由与 acquire</h3>
+<p>现有逻辑是：</p>
+<ol>
+<li>找 candidate provider</li>
+<li>选 token</li>
+<li>直接调用上游</li>
+</ol>
+<p>新逻辑改为：</p>
+<ol>
+<li>找 candidate provider</li>
+<li>遍历 candidate provider 下的可用 token</li>
+<li>对每个 token 尝试 acquire permit</li>
+<li>acquire 成功才算路由成功</li>
+<li>当前 token 满了就尝试下一个 token</li>
+<li>当前 provider 所有 token 都拿不到 permit，则尝试下一个 provider</li>
+<li>全部 provider 都失败，返回“无可用 provider token / 并发已满”</li>
+</ol>
+<p>注意：</p>
+<ul>
+<li>“permit 已满”不应记为 provider 故障</li>
+<li>“上游真实超时 / 连接失败 / 5xx”才进入 provider failure 统计</li>
+</ul>
+<h3 id="82-会话生命周期">8.2 会话生命周期</h3>
+<p>会话开始：</p>
+<ul>
+<li>acquire permit</li>
+<li>记录 <code>providerTokenId</code></li>
+<li>启动 permit 续租任务</li>
+</ul>
+<p>会话成功结束：</p>
+<ul>
+<li>停止续租</li>
+<li>release permit</li>
+<li>落成功 usage record</li>
+</ul>
+<p>会话失败结束：</p>
+<ul>
+<li>停止续租</li>
+<li>cancel 上游调用</li>
+<li>release permit</li>
+<li>落失败 usage record</li>
+</ul>
+<p>进程异常退出：</p>
+<ul>
+<li>permit lease 到期后自动回收</li>
+</ul>
+<h2 id="9-超时治理">9. 超时治理</h2>
+<h3 id="91-非流式请求">9.1 非流式请求</h3>
+<p>策略：</p>
+<ul>
+<li><code>callTimeout = 20s</code></li>
+<li><code>readTimeout = 20s</code></li>
+</ul>
+<p>判定：</p>
+<ul>
+<li>20 秒内未拿到完整响应，视为失败</li>
+</ul>
+<p>行为：</p>
+<ul>
+<li>中断上游调用</li>
+<li>释放 permit</li>
+<li>记录 <code>finish_reason = upstream_timeout</code></li>
+</ul>
+<h3 id="92-流式请求">9.2 流式请求</h3>
+<p>流式需要两个超时：</p>
+<h4 id="首包超时">首包超时</h4>
+<p>判定：</p>
+<ul>
+<li>建立上游连接后，20 秒内未收到首个有效事件</li>
+</ul>
+<p>有效事件定义：</p>
+<ul>
+<li>产生业务数据的 SSE event</li>
+<li>不建议把单纯 heartbeat comment 当作成功首包</li>
+</ul>
+<p>行为：</p>
+<ul>
+<li>cancel 上游调用</li>
+<li>向客户端返回错误事件</li>
+<li>释放 permit</li>
+<li>记录 <code>finish_reason = stream_first_event_timeout</code></li>
+</ul>
+<h4 id="空闲超时">空闲超时</h4>
+<p>判定：</p>
+<ul>
+<li>流开始后，任意连续 20 秒未收到新事件</li>
+</ul>
+<p>行为：</p>
+<ul>
+<li>cancel 上游调用</li>
+<li>向客户端发送错误事件</li>
+<li>释放 permit</li>
+<li>记录 <code>finish_reason = stream_idle_timeout</code></li>
+</ul>
+<h3 id="93-客户端断开">9.3 客户端断开</h3>
+<p>若下游客户端主动断开：</p>
+<ul>
+<li>立即 cancel upstream call</li>
+<li>释放 permit</li>
+<li>记录 <code>finish_reason = client_abort</code></li>
+</ul>
+<p>客户端断开不应计入 provider failure。</p>
+<h2 id="10-错误码与响应语义">10. 错误码与响应语义</h2>
+<p>建议新增内部错误语义：</p>
+<ul>
+<li><code>PROVIDER_TOKEN_RATE_LIMITED</code></li>
+<li><code>UPSTREAM_TIMEOUT</code></li>
+<li><code>STREAM_FIRST_EVENT_TIMEOUT</code></li>
+<li><code>STREAM_IDLE_TIMEOUT</code></li>
+<li><code>CLIENT_ABORT</code></li>
+</ul>
+<p>对外响应建议：</p>
+<ul>
+<li>permit 满 / 并发已满：<code>429</code></li>
+<li>上游超时：<code>504</code></li>
+<li>provider 返回 4xx/5xx：按当前错误模型映射</li>
+<li>内部异常：<code>500</code></li>
+</ul>
+<p>后台统计仍可保持：</p>
+<ul>
+<li><code>response_status = 200</code> 为成功</li>
+<li><code>response_status != 200</code> 为失败</li>
+</ul>
+<h2 id="11-组件拆分建议">11. 组件拆分建议</h2>
+<p>建议新增以下组件：</p>
+<h3 id="111-providerconcurrencyguard">11.1 ProviderConcurrencyGuard</h3>
+<p>职责：</p>
+<ul>
+<li>按 <code>providerTokenId</code> 获取 semaphore</li>
+<li>acquire / renew / release permit</li>
+<li>返回 <code>ProviderPermitLease</code></li>
+</ul>
+<h3 id="112-providerpermitlease">11.2 ProviderPermitLease</h3>
+<p>字段建议：</p>
+<ul>
+<li><code>providerId</code></li>
+<li><code>providerTokenId</code></li>
+<li><code>providerTokenValue</code></li>
+<li><code>permitId</code></li>
+<li><code>leaseMs</code></li>
+</ul>
+<p>方法建议：</p>
+<ul>
+<li><code>startRenew()</code></li>
+<li><code>releaseQuietly()</code></li>
+<li><code>markReleased()</code></li>
+</ul>
+<h3 id="113-proxytimeoutpolicy">11.3 ProxyTimeoutPolicy</h3>
+<p>职责：</p>
+<ul>
+<li>从 provider 配置解析 timeout / lease 参数</li>
+<li>统一提供默认值</li>
+</ul>
+<h3 id="114-streamtimeoutwatcher">11.4 StreamTimeoutWatcher</h3>
+<p>职责：</p>
+<ul>
+<li>跟踪首包超时</li>
+<li>跟踪流空闲超时</li>
+<li>超时后触发 upstream cancel</li>
+</ul>
+<h2 id="12-对现有代码的主要改造点">12. 对现有代码的主要改造点</h2>
+<h3 id="121-providertokenselectservice">12.1 ProviderTokenSelectService</h3>
+<p>当前仅负责挑选 token。</p>
+<p>需要升级为：</p>
+<ul>
+<li>遍历 token</li>
+<li>尝试 acquire permit</li>
+<li>返回“已占用”的 token 与 permit 信息</li>
+</ul>
+<h3 id="122-providerrouteresolver">12.2 ProviderRouteResolver</h3>
+<p>当前逻辑：</p>
+<ul>
+<li>providerModel -&gt; provider -&gt; token</li>
+</ul>
+<p>新逻辑：</p>
+<ul>
+<li>providerModel -&gt; provider -&gt; token + permit</li>
+</ul>
+<h3 id="123-protocolproxyservice">12.3 ProtocolProxyService</h3>
+<p>这里是整个生命周期最适合做兜底的位置。</p>
+<p>需要保证：</p>
+<ul>
+<li>成功、业务异常、运行时异常、超时、下游断开</li>
+<li>所有路径都能进入统一 release</li>
+</ul>
+<p>建议使用：</p>
+<ul>
+<li><code>try/finally</code> 做 permit 释放</li>
+<li><code>usageRecordService</code> 记录 finish reason</li>
+</ul>
+<h3 id="124-adapter-层">12.4 Adapter 层</h3>
+<p>需要支持：</p>
+<ul>
+<li>对单次请求传入专属 timeout policy</li>
+<li>在超时时主动 cancel <code>Call</code></li>
+<li>流式读取时刷新“最近事件时间”</li>
+</ul>
+<h3 id="125-controller-层">12.5 Controller 层</h3>
+<p>SSE controller 要补：</p>
+<ul>
+<li>emitter completion / timeout / error 事件与 upstream cancel 的联动</li>
+</ul>
+<h2 id="13-实施计划">13. 实施计划</h2>
+<h3 id="phase-1文档与基础设施">Phase 1：文档与基础设施</h3>
+<ol>
+<li>补设计文档</li>
+<li>引入 Redisson</li>
+<li>新增配置类</li>
+<li>新增 provider 配置字段</li>
+</ol>
+<h3 id="phase-2并发限流主链路">Phase 2：并发限流主链路</h3>
+<ol>
+<li>给 <code>ProviderInvokeContext</code> 增加 <code>providerTokenId / permitId</code></li>
+<li>新增 <code>ProviderConcurrencyGuard</code></li>
+<li>改造 <code>ProviderTokenSelectService</code></li>
+<li>改造 <code>ProviderRouteResolver</code></li>
+<li>改造 <code>ProtocolProxyService</code>，统一 acquire / release</li>
+</ol>
+<h3 id="phase-3超时治理">Phase 3：超时治理</h3>
+<ol>
+<li>非流式 20s 超时</li>
+<li>流式首包 20s 超时</li>
+<li>流式空闲 20s 超时</li>
+<li>客户端断开联动 cancel upstream</li>
+</ol>
+<h3 id="phase-4记录与观测">Phase 4：记录与观测</h3>
+<ol>
+<li>usage_records 增加 <code>provider_token_id</code></li>
+<li>usage_records 增加 <code>finish_reason</code></li>
+<li>增加关键日志与指标</li>
+</ol>
+<h3 id="phase-5后台配置与展示">Phase 5：后台配置与展示</h3>
+<ol>
+<li>admin provider 页面支持配置限流参数</li>
+<li>usage 记录页面支持 <code>finish_reason</code> 与 <code>providerTokenId</code></li>
+</ol>
+<h2 id="14-第一版实施范围">14. 第一版实施范围</h2>
+<p>为了尽快上线，第一版建议先做：</p>
+<ul>
+<li>Redisson 接入</li>
+<li><code>providerToken</code> 分布式并发 permit</li>
+<li><code>ProviderInvokeContext</code> 补 <code>providerTokenId</code></li>
+<li>非流式 20s 超时</li>
+<li>流式首包 20s + 空闲 20s</li>
+<li><code>usage_records</code> 增加 <code>provider_token_id</code></li>
+<li><code>usage_records</code> 增加 <code>finish_reason</code></li>
+</ul>
+<p>第一版暂不做：</p>
+<ul>
+<li>provider 页面完整配置 UI</li>
+<li>复杂的 QPS 令牌桶</li>
+<li>过于细分的多级限流策略</li>
+</ul>
+<h2 id="15-风险与注意事项">15. 风险与注意事项</h2>
+<h3 id="151-不能只靠本地内存">15.1 不能只靠本地内存</h3>
+<p>如果只在 JVM 内存里做 semaphore：</p>
+<ul>
+<li>多实例下并发会失真</li>
+<li>实例崩溃后会话状态丢失</li>
+</ul>
+<p>因此必须走 Redis。</p>
+<h3 id="152-permit-必须有-lease">15.2 permit 必须有 lease</h3>
+<p>否则进程异常退出会导致永久泄漏。</p>
+<h3 id="153-permit-续租不能忘">15.3 permit 续租不能忘</h3>
+<p>长流会话如果只有初始 lease，没有续租，会被 Redis 自动回收，导致并发统计失真。</p>
+<h3 id="154-客户端断开必须-cancel-上游">15.4 客户端断开必须 cancel 上游</h3>
+<p>否则只是释放下游连接，但上游仍在跑，会浪费 token 并可能继续计费。</p>
+<h3 id="155-provider-failure-与-rate-limit-要分开">15.5 provider failure 与 rate limit 要分开</h3>
+<p>并发已满不是 provider 不健康，不应参与 provider 熔断计数。</p>
+<h2 id="16-验收标准">16. 验收标准</h2>
+<p>满足以下条件视为通过：</p>
+<ol>
+<li>同一 <code>providerToken</code> 超过最大并发时，请求不会继续打到上游。</li>
+<li>多实例部署下，并发限制一致。</li>
+<li>非流式请求 20 秒超时会失败并释放 permit。</li>
+<li>流式请求首包超时、空闲超时都会失败并释放 permit。</li>
+<li>客户端断开后 permit 会释放。</li>
+<li>进程异常退出后 permit 能在 lease 过期后自动回收。</li>
+<li>usage 记录可区分成功、超时、客户端断开、上游异常等原因。</li>
+</ol>
+
+            
+            
+        </body>
+        </html>

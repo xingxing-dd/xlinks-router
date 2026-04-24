@@ -30,8 +30,15 @@ CREATE TABLE `providers` (
   `provider_name` VARCHAR(100) NOT NULL,
   `supported_protocols` VARCHAR(255) DEFAULT NULL,
   `priority` INT NOT NULL DEFAULT 0,
-  `cache_hit_strategy` VARCHAR(64) NOT NULL DEFAULT 'none',
   `base_url` VARCHAR(255) NOT NULL,
+  `concurrency_limit_enabled` TINYINT NOT NULL DEFAULT 0,
+  `max_concurrent_per_token` INT NOT NULL DEFAULT 0,
+  `acquire_timeout_ms` INT NOT NULL DEFAULT 0,
+  `request_timeout_ms` INT NOT NULL DEFAULT 20000,
+  `stream_first_response_timeout_ms` INT NOT NULL DEFAULT 20000,
+  `stream_idle_timeout_ms` INT NOT NULL DEFAULT 20000,
+  `session_lease_ms` INT NOT NULL DEFAULT 30000,
+  `session_renew_interval_ms` INT NOT NULL DEFAULT 10000,
   `status` TINYINT NOT NULL DEFAULT 1,
   `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
@@ -90,6 +97,7 @@ CREATE TABLE `provider_models` (
 CREATE TABLE `usage_records` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `request_id` VARCHAR(64) NOT NULL,
+  `provider_token_id` BIGINT DEFAULT NULL,
   `provider_id` BIGINT NOT NULL,
   `model_id` BIGINT NOT NULL,
   `prompt_tokens` INT DEFAULT 0,
@@ -100,6 +108,7 @@ CREATE TABLE `usage_records` (
   `cache_hit_cost` DECIMAL(12, 6) DEFAULT 0.000000,
   `completion_cost` DECIMAL(12, 6) DEFAULT 0.000000,
   `total_cost` DECIMAL(12, 6) DEFAULT 0.000000,
+  `finish_reason` VARCHAR(64) DEFAULT NULL,
   PRIMARY KEY (`id`)
 );
 ```
@@ -109,7 +118,8 @@ CREATE TABLE `usage_records` (
 - remove `models.provider_id`
 - keep `provider_models` for multi-provider mapping
 - keep `providers.supported_protocols` + `providers.priority` for filtering and sorting
-- add `providers.cache_hit_strategy` to support provider-specific cache-hit extraction
+- add provider-token concurrency and timeout control fields on `providers`
+- add `usage_records.provider_token_id` + `usage_records.finish_reason` for concurrency audit and failure attribution
 - add `models.cache_hit_price` for cache-hit token billing
 - remove `model_endpoints` table and remove endpoint dimension from models
 

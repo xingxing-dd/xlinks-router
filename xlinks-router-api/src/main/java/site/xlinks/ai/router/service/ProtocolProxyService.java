@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.adapter.ProviderProtocolAdapter;
 import site.xlinks.ai.router.adapter.ProviderProtocolAdapterFactory;
@@ -27,6 +29,9 @@ import site.xlinks.ai.router.service.routing.RoutingBuildContext;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -40,6 +45,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProtocolProxyService {
 
+    private static final int DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY = 128;
+    private static final long STREAM_DISPATCH_OFFER_TIMEOUT_MS = 200L;
+    private static final long STREAM_DISPATCH_JOIN_TIMEOUT_MS = 3_000L;
+
     private final CustomerTokenAuthService customerTokenAuthService;
     private final ProviderProtocolAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
@@ -47,9 +56,13 @@ public class ProtocolProxyService {
     private final UsageExtractor usageExtractor;
     private final ProxyRoutingPipeline proxyRoutingPipeline;
     private final ProviderConcurrencyGuard providerConcurrencyGuard;
+    @Qualifier("sseTaskExecutor")
+    private final TaskExecutor sseTaskExecutor;
 
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
+    @Value("${xlinks.router.stream.dispatch.queue-capacity:128}")
+    private int streamDispatchQueueCapacity;
 
     public JsonNode forwardDirect(String token, ProxyRequest request) {
         String requestId = buildRequestId(request.getProtocol());
@@ -109,7 +122,14 @@ public class ProtocolProxyService {
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
+            int queueCapacity = streamDispatchQueueCapacity <= 0
+                    ? DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY
+                    : streamDispatchQueueCapacity;
+            ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue = new ArrayBlockingQueue<>(queueCapacity);
+            AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
+            CountDownLatch writerDone = new CountDownLatch(1);
             String modelProvider = context.getModelProvider();
+            sseTaskExecutor.execute(() -> runStreamWriter(streamDispatchQueue, onEvent, writerFailureRef, writerDone));
             try {
                 adapter.forwardStream(request, context, event -> {
                     appendStreamEvent(upstreamStreamPayloadBuilder, event);
@@ -122,14 +142,26 @@ public class ProtocolProxyService {
                     if (usageMetrics != null) {
                         usageMetricsRef.set(usageMetrics);
                     }
-                    onEvent.accept(event);
+                    enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
                 });
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                RuntimeException writerFailure = writerFailureRef.get();
+                if (writerFailure != null) {
+                    throw writerFailure;
+                }
             } catch (ClientAbortException ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
             } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
                 routeCacheService.recordProviderFailure(context.getProviderId());
                 throw ex;
             } catch (Exception ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
                 routeCacheService.recordProviderFailure(context.getProviderId());
                 throw ex;
             }
@@ -376,5 +408,100 @@ public class ProtocolProxyService {
                 providerCode,
                 modelCode,
                 payloadBuilder);
+    }
+
+    private void runStreamWriter(ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue,
+                                 Consumer<StreamEvent> onEvent,
+                                 AtomicReference<RuntimeException> writerFailureRef,
+                                 CountDownLatch writerDone) {
+        try {
+            while (true) {
+                StreamDispatchItem item = streamDispatchQueue.take();
+                if (item.endSignal()) {
+                    return;
+                }
+                onEvent.accept(item.event());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            writerFailureRef.compareAndSet(null, new RuntimeException("Stream writer interrupted", e));
+        } catch (RuntimeException e) {
+            writerFailureRef.compareAndSet(null, e);
+        } finally {
+            writerDone.countDown();
+        }
+    }
+
+    private void enqueueStreamEvent(ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue,
+                                    StreamEvent event,
+                                    AtomicReference<RuntimeException> writerFailureRef) {
+        if (event == null) {
+            return;
+        }
+        offerStreamDispatchItem(streamDispatchQueue, StreamDispatchItem.event(event), writerFailureRef);
+    }
+
+    private void enqueueStreamDispatchEnd(ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue,
+                                          AtomicReference<RuntimeException> writerFailureRef) {
+        offerStreamDispatchItem(streamDispatchQueue, StreamDispatchItem.end(), writerFailureRef);
+    }
+
+    private void offerStreamDispatchItem(ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue,
+                                         StreamDispatchItem item,
+                                         AtomicReference<RuntimeException> writerFailureRef) {
+        int offerRetry = 0;
+        while (true) {
+            RuntimeException writerFailure = writerFailureRef.get();
+            if (writerFailure != null) {
+                log.warn("Stream writer failed before enqueue, itemType={}, error={}",
+                        item.endSignal() ? "end" : "event",
+                        writerFailure.getMessage());
+                throw writerFailure;
+            }
+            try {
+                if (streamDispatchQueue.offer(item, STREAM_DISPATCH_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    return;
+                }
+                offerRetry++;
+                if (offerRetry == 1 || offerRetry % 10 == 0) {
+                    log.warn("Stream dispatch queue is full, retrying enqueue. itemType={}, queueSize={}, capacity={}, retries={}",
+                            item.endSignal() ? "end" : "event",
+                            streamDispatchQueue.size(),
+                            streamDispatchQueue.remainingCapacity() + streamDispatchQueue.size(),
+                            offerRetry);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while dispatching stream event", e);
+            }
+        }
+    }
+
+    private void waitStreamWriterDone(CountDownLatch writerDone,
+                                      AtomicReference<RuntimeException> writerFailureRef) {
+        try {
+            if (!writerDone.await(STREAM_DISPATCH_JOIN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                RuntimeException timeoutError = new RuntimeException("Timed out waiting for stream writer to finish");
+                writerFailureRef.compareAndSet(null, timeoutError);
+                log.warn("Timed out waiting for stream writer to finish");
+                throw timeoutError;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            RuntimeException interruptedError = new RuntimeException("Interrupted while waiting stream writer", e);
+            writerFailureRef.compareAndSet(null, interruptedError);
+            throw interruptedError;
+        }
+    }
+
+    private record StreamDispatchItem(StreamEvent event, boolean endSignal) {
+
+        private static StreamDispatchItem event(StreamEvent event) {
+            return new StreamDispatchItem(event, false);
+        }
+
+        private static StreamDispatchItem end() {
+            return new StreamDispatchItem(null, true);
+        }
     }
 }
