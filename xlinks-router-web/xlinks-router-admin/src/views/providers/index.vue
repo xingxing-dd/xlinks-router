@@ -39,6 +39,14 @@ const form = reactive({
   providerLogo: '',
   providerWebsite: '',
   status: 1,
+  concurrencyLimitEnabled: 0,
+  maxConcurrentPerToken: 0,
+  acquireTimeoutMs: 0,
+  requestTimeoutMs: 20000,
+  streamFirstResponseTimeoutMs: 20000,
+  streamIdleTimeoutMs: 20000,
+  sessionLeaseMs: 30000,
+  sessionRenewIntervalMs: 10000,
   remark: '',
 })
 
@@ -128,6 +136,22 @@ const formatSupportedProtocols = (raw) => {
   return protocols.map((item) => labelMap[item] || item).join(', ')
 }
 
+const toInt = (value, fallback = 0) => {
+  const normalized = Number(value)
+  return Number.isFinite(normalized) ? normalized : fallback
+}
+
+const formatProviderLimitSummary = (record) => {
+  if (Number(record?.concurrencyLimitEnabled) !== 1) {
+    return '未启用'
+  }
+  const maxConcurrentPerToken = toInt(record?.maxConcurrentPerToken, 0)
+  const requestTimeoutMs = toInt(record?.requestTimeoutMs, 20000)
+  const streamFirstResponseTimeoutMs = toInt(record?.streamFirstResponseTimeoutMs, 20000)
+  const streamIdleTimeoutMs = toInt(record?.streamIdleTimeoutMs, 20000)
+  return `并发 ${maxConcurrentPerToken}/token, 非流 ${requestTimeoutMs}ms, 首包 ${streamFirstResponseTimeoutMs}ms, 空闲 ${streamIdleTimeoutMs}ms`
+}
+
 const resetForm = () => {
   Object.assign(form, {
     providerCode: '',
@@ -138,6 +162,14 @@ const resetForm = () => {
     providerLogo: '',
     providerWebsite: '',
     status: 1,
+    concurrencyLimitEnabled: 0,
+    maxConcurrentPerToken: 0,
+    acquireTimeoutMs: 0,
+    requestTimeoutMs: 20000,
+    streamFirstResponseTimeoutMs: 20000,
+    streamIdleTimeoutMs: 20000,
+    sessionLeaseMs: 30000,
+    sessionRenewIntervalMs: 10000,
     remark: '',
   })
 }
@@ -183,6 +215,14 @@ const openEdit = (record) => {
     providerLogo: record.providerLogo || '',
     providerWebsite: record.providerWebsite || '',
     status: record.status ?? 1,
+    concurrencyLimitEnabled: toInt(record.concurrencyLimitEnabled, 0),
+    maxConcurrentPerToken: toInt(record.maxConcurrentPerToken, 0),
+    acquireTimeoutMs: toInt(record.acquireTimeoutMs, 0),
+    requestTimeoutMs: toInt(record.requestTimeoutMs, 20000),
+    streamFirstResponseTimeoutMs: toInt(record.streamFirstResponseTimeoutMs, 20000),
+    streamIdleTimeoutMs: toInt(record.streamIdleTimeoutMs, 20000),
+    sessionLeaseMs: toInt(record.sessionLeaseMs, 30000),
+    sessionRenewIntervalMs: toInt(record.sessionRenewIntervalMs, 10000),
     remark: record.remark || '',
   })
   protocolDropdownOpen.value = false
@@ -203,6 +243,14 @@ const handleSubmit = async () => {
         supportedProtocols,
         priority: Number(form.priority || 0),
         status: Number(form.status || 1),
+        concurrencyLimitEnabled: Number(form.concurrencyLimitEnabled || 0),
+        maxConcurrentPerToken: Number(form.maxConcurrentPerToken || 0),
+        acquireTimeoutMs: Number(form.acquireTimeoutMs || 0),
+        requestTimeoutMs: Number(form.requestTimeoutMs || 0),
+        streamFirstResponseTimeoutMs: Number(form.streamFirstResponseTimeoutMs || 0),
+        streamIdleTimeoutMs: Number(form.streamIdleTimeoutMs || 0),
+        sessionLeaseMs: Number(form.sessionLeaseMs || 0),
+        sessionRenewIntervalMs: Number(form.sessionRenewIntervalMs || 0),
       })
       toastStore.push('服务商创建成功', 'success')
     } else {
@@ -213,6 +261,14 @@ const handleSubmit = async () => {
         baseUrl: form.baseUrl,
         providerLogo: form.providerLogo,
         providerWebsite: form.providerWebsite,
+        concurrencyLimitEnabled: Number(form.concurrencyLimitEnabled || 0),
+        maxConcurrentPerToken: Number(form.maxConcurrentPerToken || 0),
+        acquireTimeoutMs: Number(form.acquireTimeoutMs || 0),
+        requestTimeoutMs: Number(form.requestTimeoutMs || 0),
+        streamFirstResponseTimeoutMs: Number(form.streamFirstResponseTimeoutMs || 0),
+        streamIdleTimeoutMs: Number(form.streamIdleTimeoutMs || 0),
+        sessionLeaseMs: Number(form.sessionLeaseMs || 0),
+        sessionRenewIntervalMs: Number(form.sessionRenewIntervalMs || 0),
         remark: form.remark,
       })
       toastStore.push('服务商更新成功', 'success')
@@ -321,6 +377,7 @@ onBeforeUnmount(() => {
                 <th>名称</th>
                 <th>支持协议</th>
                 <th>优先级</th>
+                <th>限流配置</th>
                 <th>Base URL</th>
                 <th>状态</th>
                 <th>更新时间</th>
@@ -329,7 +386,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <tr v-if="!records.length && !loading">
-                <td colspan="8" class="empty-state">暂无服务商数据</td>
+                <td colspan="9" class="empty-state">暂无服务商数据</td>
               </tr>
               <tr v-for="record in records" :key="record.id">
                 <td>{{ record.providerCode }}</td>
@@ -338,6 +395,17 @@ onBeforeUnmount(() => {
                 </td>
                 <td>{{ formatSupportedProtocols(record.supportedProtocols) }}</td>
                 <td>{{ record.priority ?? 0 }}</td>
+                <td class="max-w-[320px]">
+                  <div
+                    class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                    :class="Number(record.concurrencyLimitEnabled) === 1 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'"
+                  >
+                    {{ Number(record.concurrencyLimitEnabled) === 1 ? '已启用' : '未启用' }}
+                  </div>
+                  <div class="mt-1 text-xs text-slate-500 break-words">
+                    {{ formatProviderLimitSummary(record) }}
+                  </div>
+                </td>
                 <td class="max-w-[280px] break-all">{{ record.baseUrl }}</td>
                 <td>
                   <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
@@ -463,6 +531,48 @@ onBeforeUnmount(() => {
               <option :value="1">启用</option>
               <option :value="0">停用</option>
             </select>
+          </div>
+          <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-slate-800">并发限流与超时治理</div>
+                <p class="mt-1 text-xs text-slate-500">配置存放在 provider 上，实际生效维度为 provider token。</p>
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                <input v-model.number="form.concurrencyLimitEnabled" type="checkbox" class="h-4 w-4" :true-value="1" :false-value="0" />
+                启用限流
+              </label>
+            </div>
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="text-sm text-slate-500">每个 Token 最大并发</label>
+                <input v-model.number="form.maxConcurrentPerToken" type="number" min="0" class="input mt-2" placeholder="0" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">Permit 获取等待(ms)</label>
+                <input v-model.number="form.acquireTimeoutMs" type="number" min="0" class="input mt-2" placeholder="0" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">非流式超时(ms)</label>
+                <input v-model.number="form.requestTimeoutMs" type="number" min="0" class="input mt-2" placeholder="20000" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">流式首包超时(ms)</label>
+                <input v-model.number="form.streamFirstResponseTimeoutMs" type="number" min="0" class="input mt-2" placeholder="20000" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">流式空闲超时(ms)</label>
+                <input v-model.number="form.streamIdleTimeoutMs" type="number" min="0" class="input mt-2" placeholder="20000" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">Permit 租约(ms)</label>
+                <input v-model.number="form.sessionLeaseMs" type="number" min="1" class="input mt-2" placeholder="30000" />
+              </div>
+              <div>
+                <label class="text-sm text-slate-500">Permit 续租周期(ms)</label>
+                <input v-model.number="form.sessionRenewIntervalMs" type="number" min="1" class="input mt-2" placeholder="10000" />
+              </div>
+            </div>
           </div>
           <div class="md:col-span-2">
             <label class="text-sm text-slate-500">备注</label>

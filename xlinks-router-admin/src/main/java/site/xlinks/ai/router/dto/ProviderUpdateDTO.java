@@ -28,6 +28,30 @@ public class ProviderUpdateDTO {
     @Schema(description = "Provider website URL")
     private String providerWebsite;
 
+    @Schema(description = "Whether provider-token concurrency limit is enabled: 1-enabled, 0-disabled")
+    private Integer concurrencyLimitEnabled;
+
+    @Schema(description = "Max concurrent sessions allowed per provider token")
+    private Integer maxConcurrentPerToken;
+
+    @Schema(description = "Wait time when acquiring permit in milliseconds")
+    private Integer acquireTimeoutMs;
+
+    @Schema(description = "Non-stream request timeout in milliseconds")
+    private Integer requestTimeoutMs;
+
+    @Schema(description = "Stream first response timeout in milliseconds")
+    private Integer streamFirstResponseTimeoutMs;
+
+    @Schema(description = "Stream idle timeout in milliseconds")
+    private Integer streamIdleTimeoutMs;
+
+    @Schema(description = "Permit lease duration in milliseconds")
+    private Integer sessionLeaseMs;
+
+    @Schema(description = "Permit renew interval in milliseconds")
+    private Integer sessionRenewIntervalMs;
+
     @Schema(description = "Remark")
     private String remark;
 }

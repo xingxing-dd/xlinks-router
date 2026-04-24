@@ -44,6 +44,14 @@ public class ProviderController {
         provider.setProviderLogo(dto.getProviderLogo());
         provider.setProviderWebsite(dto.getProviderWebsite());
         provider.setStatus(dto.getStatus());
+        provider.setConcurrencyLimitEnabled(dto.getConcurrencyLimitEnabled());
+        provider.setMaxConcurrentPerToken(dto.getMaxConcurrentPerToken());
+        provider.setAcquireTimeoutMs(dto.getAcquireTimeoutMs());
+        provider.setRequestTimeoutMs(dto.getRequestTimeoutMs());
+        provider.setStreamFirstResponseTimeoutMs(dto.getStreamFirstResponseTimeoutMs());
+        provider.setStreamIdleTimeoutMs(dto.getStreamIdleTimeoutMs());
+        provider.setSessionLeaseMs(dto.getSessionLeaseMs());
+        provider.setSessionRenewIntervalMs(dto.getSessionRenewIntervalMs());
         provider.setRemark(dto.getRemark());
 
         providerService.save(provider);
@@ -96,6 +104,30 @@ public class ProviderController {
         }
         if (dto.getProviderWebsite() != null) {
             provider.setProviderWebsite(dto.getProviderWebsite());
+        }
+        if (dto.getConcurrencyLimitEnabled() != null) {
+            provider.setConcurrencyLimitEnabled(dto.getConcurrencyLimitEnabled());
+        }
+        if (dto.getMaxConcurrentPerToken() != null) {
+            provider.setMaxConcurrentPerToken(dto.getMaxConcurrentPerToken());
+        }
+        if (dto.getAcquireTimeoutMs() != null) {
+            provider.setAcquireTimeoutMs(dto.getAcquireTimeoutMs());
+        }
+        if (dto.getRequestTimeoutMs() != null) {
+            provider.setRequestTimeoutMs(dto.getRequestTimeoutMs());
+        }
+        if (dto.getStreamFirstResponseTimeoutMs() != null) {
+            provider.setStreamFirstResponseTimeoutMs(dto.getStreamFirstResponseTimeoutMs());
+        }
+        if (dto.getStreamIdleTimeoutMs() != null) {
+            provider.setStreamIdleTimeoutMs(dto.getStreamIdleTimeoutMs());
+        }
+        if (dto.getSessionLeaseMs() != null) {
+            provider.setSessionLeaseMs(dto.getSessionLeaseMs());
+        }
+        if (dto.getSessionRenewIntervalMs() != null) {
+            provider.setSessionRenewIntervalMs(dto.getSessionRenewIntervalMs());
         }
         if (dto.getRemark() != null) {
             provider.setRemark(dto.getRemark());

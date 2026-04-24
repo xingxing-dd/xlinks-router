@@ -38,6 +38,30 @@ public class ProviderCreateDTO {
     @Schema(description = "Status: 1-enabled, 0-disabled")
     private Integer status = 1;
 
+    @Schema(description = "Whether provider-token concurrency limit is enabled: 1-enabled, 0-disabled")
+    private Integer concurrencyLimitEnabled = 0;
+
+    @Schema(description = "Max concurrent sessions allowed per provider token")
+    private Integer maxConcurrentPerToken = 0;
+
+    @Schema(description = "Wait time when acquiring permit in milliseconds")
+    private Integer acquireTimeoutMs = 0;
+
+    @Schema(description = "Non-stream request timeout in milliseconds")
+    private Integer requestTimeoutMs = 20000;
+
+    @Schema(description = "Stream first response timeout in milliseconds")
+    private Integer streamFirstResponseTimeoutMs = 20000;
+
+    @Schema(description = "Stream idle timeout in milliseconds")
+    private Integer streamIdleTimeoutMs = 20000;
+
+    @Schema(description = "Permit lease duration in milliseconds")
+    private Integer sessionLeaseMs = 30000;
+
+    @Schema(description = "Permit renew interval in milliseconds")
+    private Integer sessionRenewIntervalMs = 10000;
+
     @Schema(description = "Remark")
     private String remark;
 }
