@@ -1,30 +1,47 @@
-﻿# Deploy Script (Windows)
+﻿# Deploy Script
 
 ## Files
 - `scripts/deploy-all.ps1`: build + deploy pipeline
-- `scripts/deploy-all.bat`: wrapper to call the PowerShell script
+- `scripts/deploy-all.bat`: Windows wrapper to call the PowerShell script
+- `scripts/deploy-all.sh`: macOS/Linux shell entrypoint
 
 ## Prerequisites
 - Maven (`mvn`)
-- Node.js + npm (`npm.cmd`)
-- PuTTY tools (`plink.exe`, `pscp.exe`) in one of:
-  - `tools/putty/` (inside this repo)
-  - PATH
-  - or installed at:
-    - `C:\Program Files\PuTTY\`
-    - `C:\Program Files (x86)\PuTTY\`
+- Node.js + npm
+- Windows:
+  - PowerShell
+  - PuTTY tools (`plink.exe`, `pscp.exe`) in one of:
+    - `tools/putty/` (inside this repo)
+    - PATH
+    - or installed at:
+      - `C:\Program Files\PuTTY\`
+      - `C:\Program Files (x86)\PuTTY\`
+- macOS/Linux:
+  - `ssh`
+  - `scp`
+  - `ssh-keyscan`
+  - `ssh-keygen`
+  - `expect`
 
 ## Quick start
 From repository root:
+
+Windows:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1
 ```
 
-Or:
+or:
 
 ```bat
 scripts\deploy-all.bat
+```
+
+macOS / Linux:
+
+```bash
+./scripts/deploy-all.sh
 ```
 
 ## Options
@@ -60,6 +77,26 @@ powershell -File .\scripts\deploy-all.ps1 -Scope all -BackendApps api -FrontendA
 powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
 ```
 
+```bash
+# Full dry run
+./scripts/deploy-all.sh --dry-run
+
+# Deploy backend only
+./scripts/deploy-all.sh --scope backend
+
+# Deploy only backend api + admin
+./scripts/deploy-all.sh --scope backend --backend-apps api,admin
+
+# Deploy only frontend admin
+./scripts/deploy-all.sh --scope frontend --frontend-apps admin
+
+# Deploy mixed target: backend api + frontend admin
+./scripts/deploy-all.sh --scope all --backend-apps api --frontend-apps admin
+
+# Build frontend only, no deploy
+./scripts/deploy-all.sh --scope frontend --skip-frontend-deploy
+```
+
 ## Notes
 - Backend deploy uploads the newest runnable jar in each module `target` directory.
 - Backend build installs root parent POM first (`mvn -N install`) and by default uses Maven's configured local repository.
@@ -68,4 +105,4 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
   - client -> `101.35.218.196:/app/simple-nginx/docker`
   - admin -> `123.60.29.123:/app/simple-nginx/docker`
 - SSH host keys are pinned in script for configured servers.
-- Server addresses and passwords are currently in-script constants. Adjust in `scripts/deploy-all.ps1` if needed.
+- Server addresses and passwords are currently in-script constants. Adjust in `scripts/deploy-all.ps1` or `scripts/deploy-all.sh` if needed.
