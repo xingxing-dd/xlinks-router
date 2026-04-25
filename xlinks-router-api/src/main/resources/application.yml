@@ -65,6 +65,9 @@ xlinks:
       internal-cache-refresh-token: ${INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}
     debug:
       log-upstream-responses-stream-payload: false
+      trace-timeline-enabled: true
+      trace-stream-event-preview-limit: 120
+      trace-log-provider-token-plain: false
     async:
       usage:
         core-size: 4

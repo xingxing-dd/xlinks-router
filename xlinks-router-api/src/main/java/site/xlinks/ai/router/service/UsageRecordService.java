@@ -2,6 +2,7 @@ package site.xlinks.ai.router.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.common.constants.WalletConstants;
@@ -54,7 +55,7 @@ public class UsageRecordService {
         record.setErrorMessage(errorMessage);
         record.setFinishReason(finishReason);
         try {
-            usageRecordMapper.insert(record);
+            insertUsageRecordWithRetry(record, context.getRequestId());
             consumeUsageBalanceOrPlan(context, record);
             syncCustomerTokenQuotaUsage(context, record);
             log.debug("Usage record saved: {}", context.getRequestId());
@@ -101,10 +102,22 @@ public class UsageRecordService {
         record.setErrorMessage(errorMessage);
         record.setFinishReason(finishReason);
         try {
-            usageRecordMapper.insert(record);
+            insertUsageRecordWithRetry(record, context.getRequestId());
             log.debug("Error usage record saved: {}", context.getRequestId());
         } catch (Exception e) {
             log.error("Failed to save error usage record", e);
+        }
+    }
+
+    private void insertUsageRecordWithRetry(UsageRecord record, String requestId) {
+        try {
+            usageRecordMapper.insert(record);
+        } catch (DuplicateKeyException duplicateKeyException) {
+            Long conflictedId = record.getId();
+            log.warn("Duplicate usage record id detected, retrying insert with a new id, requestId={}, conflictedId={}",
+                    requestId, conflictedId);
+            record.setId(null);
+            usageRecordMapper.insert(record);
         }
     }
 

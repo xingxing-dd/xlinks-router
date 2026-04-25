@@ -3,6 +3,7 @@ package site.xlinks.ai.router.service;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.Model;
@@ -17,8 +18,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Request-scoped trace collector backed by ThreadLocal.
- * Collects lightweight routing/proxy milestones and emits one summary log on completion.
+ * 基于 ThreadLocal 的请求链路跟踪器。
+ * 在请求结束时输出一条汇总日志；可选输出毫秒级时间线。
  */
 public final class ProxyRequestTrace {
 
@@ -26,18 +27,25 @@ public final class ProxyRequestTrace {
     private static final DateTimeFormatter TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.of("Asia/Shanghai"));
     private static final int MAX_ROUTE_EVENTS = 32;
+    private static final int MAX_TIMELINE_EVENTS = 300;
+    private static final int DEFAULT_STREAM_EVENT_PREVIEW_LIMIT = 120;
 
     private ProxyRequestTrace() {
     }
 
-    public static void begin(String requestId, ProxyRequest request) {
+    public static void begin(String requestId, ProxyRequest request, boolean timelineEnabled, int streamEventPreviewLimit) {
         TraceContext context = new TraceContext();
         context.requestId = requestId;
         context.protocol = request == null || request.getProtocol() == null ? null : request.getProtocol().getCode();
         context.stream = request != null && Boolean.TRUE.equals(request.isStream());
         context.customerModel = request == null ? null : request.getModel();
         context.requestStartAt = System.currentTimeMillis();
+        context.timelineEnabled = timelineEnabled;
+        context.streamEventPreviewLimit = streamEventPreviewLimit <= 0
+                ? DEFAULT_STREAM_EVENT_PREVIEW_LIMIT
+                : streamEventPreviewLimit;
         HOLDER.set(context);
+        addTimelineEvent("请求开始", "收到代理请求");
     }
 
     public static void clear() {
@@ -54,12 +62,87 @@ public final class ProxyRequestTrace {
         }
         if (context.routeEvents.size() >= MAX_ROUTE_EVENTS) {
             if (!context.routeEventsTruncated) {
-                context.routeEvents.add("... 路由事件过多，后续内容已省略");
+                context.routeEvents.add("... 路由事件过多，后续省略");
                 context.routeEventsTruncated = true;
             }
             return;
         }
         context.routeEvents.add(event);
+        addTimelineEvent("路由事件", event);
+    }
+
+    public static void addTimelineEvent(String phase, String detail) {
+        TraceContext context = HOLDER.get();
+        if (context == null || !context.timelineEnabled) {
+            return;
+        }
+        if (context.timelineEvents.size() >= MAX_TIMELINE_EVENTS) {
+            if (!context.timelineEventsTruncated) {
+                context.timelineEvents.add(formatTimelineEvent(
+                        context,
+                        System.currentTimeMillis(),
+                        "时间线截断",
+                        "事件过多，后续省略"
+                ));
+                context.timelineEventsTruncated = true;
+            }
+            return;
+        }
+        context.timelineEvents.add(formatTimelineEvent(context, System.currentTimeMillis(), phase, detail));
+    }
+
+    public static void recordStreamEvent(StreamEvent event) {
+        TraceContext context = HOLDER.get();
+        if (context == null || !context.timelineEnabled || event == null) {
+            return;
+        }
+        context.streamEventCount++;
+        boolean firstEvent = context.streamFirstEventDetail == null;
+        boolean terminalEvent = isTerminalStreamEvent(event);
+        if (firstEvent) {
+            context.streamFirstEventDetail = buildStreamEventDetail(context, event);
+            addTimelineEvent("流式响应事件", "首包, " + context.streamFirstEventDetail);
+            return;
+        }
+        if (!terminalEvent) {
+            return;
+        }
+        if (context.streamTerminalEventLogged) {
+            return;
+        }
+        context.streamTerminalEventLogged = true;
+        addTimelineEvent("流式响应事件", "结束包, " + buildStreamEventDetail(context, event));
+    }
+
+    private static boolean isTerminalStreamEvent(StreamEvent event) {
+        if (event == null) {
+            return false;
+        }
+        if (event.isDoneSignal()) {
+            return true;
+        }
+        String eventName = event.getEvent();
+        if (eventName == null || eventName.isBlank()) {
+            return false;
+        }
+        String lower = eventName.toLowerCase();
+        return lower.endsWith(".completed")
+                || lower.endsWith(".failed")
+                || lower.endsWith(".error")
+                || "error".equals(lower);
+    }
+
+    private static String buildStreamEventDetail(TraceContext context, StreamEvent event) {
+        String eventName = event.getEvent();
+        String data = event.joinedData();
+        int dataLength = data == null ? 0 : data.length();
+        boolean doneSignal = event.isDoneSignal();
+        String preview = abbreviateSingleLine(data, context.streamEventPreviewLimit);
+        return "序号=" + context.streamEventCount
+                + ", event=" + nullSafe(eventName)
+                + ", data长度=" + dataLength
+                + ", done=" + doneSignal
+                + ", 预览=" + preview;
     }
 
     public static void markCustomerToken(CustomerToken customerToken) {
@@ -138,6 +221,7 @@ public final class ProxyRequestTrace {
             return;
         }
         context.firstResponseAt = System.currentTimeMillis();
+        addTimelineEvent("首包到达", "收到第一条上游响应");
     }
 
     public static void markSuccess(ProviderInvokeContext invokeContext, UsageMetrics usageMetrics) {
@@ -150,6 +234,7 @@ public final class ProxyRequestTrace {
         context.finishReason = "success";
         context.completedAt = System.currentTimeMillis();
         fillUsage(context, usageMetrics);
+        addTimelineEvent("请求结束", "成功完成");
     }
 
     public static void markFailure(ProviderInvokeContext invokeContext,
@@ -166,6 +251,10 @@ public final class ProxyRequestTrace {
         context.errorCode = errorCode;
         context.errorMessage = errorMessage;
         context.completedAt = System.currentTimeMillis();
+        addTimelineEvent(
+                "请求结束",
+                "失败, finishReason=" + nullSafe(finishReason) + ", errorCode=" + nullSafe(errorCode)
+        );
     }
 
     public static String buildSummary() {
@@ -179,7 +268,7 @@ public final class ProxyRequestTrace {
                 ? Math.max(context.firstResponseAt - context.requestStartAt, 0L)
                 : null;
 
-        StringBuilder builder = new StringBuilder(1024);
+        StringBuilder builder = new StringBuilder(4096);
         builder.append("代理请求汇总")
                 .append('\n').append("requestId=").append(nullSafe(context.requestId))
                 .append(", protocol=").append(nullSafe(context.protocol))
@@ -187,10 +276,10 @@ public final class ProxyRequestTrace {
                 .append(", customerModel=").append(nullSafe(context.customerModel))
                 .append(", modelCode=").append(nullSafe(context.modelCode))
                 .append('\n').append("开始时间=").append(formatTime(context.requestStartAt))
-                .append(", 首次响应时间=").append(formatTime(context.firstResponseAt))
+                .append(", 首包时间=").append(formatTime(context.firstResponseAt))
                 .append(", 完成时间=").append(formatTime(completedAt))
                 .append(", 总耗时Ms=").append(elapsedMs)
-                .append(", 首次响应耗时Ms=").append(firstResponseMs == null ? "-" : firstResponseMs)
+                .append(", 首包耗时Ms=").append(firstResponseMs == null ? "-" : firstResponseMs)
                 .append('\n').append("账号信息: accountId=").append(nullSafe(context.accountId))
                 .append(", customerTokenId=").append(nullSafe(context.customerTokenId))
                 .append(", planId=").append(nullSafe(context.planId))
@@ -207,18 +296,16 @@ public final class ProxyRequestTrace {
                 .append(", errorMessage=").append(nullSafe(context.errorMessage))
                 .append('\n').append("用量信息: inputTokens=").append(nullSafe(context.inputTokens))
                 .append(", outputTokens=").append(nullSafe(context.outputTokens))
-                .append(", totalTokens=").append(nullSafe(context.totalTokens))
-                .append('\n').append("路由过程:");
+                .append(", totalTokens=").append(nullSafe(context.totalTokens));
 
-        if (context.routeEvents.isEmpty()) {
-            builder.append('\n').append("  - 无");
-        } else {
-            for (int i = 0; i < context.routeEvents.size(); i++) {
-                builder.append('\n')
-                        .append("  ")
-                        .append(i + 1)
-                        .append(". ")
-                        .append(context.routeEvents.get(i));
+        if (context.timelineEnabled) {
+            builder.append('\n').append("事件时间线:");
+            if (context.timelineEvents.isEmpty()) {
+                builder.append('\n').append("  - 无");
+            } else {
+                for (String timelineEvent : context.timelineEvents) {
+                    builder.append('\n').append("  ").append(timelineEvent);
+                }
             }
         }
         return builder.toString();
@@ -231,6 +318,25 @@ public final class ProxyRequestTrace {
         context.inputTokens = usageMetrics.getInputTokens();
         context.outputTokens = usageMetrics.getOutputTokens();
         context.totalTokens = usageMetrics.getTotalTokens();
+    }
+
+    private static String formatTimelineEvent(TraceContext context, long timestamp, String phase, String detail) {
+        long offsetMs = Math.max(timestamp - context.requestStartAt, 0L);
+        return "[" + formatTime(timestamp) + " | +" + offsetMs + "ms] "
+                + nullSafe(phase)
+                + " | "
+                + nullSafe(detail);
+    }
+
+    private static String abbreviateSingleLine(String value, int limit) {
+        if (value == null || value.isBlank()) {
+            return "-";
+        }
+        String normalized = value.replace('\n', ' ').replace('\r', ' ');
+        if (normalized.length() <= limit) {
+            return normalized;
+        }
+        return normalized.substring(0, Math.max(limit, 1)) + "...";
     }
 
     private static String formatTime(long epochMillis) {
@@ -271,6 +377,13 @@ public final class ProxyRequestTrace {
         private Integer outputTokens;
         private Integer totalTokens;
         private boolean routeEventsTruncated;
+        private boolean timelineEnabled;
+        private int streamEventPreviewLimit;
+        private int streamEventCount;
+        private String streamFirstEventDetail;
+        private boolean streamTerminalEventLogged;
+        private boolean timelineEventsTruncated;
         private final List<String> routeEvents = new ArrayList<>(12);
+        private final List<String> timelineEvents = new ArrayList<>(32);
     }
 }

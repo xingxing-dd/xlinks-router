@@ -61,6 +61,12 @@ public class ProtocolProxyService {
 
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
+    @Value("${xlinks.router.debug.trace-timeline-enabled:false}")
+    private boolean traceTimelineEnabled;
+    @Value("${xlinks.router.debug.trace-stream-event-preview-limit:120}")
+    private int traceStreamEventPreviewLimit;
+    @Value("${xlinks.router.debug.trace-log-provider-token-plain:false}")
+    private boolean traceLogProviderTokenPlain;
     @Value("${xlinks.router.stream.dispatch.queue-capacity:128}")
     private int streamDispatchQueueCapacity;
 
@@ -70,12 +76,15 @@ public class ProtocolProxyService {
         ProviderInvokeContext context = null;
         ScheduledFuture<?> renewFuture = null;
         Throwable unexpectedError = null;
-        ProxyRequestTrace.begin(requestId, request);
+        ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
             context = buildContext(token, request, requestId);
+            ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
             renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
+            ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
+            ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, false));
             JsonNode response;
             try {
                 response = adapter.forwardDirect(request, context);
@@ -87,6 +96,7 @@ public class ProtocolProxyService {
                 throw ex;
             }
             routeCacheService.clearProviderFailure(context.getProviderId());
+            ProxyRequestTrace.addTimelineEvent("上游响应", "直连响应已返回");
             ProxyRequestTrace.markFirstResponse();
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
             usageRecordService.recordAsync(
@@ -124,12 +134,15 @@ public class ProtocolProxyService {
         boolean captureUpstreamStreamPayload = shouldCaptureUpstreamResponsesStreamPayload(request);
         StringBuilder upstreamStreamPayloadBuilder = captureUpstreamStreamPayload ? new StringBuilder() : null;
         Throwable unexpectedError = null;
-        ProxyRequestTrace.begin(requestId, request);
+        ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
             context = buildContext(token, request, requestId);
+            ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
             renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
+            ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
             ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
+            ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, true));
             AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
             AtomicReference<Integer> responseMsRef = new AtomicReference<>();
             int queueCapacity = streamDispatchQueueCapacity <= 0
@@ -143,6 +156,7 @@ public class ProtocolProxyService {
             try {
                 adapter.forwardStream(request, context, event -> {
                     appendStreamEvent(upstreamStreamPayloadBuilder, event);
+                    ProxyRequestTrace.recordStreamEvent(event);
                     if (isFirstResponseDataEvent(event)) {
                         long firstResponseMs = System.currentTimeMillis() - startAt;
                         int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
@@ -155,6 +169,7 @@ public class ProtocolProxyService {
                     }
                     enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
                 });
+                ProxyRequestTrace.addTimelineEvent("流式读取", "上游流读取完成");
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 RuntimeException writerFailure = writerFailureRef.get();
@@ -373,6 +388,59 @@ public class ProtocolProxyService {
                 && request != null
                 && request.isStream()
                 && request.getProtocol() == ProxyProtocol.RESPONSES;
+    }
+
+    private String buildUpstreamRequestDetail(ProviderInvokeContext context, ProxyRequest request, boolean stream) {
+        String url = buildUpstreamUrl(context, request);
+        String token = context == null ? null : context.getProviderToken();
+        String tokenForLog = formatTokenForLog(token);
+        Integer requestTimeoutMs = context == null ? null : context.getRequestTimeoutMs();
+        Integer firstTimeoutMs = context == null ? null : context.getStreamFirstResponseTimeoutMs();
+        Integer idleTimeoutMs = context == null ? null : context.getStreamIdleTimeoutMs();
+        return "url=" + nullSafe(url)
+                + ", stream=" + stream
+                + ", providerToken=" + tokenForLog
+                + ", requestTimeoutMs=" + nullSafe(requestTimeoutMs)
+                + ", streamFirstResponseTimeoutMs=" + nullSafe(firstTimeoutMs)
+                + ", streamIdleTimeoutMs=" + nullSafe(idleTimeoutMs);
+    }
+
+    private String buildUpstreamUrl(ProviderInvokeContext context, ProxyRequest request) {
+        if (context == null || request == null || request.getProtocol() == null) {
+            return null;
+        }
+        String baseUrl = context.getBaseUrl();
+        String path = request.getProtocol().getProviderPath();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return path;
+        }
+        if (path == null || path.isBlank()) {
+            return baseUrl;
+        }
+        if (baseUrl.endsWith("/") && path.startsWith("/")) {
+            return baseUrl.substring(0, baseUrl.length() - 1) + path;
+        }
+        if (!baseUrl.endsWith("/") && !path.startsWith("/")) {
+            return baseUrl + "/" + path;
+        }
+        return baseUrl + path;
+    }
+
+    private String formatTokenForLog(String token) {
+        if (token == null || token.isBlank()) {
+            return "-";
+        }
+        if (traceLogProviderTokenPlain) {
+            return token;
+        }
+        if (token.length() <= 8) {
+            return "****";
+        }
+        return token.substring(0, 4) + "****" + token.substring(token.length() - 4);
+    }
+
+    private String nullSafe(Object value) {
+        return value == null ? "-" : String.valueOf(value);
     }
 
     private void appendStreamEvent(StringBuilder payloadBuilder, StreamEvent event) {
