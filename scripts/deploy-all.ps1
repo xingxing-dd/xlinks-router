@@ -418,12 +418,12 @@ try {
     Ensure-Command -Name "mvn"
     Ensure-Command -Name "npm.cmd"
 
-    $selectedBackendNames = Normalize-NameList -Values $BackendApps
+    $selectedBackendNames = @(Normalize-NameList -Values $BackendApps)
     if ($selectedBackendNames.Count -eq 0) {
         $selectedBackendNames = @("api", "client", "admin")
     }
 
-    $selectedFrontendNames = Normalize-NameList -Values $FrontendApps
+    $selectedFrontendNames = @(Normalize-NameList -Values $FrontendApps)
     if ($selectedFrontendNames.Count -eq 0) {
         $selectedFrontendNames = @("client", "admin")
     }
