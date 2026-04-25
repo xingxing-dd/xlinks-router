@@ -6,9 +6,9 @@ spring:
     name: xlinks-router-api
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://123.60.29.123:3306/xlinks_router?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://rm-uf635ebs664h84te8no.mysql.rds.aliyuncs.com:3306/xlinks_router?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: 132311aA.
+    password: "132311aA!"
     hikari:
       idleTimeout: 300000
   data:

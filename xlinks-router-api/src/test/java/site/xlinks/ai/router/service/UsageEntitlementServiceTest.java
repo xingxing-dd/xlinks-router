@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import site.xlinks.ai.router.context.UsageDecision;
 import site.xlinks.ai.router.entity.CustomerMainWallet;
@@ -32,7 +31,6 @@ class UsageEntitlementServiceTest {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         WalletService walletService = mock(WalletService.class);
         UsageEntitlementService service = new UsageEntitlementService(
-                new ObjectMapper(),
                 customerPlanMapper,
                 routeCacheService,
                 walletService
@@ -40,6 +38,7 @@ class UsageEntitlementServiceTest {
 
         CustomerToken token = buildToken();
         when(customerPlanMapper.selectAvailablePlans(eq(100L), any())).thenReturn(List.of());
+        when(routeCacheService.getCustomerTokenAllowedModels(token)).thenReturn(List.of());
         when(walletService.ensureWallet(100L)).thenReturn(new WalletBundle(buildWallet("10.000000"), List.of()));
 
         UsageDecision decision = service.decide(token, "gpt-5");
@@ -56,7 +55,6 @@ class UsageEntitlementServiceTest {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         WalletService walletService = mock(WalletService.class);
         UsageEntitlementService service = new UsageEntitlementService(
-                new ObjectMapper(),
                 customerPlanMapper,
                 routeCacheService,
                 walletService
@@ -65,6 +63,7 @@ class UsageEntitlementServiceTest {
         CustomerToken token = buildToken();
         CustomerPlan plan = buildPlan();
         when(customerPlanMapper.selectAvailablePlans(eq(100L), any())).thenReturn(List.of(plan));
+        when(routeCacheService.getCustomerTokenAllowedModels(token)).thenReturn(List.of());
         when(routeCacheService.isModelSupportedByPlan(200L, "gpt-5")).thenReturn(true);
 
         UsageDecision decision = service.decide(token, "gpt-5");
@@ -82,7 +81,6 @@ class UsageEntitlementServiceTest {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         WalletService walletService = mock(WalletService.class);
         UsageEntitlementService service = new UsageEntitlementService(
-                new ObjectMapper(),
                 customerPlanMapper,
                 routeCacheService,
                 walletService
@@ -90,6 +88,7 @@ class UsageEntitlementServiceTest {
 
         CustomerToken token = buildToken();
         when(customerPlanMapper.selectAvailablePlans(eq(100L), any())).thenReturn(List.of());
+        when(routeCacheService.getCustomerTokenAllowedModels(token)).thenReturn(List.of());
         when(walletService.ensureWallet(100L)).thenReturn(new WalletBundle(buildWallet("0.000000"), List.of()));
 
         UsageDecision decision = service.decide(token, "gpt-5");
