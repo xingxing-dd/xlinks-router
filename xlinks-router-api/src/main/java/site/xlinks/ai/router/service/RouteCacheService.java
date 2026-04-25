@@ -75,6 +75,7 @@ public class RouteCacheService {
     private volatile Map<Long, ProviderToken> providerTokenByIdCache = Collections.emptyMap();
     private volatile Map<String, CustomerToken> customerTokenByValueCache = Collections.emptyMap();
     private volatile Map<Long, CustomerToken> customerTokenByIdCache = Collections.emptyMap();
+    private volatile Map<Long, AllowedModelMatcher> customerTokenAllowedModelCache = Collections.emptyMap();
     private volatile Map<Long, ProviderProtocolMatcher> providerProtocolCache = Collections.emptyMap();
     private volatile Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache = Collections.emptyMap();
     private volatile Map<Long, PlanModelMatcher> planModelCache = Collections.emptyMap();
@@ -250,6 +251,11 @@ public class RouteCacheService {
                 CustomerToken token = entry.getValue();
                 return token != null && accountId.equals(token.getAccountId());
             });
+            Map<Long, AllowedModelMatcher> nextAllowedModelCache = new HashMap<>(customerTokenAllowedModelCache);
+            nextAllowedModelCache.entrySet().removeIf(entry -> {
+                CustomerToken token = customerTokenByIdCache.get(entry.getKey());
+                return token != null && accountId.equals(token.getAccountId());
+            });
 
             for (CustomerToken token : latestTokens) {
                 if (token == null) {
@@ -260,11 +266,13 @@ public class RouteCacheService {
                 }
                 if (token.getId() != null) {
                     nextById.put(token.getId(), token);
+                    nextAllowedModelCache.put(token.getId(), parseAllowedModelMatcher(token.getAllowedModels()));
                 }
             }
 
             customerTokenByValueCache = Collections.unmodifiableMap(nextByValue);
             customerTokenByIdCache = Collections.unmodifiableMap(nextById);
+            customerTokenAllowedModelCache = Collections.unmodifiableMap(nextAllowedModelCache);
             log.info("Customer token cache refreshed incrementally: accountId={}, loadedTokens={}",
                     accountId, latestTokens.size());
         });
@@ -463,12 +471,34 @@ public class RouteCacheService {
         nextByValue.put(customerToken.getTokenValue(), customerToken);
 
         Map<Long, CustomerToken> nextById = new HashMap<>(customerTokenByIdCache);
+        Map<Long, AllowedModelMatcher> nextAllowedModelCache = new HashMap<>(customerTokenAllowedModelCache);
         if (customerToken.getId() != null) {
             nextById.put(customerToken.getId(), customerToken);
+            nextAllowedModelCache.put(customerToken.getId(), parseAllowedModelMatcher(customerToken.getAllowedModels()));
         }
 
         customerTokenByValueCache = Collections.unmodifiableMap(nextByValue);
         customerTokenByIdCache = Collections.unmodifiableMap(nextById);
+        customerTokenAllowedModelCache = Collections.unmodifiableMap(nextAllowedModelCache);
+    }
+
+    public List<String> getCustomerTokenAllowedModels(CustomerToken customerToken) {
+        if (customerToken == null) {
+            return Collections.emptyList();
+        }
+        Long tokenId = customerToken.getId();
+        if (tokenId != null) {
+            AllowedModelMatcher matcher = customerTokenAllowedModelCache.get(tokenId);
+            if (matcher != null) {
+                return matcher.toAllowedModelList();
+            }
+            cacheCustomerToken(customerToken);
+            matcher = customerTokenAllowedModelCache.get(tokenId);
+            if (matcher != null) {
+                return matcher.toAllowedModelList();
+            }
+        }
+        return Collections.emptyList();
     }
 
     public void updateCustomerTokenQuota(Long tokenId, BigDecimal usedQuota, BigDecimal totalUsedQuota) {
@@ -564,6 +594,7 @@ public class RouteCacheService {
         );
         Map<String, CustomerToken> nextCustomerTokenByValueCache = buildCustomerTokenByValueCache(customerTokens);
         Map<Long, CustomerToken> nextCustomerTokenByIdCache = buildCustomerTokenByIdCache(customerTokens);
+        Map<Long, AllowedModelMatcher> nextCustomerTokenAllowedModelCache = buildCustomerTokenAllowedModelCache(customerTokens);
         Map<String, Long> nextMerchantProviderRouteCache = buildMerchantProviderRouteCache(merchantProviderRoutes);
 
         return new CacheSnapshot(
@@ -575,6 +606,7 @@ public class RouteCacheService {
                 nextProviderTokenByIdCache,
                 nextCustomerTokenByValueCache,
                 nextCustomerTokenByIdCache,
+                nextCustomerTokenAllowedModelCache,
                 nextProviderProtocolCache,
                 nextRoutingIndex,
                 nextPlanModelCache,
@@ -591,6 +623,7 @@ public class RouteCacheService {
         providerTokenByIdCache = snapshot.providerTokenByIdCache();
         customerTokenByValueCache = snapshot.customerTokenByValueCache();
         customerTokenByIdCache = snapshot.customerTokenByIdCache();
+        customerTokenAllowedModelCache = snapshot.customerTokenAllowedModelCache();
         providerProtocolCache = snapshot.providerProtocolCache();
         providerModelByModelAndProtocolCache = snapshot.providerModelByModelAndProtocolCache();
         planModelCache = snapshot.planModelCache();
@@ -808,9 +841,28 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(map);
     }
 
+    private Map<Long, AllowedModelMatcher> buildCustomerTokenAllowedModelCache(List<CustomerToken> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, AllowedModelMatcher> map = new HashMap<>();
+        for (CustomerToken token : tokens) {
+            if (token == null || token.getId() == null) {
+                continue;
+            }
+            map.put(token.getId(), parseAllowedModelMatcher(token.getAllowedModels()));
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
     private PlanModelMatcher parsePlanModelMatcher(String rawAllowedModels) {
+        AllowedModelMatcher matcher = parseAllowedModelMatcher(rawAllowedModels);
+        return new PlanModelMatcher(matcher.allowAll(), matcher.allowedModels());
+    }
+
+    private AllowedModelMatcher parseAllowedModelMatcher(String rawAllowedModels) {
         if (rawAllowedModels == null || rawAllowedModels.isBlank()) {
-            return new PlanModelMatcher(true, Collections.emptySet());
+            return new AllowedModelMatcher(true, Collections.emptySet());
         }
         String trimmed = rawAllowedModels.trim();
         try {
@@ -831,12 +883,12 @@ public class RouteCacheService {
                         .collect(Collectors.toSet());
             }
             if (values.isEmpty()) {
-                return new PlanModelMatcher(true, Collections.emptySet());
+                return new AllowedModelMatcher(true, Collections.emptySet());
             }
-            return new PlanModelMatcher(false, Collections.unmodifiableSet(values));
+            return new AllowedModelMatcher(false, Collections.unmodifiableSet(values));
         } catch (Exception ex) {
-            log.warn("Failed to parse plan allowed models: {}", rawAllowedModels, ex);
-            return new PlanModelMatcher(true, Collections.emptySet());
+            log.warn("Failed to parse allowed models: {}", rawAllowedModels, ex);
+            return new AllowedModelMatcher(true, Collections.emptySet());
         }
     }
 
@@ -868,6 +920,7 @@ public class RouteCacheService {
                                  Map<Long, ProviderToken> providerTokenByIdCache,
                                  Map<String, CustomerToken> customerTokenByValueCache,
                                  Map<Long, CustomerToken> customerTokenByIdCache,
+                                 Map<Long, AllowedModelMatcher> customerTokenAllowedModelCache,
                                  Map<Long, ProviderProtocolMatcher> providerProtocolCache,
                                  Map<String, List<ProviderModel>> providerModelByModelAndProtocolCache,
                                  Map<Long, PlanModelMatcher> planModelCache,
@@ -886,6 +939,15 @@ public class RouteCacheService {
                 return true;
             }
             return allowedModels.contains(modelCode.trim());
+        }
+    }
+
+    private record AllowedModelMatcher(boolean allowAll, Set<String> allowedModels) {
+        List<String> toAllowedModelList() {
+            if (allowAll || allowedModels == null || allowedModels.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return allowedModels.stream().sorted().toList();
         }
     }
 

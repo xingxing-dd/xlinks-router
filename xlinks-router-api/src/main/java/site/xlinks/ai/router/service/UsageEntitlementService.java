@@ -1,7 +1,5 @@
 package site.xlinks.ai.router.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,8 +14,6 @@ import site.xlinks.ai.router.model.wallet.WalletBundle;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -28,7 +24,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UsageEntitlementService {
 
-    private final ObjectMapper objectMapper;
     private final CustomerPlanMapper customerPlanMapper;
     private final RouteCacheService routeCacheService;
     private final WalletService walletService;
@@ -40,7 +35,7 @@ public class UsageEntitlementService {
         log.debug("Deciding usage type for customer: {}, model: {}",
                 customerToken.getCustomerName(), requestModel);
 
-        List<String> packageAllowedModels = parseAllowedModels(customerToken.getAllowedModels());
+        List<String> packageAllowedModels = routeCacheService.getCustomerTokenAllowedModels(customerToken);
 
         CustomerPlan plan = selectAvailablePlan(customerToken.getAccountId(), requestModel);
         boolean packageEnabled = plan != null;
@@ -169,38 +164,6 @@ public class UsageEntitlementService {
             return 2;
         } else {
             return 0;
-        }
-    }
-
-    /**
-     * Parse allowed model list from JSON array or comma-separated string.
-     */
-    private List<String> parseAllowedModels(String allowedModels) {
-        if (!StringUtils.hasText(allowedModels)) {
-            return new ArrayList<>();
-        }
-
-        String trimmed = allowedModels.trim();
-        try {
-            if (trimmed.startsWith("[")) {
-                List<String> models = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {
-                });
-                if (models == null) {
-                    return Collections.emptyList();
-                }
-                return models.stream()
-                        .filter(StringUtils::hasText)
-                        .map(String::trim)
-                        .toList();
-            }
-
-            return java.util.Arrays.stream(trimmed.split(","))
-                    .map(String::trim)
-                    .filter(StringUtils::hasText)
-                    .toList();
-        } catch (Exception e) {
-            log.warn("Failed to parse allowed models: {}", allowedModels, e);
-            return new ArrayList<>();
         }
     }
 
