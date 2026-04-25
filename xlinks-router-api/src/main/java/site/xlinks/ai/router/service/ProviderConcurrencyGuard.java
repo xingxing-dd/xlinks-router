@@ -59,6 +59,7 @@ public class ProviderConcurrencyGuard {
 
         ProxyRuntimePolicy policy = resolvePolicy(provider);
         if (!policy.concurrencyLimitEnabled() || policy.maxConcurrentPerToken() <= 0) {
+            ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " 未启用并发限制，直接放行");
             return new ProviderPermitLease(
                     provider.getId(),
                     token.getId(),
@@ -80,10 +81,14 @@ public class ProviderConcurrencyGuard {
                     TimeUnit.MILLISECONDS
             );
             if (permitId == null || permitId.isBlank()) {
-                log.debug("Provider token concurrency limit reached. providerId={}, providerTokenId={}, requestId={}",
-                        provider.getId(), token.getId(), requestId);
+                ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId()
+                        + " 触发并发限流，未拿到许可(maxConcurrent=" + policy.maxConcurrentPerToken()
+                        + ", acquireTimeoutMs=" + policy.acquireTimeoutMs() + ")");
                 return null;
             }
+            ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId()
+                    + " 获取并发许可成功(permitId=" + permitId
+                    + ", maxConcurrent=" + policy.maxConcurrentPerToken() + ")");
             return new ProviderPermitLease(
                     provider.getId(),
                     token.getId(),
@@ -103,6 +108,7 @@ public class ProviderConcurrencyGuard {
             return null;
         }
         long intervalMs = Math.max(context.getSessionRenewIntervalMs(), 1000);
+        ProxyRequestTrace.addRouteEvent("启动 provider token 许可续租任务(intervalMs=" + intervalMs + ")");
         return renewScheduler.scheduleAtFixedRate(
                 () -> renewQuietly(context),
                 Duration.ofMillis(intervalMs)
@@ -123,11 +129,13 @@ public class ProviderConcurrencyGuard {
         try {
             String semaphoreKey = buildSemaphoreKey(context.getProviderId(), context.getProviderTokenId());
             redissonClient.getPermitExpirableSemaphore(semaphoreKey).release(context.getProviderPermitId());
+            ProxyRequestTrace.addRouteEvent("释放 provider token 并发许可成功(permitId=" + context.getProviderPermitId() + ")");
         } catch (Exception e) {
-            log.warn("Failed to release provider permit. providerId={}, providerTokenId={}, requestId={}, msg={}",
+            log.warn("释放 provider token 并发许可失败。providerId={}, providerTokenId={}, requestId={}, permitId={}, msg={}",
                     context.getProviderId(),
                     context.getProviderTokenId(),
                     context.getRequestId(),
+                    context.getProviderPermitId(),
                     e.getMessage());
         }
     }
@@ -142,10 +150,11 @@ public class ProviderConcurrencyGuard {
                             TimeUnit.MILLISECONDS
                     );
         } catch (Exception e) {
-            log.warn("Failed to renew provider permit lease. providerId={}, providerTokenId={}, requestId={}, msg={}",
+            log.warn("续租 provider token 许可失败。providerId={}, providerTokenId={}, requestId={}, permitId={}, msg={}",
                     context.getProviderId(),
                     context.getProviderTokenId(),
                     context.getRequestId(),
+                    context.getProviderPermitId(),
                     e.getMessage());
         }
     }

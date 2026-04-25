@@ -3,6 +3,7 @@ package site.xlinks.ai.router.service.routing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.context.UsageDecision;
+import site.xlinks.ai.router.service.ProxyRequestTrace;
 import site.xlinks.ai.router.service.UsageEntitlementService;
 
 /**
@@ -24,5 +25,10 @@ public class UsageDecisionRoutingStep implements RoutingStep {
             throw ProxyErrors.noUsableEntitlement();
         }
         context.setUsageDecision(usageDecision);
+        ProxyRequestTrace.markUsageDecision(usageDecision);
+        ProxyRequestTrace.addRouteEvent("权益决策完成(planId=" + usageDecision.getPlanId()
+                + ", currentUsageType=" + usageDecision.getCurrentUsageType()
+                + ", packageEnabled=" + usageDecision.isPackageEnabled()
+                + ", balanceEnabled=" + usageDecision.isBalanceEnabled() + ")");
     }
 }

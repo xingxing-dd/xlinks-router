@@ -28,6 +28,15 @@ $BackendServices = @(
         ComposeRoot = "/app/x-links-api"
     },
     @{
+        Name = "api-test"
+        ModuleDir = "xlinks-router-api"
+        DeployHost = "119.28.150.166"
+        DeployUser = "root"
+        DeployPassword = "132311aA."
+        JarTargetDir = "/app/x-links-api/docker/target"
+        ComposeRoot = "/app/x-links-api"
+    },
+    @{
         Name = "client"
         ModuleDir = "xlinks-router-client"
         DeployHost = "106.14.134.62"
@@ -82,6 +91,7 @@ function Get-HostKeyFingerprint {
     param([string]$RemoteHost)
     switch ($RemoteHost) {
         "101.35.218.196" { return "ssh-ed25519 255 SHA256:PfiPY69KeproT34U+fYlVw2A3URhqcCI0sKC6eguGJc" }
+        "119.28.150.166" { return "ssh-ed25519 255 SHA256:/s5Kmh1ukYkGpz/d7r0EvGG3gxtSnCVcriSOqvZSNhw" }
         "106.14.134.62" { return "ssh-ed25519 255 SHA256:Y0bjWgodEzH/lJSp5J+uDcaX9T8Q+Ud2BoIunmpELps" }
         "123.60.29.123" { return "ssh-ed25519 255 SHA256:ggDyPPYBU3G0NgqWzwJ4TK0F9gxc4RYlg+R/g357E+I" }
         default { return $null }
@@ -409,7 +419,14 @@ try {
     Ensure-Command -Name "npm.cmd"
 
     $selectedBackendNames = Normalize-NameList -Values $BackendApps
+    if ($selectedBackendNames.Count -eq 0) {
+        $selectedBackendNames = @("api", "client", "admin")
+    }
+
     $selectedFrontendNames = Normalize-NameList -Values $FrontendApps
+    if ($selectedFrontendNames.Count -eq 0) {
+        $selectedFrontendNames = @("client", "admin")
+    }
 
     $selectedBackendServices = Select-ConfiguredItems -Items $BackendServices -Names $selectedBackendNames -ItemType "backend app"
     $selectedFrontendApps = Select-ConfiguredItems -Items $FrontendAppConfigs -Names $selectedFrontendNames -ItemType "frontend app"

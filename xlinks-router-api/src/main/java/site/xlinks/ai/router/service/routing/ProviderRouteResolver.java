@@ -8,6 +8,7 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.service.ProviderPermitLease;
+import site.xlinks.ai.router.service.ProxyRequestTrace;
 import site.xlinks.ai.router.service.ProviderTokenSelectService;
 import site.xlinks.ai.router.service.RouteCacheService;
 
@@ -37,26 +38,37 @@ public class ProviderRouteResolver {
 
         providerModels = prioritizeMerchantConfiguredProvider(accountId, modelId, providerModels);
         boolean concurrencyLimited = false;
+        Long preferredProviderId = routeCacheService.getMerchantPreferredProviderId(accountId, modelId);
+        ProxyRequestTrace.addRouteEvent("开始选择上游 provider，候选数=" + providerModels.size()
+                + ", preferredProviderId=" + preferredProviderId);
 
         for (ProviderModel candidate : providerModels) {
             if (candidate == null || candidate.getProviderId() == null) {
                 continue;
             }
             if (routeCacheService.isProviderTemporarilyUnavailable(candidate.getProviderId())) {
-                log.warn("Skipping temporarily unavailable provider. providerId={}, modelId={}, modelCode={}, protocol={}",
-                        candidate.getProviderId(), modelId, modelCode, protocol);
+                ProxyRequestTrace.addRouteEvent("触发降级，跳过临时不可用 provider(providerId="
+                        + candidate.getProviderId() + ")");
                 continue;
             }
             Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());
             if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
+                ProxyRequestTrace.addRouteEvent("跳过不可用 provider(providerId=" + candidate.getProviderId()
+                        + ", providerStatus=" + (candidateProvider == null ? null : candidateProvider.getStatus()) + ")");
                 continue;
             }
             ProviderTokenSelectService.SelectionResult selectionResult =
                     providerTokenSelectService.selectTokenLeaseOrNull(candidateProvider, requestId);
             if (selectionResult.token() == null) {
                 concurrencyLimited = concurrencyLimited || selectionResult.concurrencyLimited();
+                ProxyRequestTrace.addRouteEvent("provider=" + candidateProvider.getId()
+                        + " 未选到可用 token，继续尝试下一个 provider(concurrencyLimited="
+                        + selectionResult.concurrencyLimited() + ")");
                 continue;
             }
+            ProxyRequestTrace.addRouteEvent("上游 provider 选择成功(providerId=" + candidateProvider.getId()
+                    + ", providerModelId=" + candidate.getId()
+                    + ", providerTokenId=" + selectionResult.token().getId() + ")");
             return new ResolvedProviderRoute(
                     candidateProvider,
                     candidate,
@@ -66,8 +78,10 @@ public class ProviderRouteResolver {
         }
 
         if (concurrencyLimited) {
+            ProxyRequestTrace.addRouteEvent("所有候选 provider 均因限流未命中");
             throw ProxyErrors.providerTokenRateLimited();
         }
+        ProxyRequestTrace.addRouteEvent("所有候选 provider 均无可用 token");
         throw ProxyErrors.noProviderToken(modelCode);
     }
 

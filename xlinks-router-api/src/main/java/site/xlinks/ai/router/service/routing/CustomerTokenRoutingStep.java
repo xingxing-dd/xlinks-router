@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.service.CustomerTokenAuthService;
+import site.xlinks.ai.router.service.ProxyRequestTrace;
 
 /**
  * Validates customer token access for the requested model.
@@ -21,5 +22,8 @@ public class CustomerTokenRoutingStep implements RoutingStep {
                 context.getRequest().getModel()
         );
         context.setCustomerToken(customerToken);
+        ProxyRequestTrace.markCustomerToken(customerToken);
+        ProxyRequestTrace.addRouteEvent("客户令牌校验通过(accountId=" + customerToken.getAccountId()
+                + ", customerTokenId=" + customerToken.getId() + ")");
     }
 }

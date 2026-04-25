@@ -45,11 +45,11 @@ public class ProviderTokenSelectService {
         if (provider == null || provider.getId() == null) {
             return SelectionResult.none(false);
         }
-        log.debug("Selecting token lease for provider: {}, requestId={}", provider.getId(), requestId);
-
         LocalDateTime now = LocalDateTime.now();
         List<ProviderToken> candidates = listAvailableTokens(provider.getId(), now);
+        ProxyRequestTrace.addRouteEvent("开始选择 provider=" + provider.getId() + " 的 token，候选数=" + candidates.size());
         if (candidates.isEmpty()) {
+            ProxyRequestTrace.addRouteEvent("provider=" + provider.getId() + " 下无可用 token");
             return SelectionResult.none(false);
         }
 
@@ -58,13 +58,16 @@ public class ProviderTokenSelectService {
             ProviderPermitLease lease = providerConcurrencyGuard.tryAcquire(provider, token, requestId);
             if (lease == null) {
                 concurrencyLimited = true;
+                ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " 当前不可用，继续尝试下一个候选");
                 continue;
             }
             token.setLastUsedAt(now);
             routeCacheService.touchProviderToken(token.getId(), now);
-            log.debug("Selected token: {} for provider: {}, requestId={}", token.getId(), provider.getId(), requestId);
+            ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " 选择成功");
             return new SelectionResult(token, lease, false);
         }
+        ProxyRequestTrace.addRouteEvent("provider=" + provider.getId()
+                + " 的 token 选择失败(concurrencyLimited=" + concurrencyLimited + ")");
         return SelectionResult.none(concurrencyLimited);
     }
 

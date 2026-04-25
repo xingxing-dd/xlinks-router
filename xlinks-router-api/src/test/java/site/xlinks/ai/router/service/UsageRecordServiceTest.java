@@ -53,7 +53,7 @@ class UsageRecordServiceTest {
                 .totalTokens(120)
                 .build();
 
-        service.record(context, usageMetrics, 1200L, null, null);
+        service.record(context, usageMetrics, 1200L, null, null, null);
 
         ArgumentCaptor<UsageRecord> captor = ArgumentCaptor.forClass(UsageRecord.class);
         verify(usageRecordMapper).insert(captor.capture());
@@ -109,7 +109,7 @@ class UsageRecordServiceTest {
                 .totalTokens(120)
                 .build();
 
-        service.record(context, usageMetrics, 800L, null, null);
+        service.record(context, usageMetrics, 800L, null, null, null);
 
         ArgumentCaptor<UsageRecord> captor = ArgumentCaptor.forClass(UsageRecord.class);
         verify(usageRecordMapper).insert(captor.capture());
@@ -161,7 +161,7 @@ class UsageRecordServiceTest {
                 .totalTokens(120)
                 .build();
 
-        service.record(context, usageMetrics, 1200L, null, null);
+        service.record(context, usageMetrics, 1200L, null, null, null);
 
         verify(customerPlanService).consumeQuota(900L, new BigDecimal("0.000360"));
         verify(walletService, never()).debitBasic(

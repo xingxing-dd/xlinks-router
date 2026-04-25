@@ -3,6 +3,7 @@ package site.xlinks.ai.router.service.routing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.dto.ProxyRequest;
+import site.xlinks.ai.router.service.ProxyRequestTrace;
 
 import java.util.List;
 
@@ -29,6 +30,7 @@ public class ProxyRoutingPipeline {
                 providerRouteSelectionStep
         );
         for (RoutingStep step : steps) {
+            ProxyRequestTrace.addRouteEvent("执行路由步骤: " + step.getClass().getSimpleName());
             step.apply(context);
         }
         return context;

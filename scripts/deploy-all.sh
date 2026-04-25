@@ -15,8 +15,10 @@ SKIP_FRONTEND_DEPLOY=0
 SELECTED_BACKEND_NAMES=()
 SELECTED_FRONTEND_NAMES=()
 
-BACKEND_NAMES=("api" "client" "admin")
-FRONTEND_NAMES=("client" "admin")
+VALID_BACKEND_NAMES=("api" "api-test" "client" "admin")
+DEFAULT_BACKEND_NAMES=("api" "client" "admin")
+VALID_FRONTEND_NAMES=("client" "admin")
+DEFAULT_FRONTEND_NAMES=("client" "admin")
 
 usage() {
   cat <<'EOF'
@@ -107,9 +109,9 @@ validate_names() {
   local name
 
   if [[ "$item_type" == "backend" ]]; then
-    known_names=("${BACKEND_NAMES[@]}")
+    known_names=("${VALID_BACKEND_NAMES[@]}")
   else
-    known_names=("${FRONTEND_NAMES[@]}")
+    known_names=("${VALID_FRONTEND_NAMES[@]}")
   fi
 
   for name in "${selected[@]}"; do
@@ -150,6 +152,7 @@ invoke_local_command() {
 backend_module_dir() {
   case "$1" in
     api) printf '%s\n' "xlinks-router-api" ;;
+    api-test) printf '%s\n' "xlinks-router-api" ;;
     client) printf '%s\n' "xlinks-router-client" ;;
     admin) printf '%s\n' "xlinks-router-admin" ;;
     *) return 1 ;;
@@ -159,6 +162,7 @@ backend_module_dir() {
 backend_deploy_host() {
   case "$1" in
     api) printf '%s\n' "101.35.218.196" ;;
+    api-test) printf '%s\n' "119.28.150.166" ;;
     client|admin) printf '%s\n' "106.14.134.62" ;;
     *) return 1 ;;
   esac
@@ -175,6 +179,7 @@ backend_deploy_password() {
 backend_jar_target_dir() {
   case "$1" in
     api) printf '%s\n' "/app/x-links-api/docker/target" ;;
+    api-test) printf '%s\n' "/app/x-links-api/docker/target" ;;
     client) printf '%s\n' "/app/x-links-client/docker/target" ;;
     admin) printf '%s\n' "/app/x-links-admin/docker/target" ;;
     *) return 1 ;;
@@ -184,6 +189,7 @@ backend_jar_target_dir() {
 backend_compose_root() {
   case "$1" in
     api) printf '%s\n' "/app/x-links-api" ;;
+    api-test) printf '%s\n' "/app/x-links-api" ;;
     client) printf '%s\n' "/app/x-links-client" ;;
     admin) printf '%s\n' "/app/x-links-admin" ;;
     *) return 1 ;;
@@ -225,6 +231,7 @@ frontend_compose_root() {
 host_key_fingerprint() {
   case "$1" in
     101.35.218.196) printf '%s\n' "SHA256:PfiPY69KeproT34U+fYlVw2A3URhqcCI0sKC6eguGJc" ;;
+    119.28.150.166) printf '%s\n' "SHA256:/s5Kmh1ukYkGpz/d7r0EvGG3gxtSnCVcriSOqvZSNhw" ;;
     106.14.134.62) printf '%s\n' "SHA256:Y0bjWgodEzH/lJSp5J+uDcaX9T8Q+Ud2BoIunmpELps" ;;
     123.60.29.123) printf '%s\n' "SHA256:ggDyPPYBU3G0NgqWzwJ4TK0F9gxc4RYlg+R/g357E+I" ;;
     *) printf '\n' ;;
@@ -279,7 +286,7 @@ run_expect() {
     return 0
   fi
 
-  expect <<'EOF' -- "$program" "$password" "$@"
+  expect -f - -- "$program" "$password" "$@" <<'EOF'
 set timeout -1
 set program [lindex $argv 0]
 set password [lindex $argv 1]
@@ -619,10 +626,10 @@ SELECTED_BACKEND_SERVICES=("${SELECTED_BACKEND_NAMES[@]}")
 SELECTED_FRONTEND_APPS=("${SELECTED_FRONTEND_NAMES[@]}")
 
 if [[ "${#SELECTED_BACKEND_SERVICES[@]}" -eq 0 ]]; then
-  SELECTED_BACKEND_SERVICES=("${BACKEND_NAMES[@]}")
+  SELECTED_BACKEND_SERVICES=("${DEFAULT_BACKEND_NAMES[@]}")
 fi
 if [[ "${#SELECTED_FRONTEND_APPS[@]}" -eq 0 ]]; then
-  SELECTED_FRONTEND_APPS=("${FRONTEND_NAMES[@]}")
+  SELECTED_FRONTEND_APPS=("${DEFAULT_FRONTEND_NAMES[@]}")
 fi
 
 RUN_BACKEND=0

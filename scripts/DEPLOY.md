@@ -46,7 +46,7 @@ macOS / Linux:
 
 ## Options
 - `-Scope all|backend|frontend` (default: `all`)
-- `-BackendApps <name[,name...]>` 指定后端应用（可选值：`api`,`client`,`admin`）
+- `-BackendApps <name[,name...]>` 指定后端应用（可选值：`api`,`api-test`,`client`,`admin`）
 - `-FrontendApps <name[,name...]>` 指定前端应用（可选值：`client`,`admin`）
 - `-DryRun` print commands only, do not execute
 - `-SkipBackendBuild`
@@ -60,6 +60,9 @@ Examples:
 ```powershell
 # Full dry run
 powershell -File .\scripts\deploy-all.ps1 -DryRun
+
+# Deploy api test env
+powershell -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api-test
 
 # Deploy backend only
 powershell -File .\scripts\deploy-all.ps1 -Scope backend
@@ -80,6 +83,9 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
 ```bash
 # Full dry run
 ./scripts/deploy-all.sh --dry-run
+
+# Deploy api test env
+./scripts/deploy-all.sh --scope backend --backend-apps api-test
 
 # Deploy backend only
 ./scripts/deploy-all.sh --scope backend
@@ -104,5 +110,9 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
 - Frontend deploy targets:
   - client -> `101.35.218.196:/app/simple-nginx/docker`
   - admin -> `123.60.29.123:/app/simple-nginx/docker`
+- Backend deploy targets:
+  - api -> `101.35.218.196:/app/x-links-api/docker/target` (prod)
+  - api-test -> `119.28.150.166:/app/x-links-api/docker/target` (test)
+- `api-test` 当前复用和 `api` 相同的远端目录与 `docker-compose` 根目录；如果测试环境目录不同，请同步修改两个脚本。
 - SSH host keys are pinned in script for configured servers.
 - Server addresses and passwords are currently in-script constants. Adjust in `scripts/deploy-all.ps1` or `scripts/deploy-all.sh` if needed.
