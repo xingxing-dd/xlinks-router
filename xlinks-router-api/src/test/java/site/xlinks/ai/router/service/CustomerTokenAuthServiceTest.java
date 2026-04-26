@@ -10,12 +10,56 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CustomerTokenAuthServiceTest {
+
+    @Test
+    void shouldValidateTokenAgainstFreshDatabaseRecord() {
+        RouteCacheService routeCacheService = mock(RouteCacheService.class);
+        CustomerTokenMapper customerTokenMapper = mock(CustomerTokenMapper.class);
+        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper);
+
+        CustomerToken cachedToken = buildToken();
+        CustomerToken freshToken = buildToken();
+        freshToken.setCustomerName("fresh-demo");
+
+        when(routeCacheService.getCustomerTokenByValue("sk-token")).thenReturn(cachedToken);
+        when(customerTokenMapper.selectById(cachedToken.getId())).thenReturn(freshToken);
+
+        CustomerToken result = service.validateToken("sk-token");
+
+        assertSame(freshToken, result);
+        verify(routeCacheService, times(1)).getCustomerTokenByValue("sk-token");
+        verify(customerTokenMapper, times(1)).selectById(cachedToken.getId());
+        verify(routeCacheService, times(1)).cacheCustomerToken(freshToken);
+    }
+
+    @Test
+    void shouldRejectValidateTokenWhenFreshTokenValueDoesNotMatch() {
+        RouteCacheService routeCacheService = mock(RouteCacheService.class);
+        CustomerTokenMapper customerTokenMapper = mock(CustomerTokenMapper.class);
+        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper);
+
+        CustomerToken cachedToken = buildToken();
+        CustomerToken freshToken = buildToken();
+        freshToken.setTokenValue("sk-new-token");
+
+        when(routeCacheService.getCustomerTokenByValue("sk-token")).thenReturn(cachedToken);
+        when(customerTokenMapper.selectById(cachedToken.getId())).thenReturn(freshToken);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.validateToken("sk-token"));
+
+        assertEquals("Invalid token", exception.getMessage());
+        verify(routeCacheService, times(1)).getCustomerTokenByValue("sk-token");
+        verify(customerTokenMapper, times(1)).selectById(cachedToken.getId());
+        verify(routeCacheService, never()).cacheCustomerToken(freshToken);
+    }
 
     @Test
     void shouldRejectWhenCachedQuotaAlreadyReached() {

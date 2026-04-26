@@ -33,10 +33,15 @@ public class CustomerTokenAuthService {
      */
     public CustomerToken validateToken(String token) {
         LocalDateTime now = LocalDateTime.now();
-        CustomerToken customerToken = loadCustomerToken(token);
-        assertTokenState(customerToken, now);
-        log.debug("Token validated for customer: {}", customerToken.getCustomerName());
-        return customerToken;
+        CustomerToken cachedToken = loadCustomerToken(token);
+        assertTokenState(cachedToken, now);
+        CustomerToken freshToken = resolveFreshCustomerToken(cachedToken, token);
+        assertTokenState(freshToken, now);
+        if (freshToken != cachedToken) {
+            routeCacheService.cacheCustomerToken(freshToken);
+        }
+        log.debug("Token validated for customer: {}", freshToken.getCustomerName());
+        return freshToken;
     }
 
     /**

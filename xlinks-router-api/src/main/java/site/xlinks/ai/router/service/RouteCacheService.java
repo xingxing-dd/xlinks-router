@@ -469,6 +469,14 @@ public class RouteCacheService {
             return;
         }
         Map<String, CustomerToken> nextByValue = new HashMap<>(customerTokenByValueCache);
+        if (customerToken.getId() != null) {
+            nextByValue.entrySet().removeIf(entry -> {
+                CustomerToken existing = entry.getValue();
+                return existing != null
+                        && customerToken.getId().equals(existing.getId())
+                        && !customerToken.getTokenValue().equals(entry.getKey());
+            });
+        }
         nextByValue.put(customerToken.getTokenValue(), customerToken);
 
         Map<Long, CustomerToken> nextById = new HashMap<>(customerTokenByIdCache);
