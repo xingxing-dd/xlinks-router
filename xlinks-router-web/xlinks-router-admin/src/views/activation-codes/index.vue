@@ -202,10 +202,21 @@ const handleDelete = async (record) => {
 const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text)
-    toastStore.push('激活码已复制', 'success')
+    toastStore.push('内容已复制', 'success')
   } catch (error) {
     toastStore.push('当前环境不支持自动复制', 'warning')
   }
+}
+
+const maskText = (value, head = 6, tail = 4) => {
+  if (!value) {
+    return '-'
+  }
+  const text = String(value)
+  if (text.length <= head + tail + 3) {
+    return text
+  }
+  return `${text.slice(0, head)}...${text.slice(-tail)}`
 }
 
 const copyGeneratedCodes = () => {
@@ -325,8 +336,14 @@ onMounted(async () => {
               </tr>
               <tr v-for="record in records" :key="record.id">
                 <td>
-                  <div class="font-mono text-sm text-slate-800 break-all">{{ record.activationCode }}</div>
-                  <button class="btn-text mt-2" @click="copyText(record.activationCode)">复制</button>
+                  <button
+                    class="copy-chip max-w-[220px]"
+                    :title="`点击复制完整激活码\n${record.activationCode}`"
+                    @click="copyText(record.activationCode)"
+                  >
+                    <span class="font-mono">{{ maskText(record.activationCode, 6, 4) }}</span>
+                    <span class="copy-chip-hint">复制</span>
+                  </button>
                 </td>
                 <td>
                   <div class="font-medium text-slate-800">{{ record.planName || '-' }}</div>
@@ -343,7 +360,19 @@ onMounted(async () => {
                 <td>{{ record.usedAccount || '-' }}</td>
                 <td>{{ formatDateTime(record.usedAt) }}</td>
                 <td>{{ record.subscriptionId || '-' }}</td>
-                <td>{{ record.orderId || '-' }}</td>
+                <td>
+                  <template v-if="record.orderId">
+                    <button
+                      class="copy-chip max-w-[220px]"
+                      :title="`点击复制完整订单号\n${record.orderId}`"
+                      @click="copyText(record.orderId)"
+                    >
+                      <span class="font-mono">{{ maskText(record.orderId, 8, 6) }}</span>
+                      <span class="copy-chip-hint">复制</span>
+                    </button>
+                  </template>
+                  <span v-else>-</span>
+                </td>
                 <td class="max-w-[180px] break-words">{{ record.remark || '-' }}</td>
                 <td>{{ formatDateTime(record.updatedAt) }}</td>
                 <td>
