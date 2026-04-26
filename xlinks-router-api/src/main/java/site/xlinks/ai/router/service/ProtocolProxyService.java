@@ -166,7 +166,6 @@ public class ProtocolProxyService {
 
     public Object listModels(String token) {
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-        long createdEpoch = System.currentTimeMillis() / 1000;
         List<Model> models = routeCacheService.listModels();
         List<Object> modelList = models.stream()
                 .filter(model -> model.getModelCode() != null && !model.getModelCode().isBlank())
@@ -174,8 +173,8 @@ public class ProtocolProxyService {
                 .map(model -> Map.of(
                         "id", model.getModelCode(),
                         "object", "model",
-                        "created", createdEpoch,
-                        "owned_by", "xlinks-router"
+                        "created", 0,
+                        "owned_by", "openai"
                 ))
                 .collect(Collectors.toList());
 

@@ -28,7 +28,7 @@ public class BearerTokenInterceptor implements HandlerInterceptor {
             writeUnauthorized(response, "Missing Authorization header");
             return false;
         }
-
+        log.debug("Authorization header received: {}", authorization);
         String token = parseBearerToken(authorization);
         if (token == null || token.isEmpty()) {
             writeUnauthorized(response, "Invalid Authorization header, expected: Bearer {token}");

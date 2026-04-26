@@ -1,6 +1,7 @@
 package site.xlinks.ai.router.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -10,51 +11,33 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Customer Token 实体类
+ * Customer token entity.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("customer_tokens")
 public class CustomerToken extends BaseEntity {
 
-    /**
-     * 主键
-     */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /**
-     * 账户 ID
-     */
     private Long accountId;
 
-    /**
-     * 客户名称
-     */
     private String customerName;
 
-    /**
-     * Token 名称
-     */
     private String tokenName;
 
     /**
-     * Token 值（SHA256 哈希存储）
+     * Stored as SHA-256 hash.
      */
     private String tokenValue;
 
-    /**
-     * 状态：1-启用，0-禁用
-     */
     private Integer status;
 
-    /**
-     * 过期时间
-     */
     private LocalDateTime expireTime;
 
     /**
-     * 允许访问的模型列表（JSON）
+     * JSON array string of allowed models.
      */
     private String allowedModels;
 
@@ -79,7 +62,16 @@ public class CustomerToken extends BaseEntity {
     private BigDecimal totalUsedQuota;
 
     /**
-     * 备注
+     * Total tokens consumed by this token today.
      */
+    @TableField(exist = false)
+    private Long todayUsedTokens;
+
+    /**
+     * Total tokens consumed by this token across all time.
+     */
+    @TableField(exist = false)
+    private Long totalUsedTokens;
+
     private String remark;
 }

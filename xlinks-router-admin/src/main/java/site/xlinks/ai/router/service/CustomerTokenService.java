@@ -14,12 +14,20 @@ import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
+import site.xlinks.ai.router.mapper.UsageRecordAdminMapper;
+import site.xlinks.ai.router.vo.CustomerTokenUsageStatsVO;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Customer token service.
@@ -30,13 +38,16 @@ import java.util.UUID;
 public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, CustomerToken> {
 
     private final CustomerAccountMapper customerAccountMapper;
+    private final UsageRecordAdminMapper usageRecordAdminMapper;
 
     public IPage<CustomerToken> pageQuery(Integer page, Integer pageSize, String customerName, Integer status) {
         LambdaQueryWrapper<CustomerToken> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.hasText(customerName), CustomerToken::getCustomerName, customerName)
                 .eq(status != null, CustomerToken::getStatus, status)
                 .orderByDesc(CustomerToken::getCreatedAt);
-        return this.page(new Page<>(page, pageSize), wrapper);
+        IPage<CustomerToken> tokenPage = this.page(new Page<>(page, pageSize), wrapper);
+        enrichTokenUsage(tokenPage.getRecords());
+        return tokenPage;
     }
 
     public CustomerToken getById(Long id) {
@@ -155,5 +166,42 @@ public class CustomerTokenService extends ServiceImpl<CustomerTokenMapper, Custo
             return null;
         }
         return dailyQuota;
+    }
+
+    private void enrichTokenUsage(List<CustomerToken> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        records.forEach(record -> {
+            record.setTodayUsedTokens(0L);
+            record.setTotalUsedTokens(0L);
+        });
+
+        List<String> tokenHashes = records.stream()
+                .map(CustomerToken::getTokenValue)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (tokenHashes.isEmpty()) {
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime startAt = today.atStartOfDay();
+        LocalDateTime endAt = today.plusDays(1).atStartOfDay();
+        Map<String, CustomerTokenUsageStatsVO> usageByHash = usageRecordAdminMapper
+                .aggregateCustomerTokenUsage(tokenHashes, startAt, endAt)
+                .stream()
+                .filter(item -> StringUtils.hasText(item.getTokenHash()))
+                .collect(Collectors.toMap(CustomerTokenUsageStatsVO::getTokenHash, Function.identity(), (left, right) -> left));
+
+        records.forEach(record -> {
+            CustomerTokenUsageStatsVO usage = usageByHash.get(record.getTokenValue());
+            if (usage == null) {
+                return;
+            }
+            record.setTodayUsedTokens(usage.getTodayUsedTokens() == null ? 0L : usage.getTodayUsedTokens());
+            record.setTotalUsedTokens(usage.getTotalUsedTokens() == null ? 0L : usage.getTotalUsedTokens());
+        });
     }
 }

@@ -124,7 +124,7 @@ onMounted(loadPromotionData)
             <div>
               <h3 class="font-semibold text-slate-900 mb-1">{{ t('promotion.rule1Title') }}</h3>
               <p class="text-sm text-slate-600">
-                {{ t('promotion.rule1Desc', { amount: formatCurrency(rules?.registerReward || 0) }) }}
+                {{ t('promotion.rule1Desc') }}
               </p>
             </div>
           </div>
@@ -136,7 +136,7 @@ onMounted(loadPromotionData)
             <div>
               <h3 class="font-semibold text-slate-900 mb-1">{{ t('promotion.rule2Title') }}</h3>
               <p class="text-sm text-slate-600">
-                {{ t('promotion.rule2Desc', { rate: rules?.firstRechargeRate || 0 }) }}
+                {{ t('promotion.rule2Desc', { amount: formatCurrency(rules?.firstRechargeRate || 5) }) }}
               </p>
             </div>
           </div>
@@ -148,7 +148,7 @@ onMounted(loadPromotionData)
             <div>
               <h3 class="font-semibold text-slate-900 mb-1">{{ t('promotion.rule3Title') }}</h3>
               <p class="text-sm text-slate-600">
-                {{ t('promotion.rule3Desc', { rate: rules?.consumptionRate || 0 }) }}
+                {{ t('promotion.rule3Desc') }}
               </p>
             </div>
           </div>
@@ -160,7 +160,7 @@ onMounted(loadPromotionData)
             <div>
               <h3 class="font-semibold text-slate-900 mb-1">{{ t('promotion.rule4Title') }}</h3>
               <p class="text-sm text-slate-600">
-                {{ t('promotion.rule4Desc', { day: rules?.settlementDay || 1 }) }}
+                {{ t('promotion.rule4Desc') }}
               </p>
             </div>
           </div>

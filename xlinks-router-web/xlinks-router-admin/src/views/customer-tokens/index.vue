@@ -30,6 +30,7 @@ const form = reactive({
 })
 
 const pageCount = computed(() => Math.max(1, Math.ceil((page.total || 0) / page.pageSize)))
+const formatTokenCount = (value) => Number(value || 0).toLocaleString('en-US')
 
 const resetForm = () => {
   Object.assign(form, {
@@ -172,7 +173,7 @@ onMounted(loadTokens)
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">客户 Token</h1>
-        <p class="text-slate-500">为客户账号签发调用凭证，并维护允许访问的模型列表。</p>
+        <p class="text-slate-500">为客户账户签发调用凭证，并维护允许访问的模型列表。</p>
       </div>
       <button class="btn-primary" @click="openCreate">新增客户 Token</button>
     </div>
@@ -214,6 +215,8 @@ onMounted(loadTokens)
                 <th>客户标识</th>
                 <th>Token 名称</th>
                 <th>允许模型</th>
+                <th>今日 Token</th>
+                <th>累计 Token</th>
                 <th>到期时间</th>
                 <th>状态</th>
                 <th>更新时间</th>
@@ -222,7 +225,7 @@ onMounted(loadTokens)
             </thead>
             <tbody>
               <tr v-if="!records.length && !loading">
-                <td colspan="7" class="empty-state">暂无客户 Token 数据</td>
+                <td colspan="9" class="empty-state">暂无客户 Token 数据</td>
               </tr>
               <tr v-for="record in records" :key="record.id">
                 <td>{{ record.customerName }}</td>
@@ -231,6 +234,8 @@ onMounted(loadTokens)
                   <div class="text-xs text-slate-400 mt-1">{{ record.remark || '-' }}</div>
                 </td>
                 <td class="max-w-[280px] break-all">{{ summarizeJsonArray(record.allowedModels) }}</td>
+                <td class="font-mono text-sm text-slate-700">{{ formatTokenCount(record.todayUsedTokens) }}</td>
+                <td class="font-mono text-sm text-slate-700">{{ formatTokenCount(record.totalUsedTokens) }}</td>
                 <td>{{ formatDateTime(record.expireTime) }}</td>
                 <td>
                   <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
