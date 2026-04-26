@@ -22,6 +22,7 @@ import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.service.RetryRouteExclusions;
 import site.xlinks.ai.router.service.routing.ProxyErrors;
 import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
 import site.xlinks.ai.router.service.routing.RoutingBuildContext;
@@ -47,6 +48,7 @@ public class ProtocolProxyService {
 
     private static final int DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY = 128;
     private static final long STREAM_DISPATCH_OFFER_TIMEOUT_MS = 200L;
+    private static final int MAX_UPSTREAM_ATTEMPTS = 3;
     private final CustomerTokenAuthService customerTokenAuthService;
     private final ProviderProtocolAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
@@ -76,28 +78,13 @@ public class ProtocolProxyService {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
-        ScheduledFuture<?> renewFuture = null;
         Throwable unexpectedError = null;
         ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
-            context = buildContext(token, request, requestId);
-            ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
-            renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
-            ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
-            ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
-            ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, false));
-            JsonNode response;
-            try {
-                response = adapter.forwardDirect(request, context);
-            } catch (UpstreamTimeoutException ex) {
-                recordSelectedRouteFailure(context);
-                throw ex;
-            } catch (Exception ex) {
-                recordSelectedRouteFailure(context);
-                throw ex;
-            }
-            clearSelectedRouteFailure(context);
+            DirectInvokeResult invokeResult = forwardDirectWithRetry(token, request, requestId);
+            context = invokeResult.context();
+            JsonNode response = invokeResult.response();
             ProxyRequestTrace.addTimelineEvent("上游响应", "直连响应已返回");
             ProxyRequestTrace.markFirstResponse();
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
@@ -120,8 +107,6 @@ public class ProtocolProxyService {
             unexpectedError = e;
             throw handleUnexpectedError("Proxy request failed", context, e, startAt);
         } finally {
-            providerConcurrencyGuard.cancelAutoRenew(renewFuture);
-            providerConcurrencyGuard.releaseQuietly(context);
             emitTraceSummary(unexpectedError);
         }
     }
@@ -132,68 +117,16 @@ public class ProtocolProxyService {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
-        ScheduledFuture<?> renewFuture = null;
         boolean captureUpstreamStreamPayload = shouldCaptureUpstreamResponsesStreamPayload(request);
         StringBuilder upstreamStreamPayloadBuilder = captureUpstreamStreamPayload ? new StringBuilder() : null;
         Throwable unexpectedError = null;
         ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
-            context = buildContext(token, request, requestId);
-            ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
-            renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
-            ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
-            ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
-            ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, true));
-            AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
-            AtomicReference<Integer> responseMsRef = new AtomicReference<>();
-            int queueCapacity = streamDispatchQueueCapacity <= 0
-                    ? DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY
-                    : streamDispatchQueueCapacity;
-            ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue = new ArrayBlockingQueue<>(queueCapacity);
-            AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
-            CountDownLatch writerDone = new CountDownLatch(1);
-            String modelProvider = context.getModelProvider();
-            sseWriterTaskExecutor.execute(() -> runStreamWriter(streamDispatchQueue, onEvent, writerFailureRef, writerDone));
-            try {
-                adapter.forwardStream(request, context, event -> {
-                    appendStreamEvent(upstreamStreamPayloadBuilder, event);
-                    ProxyRequestTrace.recordStreamEvent(event);
-                    if (isFirstResponseDataEvent(event)) {
-                        long firstResponseMs = System.currentTimeMillis() - startAt;
-                        int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
-                        responseMsRef.compareAndSet(null, normalized);
-                        ProxyRequestTrace.markFirstResponse();
-                    }
-                    UsageMetrics usageMetrics = usageExtractor.extract(event, modelProvider);
-                    if (usageMetrics != null) {
-                        usageMetricsRef.set(usageMetrics);
-                    }
-                    enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
-                });
-                ProxyRequestTrace.addTimelineEvent("流式读取", "上游流读取完成");
-                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                waitStreamWriterDone(writerDone, writerFailureRef);
-                RuntimeException writerFailure = writerFailureRef.get();
-                if (writerFailure != null) {
-                    throw writerFailure;
-                }
-            } catch (ClientAbortException ex) {
-                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                waitStreamWriterDone(writerDone, writerFailureRef);
-                throw ex;
-                } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
-                    enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                    waitStreamWriterDone(writerDone, writerFailureRef);
-                    recordSelectedRouteFailure(context);
-                    throw ex;
-                } catch (Exception ex) {
-                    enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                    waitStreamWriterDone(writerDone, writerFailureRef);
-                    recordSelectedRouteFailure(context);
-                    throw ex;
-                }
-            clearSelectedRouteFailure(context);
+            StreamInvokeResult streamInvokeResult = forwardStreamWithRetry(token, request, requestId, onEvent, upstreamStreamPayloadBuilder, startAt);
+            context = streamInvokeResult.context();
+            AtomicReference<UsageMetrics> usageMetricsRef = streamInvokeResult.usageMetricsRef();
+            AtomicReference<Integer> responseMsRef = streamInvokeResult.responseMsRef();
             usageRecordService.recordAsync(
                     context,
                     usageMetricsRef.get(),
@@ -227,8 +160,6 @@ public class ProtocolProxyService {
             unexpectedError = e;
             throw handleUnexpectedError("Proxy stream failed", context, e, startAt);
         } finally {
-            providerConcurrencyGuard.cancelAutoRenew(renewFuture);
-            providerConcurrencyGuard.releaseQuietly(context);
             emitTraceSummary(unexpectedError);
         }
     }
@@ -257,7 +188,20 @@ public class ProtocolProxyService {
     private ProviderInvokeContext buildContext(String token,
                                                ProxyRequest request,
                                                String requestId) {
-        RoutingBuildContext routingContext = proxyRoutingPipeline.resolve(token, request, requestId);
+        return buildContext(token, request, requestId, new RetryRouteExclusions());
+    }
+
+    private ProviderInvokeContext buildContext(String token,
+                                               ProxyRequest request,
+                                               String requestId,
+                                               RetryRouteExclusions exclusions) {
+        RoutingBuildContext routingContext = proxyRoutingPipeline.resolve(
+                token,
+                request,
+                requestId,
+                exclusions.getProviderIds(),
+                exclusions.getProviderTokenIds()
+        );
         CustomerToken customerToken = routingContext.getCustomerToken();
         UsageDecision usageDecision = routingContext.getUsageDecision();
         Model model = routingContext.getModel();
@@ -276,6 +220,9 @@ public class ProtocolProxyService {
                 : permitLease.runtimePolicy();
         ProviderInvokeContext invokeContext = ProviderInvokeContext.builder()
                 .requestId(requestId)
+                .customerName(usageDecision.getCustomerName())
+                .customerTokenName(customerToken.getTokenName())
+                .planName(usageDecision.getPlanName())
                 .providerId(provider.getId())
                 .providerCode(provider.getProviderCode())
                 .providerName(provider.getProviderName())
@@ -295,6 +242,7 @@ public class ProtocolProxyService {
                 .multiplier(usageDecision.getMultiplier())
                 .modelProvider(model.getModelProvider())
                 .providerModel(upstreamModelCode)
+                .providerModelName(providerModel.getProviderModelName())
                 .planId(usageDecision.getPlanId())
                 .customerTokenId(customerToken.getId())
                 .accountId(customerToken.getAccountId())
@@ -308,6 +256,153 @@ public class ProtocolProxyService {
         ProxyRequestTrace.markInvokeContext(invokeContext);
         ProxyRequestTrace.addRouteEvent("路由解析完成，已确定上游 provider 和 token");
         return invokeContext;
+    }
+
+    private DirectInvokeResult forwardDirectWithRetry(String token,
+                                                      ProxyRequest request,
+                                                      String requestId) {
+        RetryRouteExclusions exclusions = new RetryRouteExclusions();
+        ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
+        UpstreamProviderException lastRetryableFailure = null;
+        for (int attempt = 1; attempt <= MAX_UPSTREAM_ATTEMPTS; attempt++) {
+            ProviderInvokeContext context = buildContext(token, request, requestId, exclusions);
+            ScheduledFuture<?> renewFuture = null;
+            try {
+                logRetryAttempt("直连", attempt, context, exclusions);
+                ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
+                renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
+                ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
+                ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, false));
+                JsonNode response = adapter.forwardDirect(request, context);
+                clearSelectedRouteFailure(context);
+                if (attempt > 1) {
+                    ProxyRequestTrace.addRouteEvent("重试成功，结束重试链路("
+                            + buildRetryRouteDetail(attempt, context) + ")");
+                }
+                return new DirectInvokeResult(context, response);
+            } catch (UpstreamTimeoutException ex) {
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } catch (UpstreamProviderException ex) {
+                recordSelectedRouteFailure(context);
+                ProxyRequestTrace.addRouteEvent("上游失败("
+                        + buildRetryFailureDetail(attempt, context, ex) + ")");
+                if (!shouldRetryProviderFailure(ex, attempt)) {
+                    ProxyRequestTrace.addRouteEvent("不再重试("
+                            + buildRetryStopDetail(attempt, context, ex) + ")");
+                    throw ex;
+                }
+                lastRetryableFailure = ex;
+                exclusions.exclude(context);
+                ProxyRequestTrace.addRouteEvent("准备重试下一个 provider/token("
+                        + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
+            } catch (Exception ex) {
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } finally {
+                providerConcurrencyGuard.cancelAutoRenew(renewFuture);
+                providerConcurrencyGuard.releaseQuietly(context);
+            }
+        }
+        throw lastRetryableFailure == null
+                ? new RuntimeException("Upstream retry exhausted without a captured provider failure")
+                : lastRetryableFailure;
+    }
+
+    private StreamInvokeResult forwardStreamWithRetry(String token,
+                                                      ProxyRequest request,
+                                                      String requestId,
+                                                      Consumer<StreamEvent> onEvent,
+                                                      StringBuilder upstreamStreamPayloadBuilder,
+                                                      long startAt) {
+        RetryRouteExclusions exclusions = new RetryRouteExclusions();
+        ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
+        UpstreamProviderException lastRetryableFailure = null;
+        for (int attempt = 1; attempt <= MAX_UPSTREAM_ATTEMPTS; attempt++) {
+            ProviderInvokeContext context = buildContext(token, request, requestId, exclusions);
+            ScheduledFuture<?> renewFuture = null;
+            AtomicReference<UsageMetrics> usageMetricsRef = new AtomicReference<>();
+            AtomicReference<Integer> responseMsRef = new AtomicReference<>();
+            int queueCapacity = streamDispatchQueueCapacity <= 0
+                    ? DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY
+                    : streamDispatchQueueCapacity;
+            ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue = new ArrayBlockingQueue<>(queueCapacity);
+            AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
+            CountDownLatch writerDone = new CountDownLatch(1);
+            try {
+                logRetryAttempt("流式", attempt, context, exclusions);
+                ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
+                renewFuture = providerConcurrencyGuard.scheduleAutoRenew(context);
+                ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
+                ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, true));
+                String modelProvider = context.getModelProvider();
+                sseWriterTaskExecutor.execute(() -> runStreamWriter(streamDispatchQueue, onEvent, writerFailureRef, writerDone));
+                adapter.forwardStream(request, context, event -> {
+                    appendStreamEvent(upstreamStreamPayloadBuilder, event);
+                    ProxyRequestTrace.recordStreamEvent(event);
+                    if (isFirstResponseDataEvent(event)) {
+                        long firstResponseMs = System.currentTimeMillis() - startAt;
+                        int normalized = firstResponseMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(firstResponseMs, 0L);
+                        responseMsRef.compareAndSet(null, normalized);
+                        ProxyRequestTrace.markFirstResponse();
+                    }
+                    UsageMetrics usageMetrics = usageExtractor.extract(event, modelProvider);
+                    if (usageMetrics != null) {
+                        usageMetricsRef.set(usageMetrics);
+                    }
+                    enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
+                });
+                ProxyRequestTrace.addTimelineEvent("流式读取", "上游流读取完成");
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                RuntimeException writerFailure = writerFailureRef.get();
+                if (writerFailure != null) {
+                    throw writerFailure;
+                }
+                clearSelectedRouteFailure(context);
+                if (attempt > 1) {
+                    ProxyRequestTrace.addRouteEvent("重试成功，结束重试链路("
+                            + buildRetryRouteDetail(attempt, context) + ")");
+                }
+                return new StreamInvokeResult(context, usageMetricsRef, responseMsRef);
+            } catch (ClientAbortException ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                throw ex;
+            } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } catch (UpstreamProviderException ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                recordSelectedRouteFailure(context);
+                ProxyRequestTrace.addRouteEvent("流式上游失败("
+                        + buildRetryFailureDetail(attempt, context, ex) + ")");
+                if (!shouldRetryProviderFailure(ex, attempt) || responseMsRef.get() != null) {
+                    ProxyRequestTrace.addRouteEvent("流式不再重试("
+                            + buildRetryStopDetail(attempt, context, ex)
+                            + ", firstResponseReceived=" + (responseMsRef.get() != null) + ")");
+                    throw ex;
+                }
+                lastRetryableFailure = ex;
+                exclusions.exclude(context);
+                ProxyRequestTrace.addRouteEvent("流式首包前准备重试下一个 provider/token("
+                        + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
+            } catch (Exception ex) {
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } finally {
+                providerConcurrencyGuard.cancelAutoRenew(renewFuture);
+                providerConcurrencyGuard.releaseQuietly(context);
+            }
+        }
+        throw lastRetryableFailure == null
+                ? new RuntimeException("Upstream stream retry exhausted without a captured provider failure")
+                : lastRetryableFailure;
     }
 
     private ProviderProtocolAdapter resolveAdapter(ProxyProtocol protocol) {
@@ -391,6 +486,62 @@ public class ProtocolProxyService {
         routeCacheService.clearProviderFailure(context.getProviderId());
     }
 
+    private boolean shouldRetryProviderFailure(UpstreamProviderException exception, int attempt) {
+        return exception != null
+                && exception.isRetryable()
+                && attempt < MAX_UPSTREAM_ATTEMPTS;
+    }
+
+    private void logRetryAttempt(String mode,
+                                 int attempt,
+                                 ProviderInvokeContext context,
+                                 RetryRouteExclusions exclusions) {
+        if (attempt <= 1) {
+            return;
+        }
+        ProxyRequestTrace.addRouteEvent(mode + "重试开始("
+                + buildRetryRouteDetail(attempt, context)
+                + ", excludedProviderIds=" + exclusions.getProviderIds()
+                + ", excludedProviderTokenIds=" + exclusions.getProviderTokenIds()
+                + ")");
+    }
+
+    private String buildRetryRouteDetail(int attempt, ProviderInvokeContext context) {
+        return "attempt=" + attempt + "/" + MAX_UPSTREAM_ATTEMPTS
+                + ", providerId=" + nullSafe(context == null ? null : context.getProviderId())
+                + ", providerCode=" + nullSafe(context == null ? null : context.getProviderCode())
+                + ", providerTokenId=" + nullSafe(context == null ? null : context.getProviderTokenId())
+                + ", providerModel=" + nullSafe(context == null ? null : context.getProviderModel())
+                + ", modelCode=" + nullSafe(context == null ? null : context.getModelCode())
+                + ", baseUrl=" + nullSafe(context == null ? null : context.getBaseUrl());
+    }
+
+    private String buildRetryFailureDetail(int attempt,
+                                           ProviderInvokeContext context,
+                                           UpstreamProviderException exception) {
+        return buildRetryRouteDetail(attempt, context)
+                + ", statusCode=" + nullSafe(exception == null ? null : exception.getStatusCode())
+                + ", retryable=" + (exception != null && exception.isRetryable())
+                + ", bodyPreview=" + abbreviateForLog(exception == null ? null : exception.getResponseBody(), 240);
+    }
+
+    private String buildRetryPlanDetail(int attempt,
+                                        ProviderInvokeContext context,
+                                        UpstreamProviderException exception,
+                                        RetryRouteExclusions exclusions) {
+        return buildRetryFailureDetail(attempt, context, exception)
+                + ", nextAttempt=" + (attempt + 1) + "/" + MAX_UPSTREAM_ATTEMPTS
+                + ", excludedProviderIds=" + exclusions.getProviderIds()
+                + ", excludedProviderTokenIds=" + exclusions.getProviderTokenIds();
+    }
+
+    private String buildRetryStopDetail(int attempt,
+                                        ProviderInvokeContext context,
+                                        UpstreamProviderException exception) {
+        return buildRetryFailureDetail(attempt, context, exception)
+                + ", maxAttemptsReached=" + (attempt >= MAX_UPSTREAM_ATTEMPTS);
+    }
+
     private boolean isFirstResponseDataEvent(StreamEvent event) {
         if (event == null || event.isDoneSignal()) {
             return false;
@@ -446,6 +597,24 @@ public class ProtocolProxyService {
             return baseUrl + "/" + path;
         }
         return baseUrl + path;
+    }
+
+    private String abbreviateForLog(String text, int maxLength) {
+        if (text == null || text.isBlank()) {
+            return "-";
+        }
+        if (maxLength <= 0 || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
+    }
+
+    private record DirectInvokeResult(ProviderInvokeContext context, JsonNode response) {
+    }
+
+    private record StreamInvokeResult(ProviderInvokeContext context,
+                                      AtomicReference<UsageMetrics> usageMetricsRef,
+                                      AtomicReference<Integer> responseMsRef) {
     }
 
     private String formatTokenForLog(String token) {

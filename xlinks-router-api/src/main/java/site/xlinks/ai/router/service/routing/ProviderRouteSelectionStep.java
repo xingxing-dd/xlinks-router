@@ -20,7 +20,9 @@ public class ProviderRouteSelectionStep implements RoutingStep {
                 context.getModel().getId(),
                 context.getModel().getModelCode(),
                 context.getRequest().getProtocol(),
-                context.getRequestId()
+                context.getRequestId(),
+                context.getExcludedProviderIds(),
+                context.getExcludedProviderTokenIds()
         );
         context.setProvider(route.provider());
         context.setProviderModel(route.providerModel());
@@ -28,6 +30,8 @@ public class ProviderRouteSelectionStep implements RoutingStep {
         context.setProviderPermitLease(route.providerPermitLease());
         ProxyRequestTrace.markRouteResolved(route.provider(), route.providerModel(), route.providerToken(), route.providerPermitLease());
         ProxyRequestTrace.addRouteEvent("已选定 provider(providerId=" + route.provider().getId()
-                + ", providerTokenId=" + route.providerToken().getId() + ")");
+                + ", providerName=" + route.provider().getProviderName()
+                + ", providerTokenId=" + route.providerToken().getId()
+                + ", providerTokenName=" + route.providerToken().getTokenName() + ")");
     }
 }

@@ -14,6 +14,12 @@ public class ProviderInvokeContext {
 
     private String requestId;
 
+    private String customerName;
+
+    private String customerTokenName;
+
+    private String planName;
+
     private Long providerId;
 
     private String providerCode;
@@ -69,6 +75,8 @@ public class ProviderInvokeContext {
      * Real upstream model code.
      */
     private String providerModel;
+
+    private String providerModelName;
 
     private Long planId;
 

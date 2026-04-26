@@ -14,6 +14,7 @@ import site.xlinks.ai.router.service.RouteCacheService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Resolves the first available provider route for a model/protocol pair.
@@ -31,6 +32,16 @@ public class ProviderRouteResolver {
                                          String modelCode,
                                          ProxyProtocol protocol,
                                          String requestId) {
+        return resolve(accountId, modelId, modelCode, protocol, requestId, Set.of(), Set.of());
+    }
+
+    public ResolvedProviderRoute resolve(Long accountId,
+                                         Long modelId,
+                                         String modelCode,
+                                         ProxyProtocol protocol,
+                                         String requestId,
+                                         Set<Long> excludedProviderIds,
+                                         Set<Long> excludedProviderTokenIds) {
         List<ProviderModel> providerModels = routeCacheService.listProviderModelsByPriority(modelId, protocol);
         if (providerModels == null || providerModels.isEmpty()) {
             throw ProxyErrors.noProviderMapping(modelCode);
@@ -46,6 +57,11 @@ public class ProviderRouteResolver {
             if (candidate == null || candidate.getProviderId() == null) {
                 continue;
             }
+            if (excludedProviderIds != null && excludedProviderIds.contains(candidate.getProviderId())) {
+                ProxyRequestTrace.addRouteEvent("跳过已重试失败 provider(providerId="
+                        + candidate.getProviderId() + ")");
+                continue;
+            }
             if (routeCacheService.isProviderTemporarilyUnavailable(candidate.getProviderId())) {
                 ProxyRequestTrace.addRouteEvent("触发降级，跳过临时不可用 provider(providerId="
                         + candidate.getProviderId() + ")");
@@ -58,7 +74,11 @@ public class ProviderRouteResolver {
                 continue;
             }
             ProviderTokenSelectService.SelectionResult selectionResult =
-                    providerTokenSelectService.selectTokenLeaseOrNull(candidateProvider, requestId);
+                    providerTokenSelectService.selectTokenLeaseOrNull(
+                            candidateProvider,
+                            requestId,
+                            excludedProviderTokenIds
+                    );
             if (selectionResult.token() == null) {
                 concurrencyLimited = concurrencyLimited || selectionResult.concurrencyLimited();
                 ProxyRequestTrace.addRouteEvent("provider=" + candidateProvider.getId()
@@ -67,7 +87,9 @@ public class ProviderRouteResolver {
                 continue;
             }
             ProxyRequestTrace.addRouteEvent("上游 provider 选择成功(providerId=" + candidateProvider.getId()
+                    + ", providerName=" + candidateProvider.getProviderName()
                     + ", providerModelId=" + candidate.getId()
+                    + ", providerModelName=" + candidate.getProviderModelName()
                     + ", providerTokenId=" + selectionResult.token().getId() + ")");
             return new ResolvedProviderRoute(
                     candidateProvider,

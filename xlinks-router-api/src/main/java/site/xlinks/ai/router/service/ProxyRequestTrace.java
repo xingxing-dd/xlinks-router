@@ -138,6 +138,8 @@ public final class ProxyRequestTrace {
         }
         context.customerTokenId = customerToken.getId();
         context.accountId = customerToken.getAccountId();
+        context.customerName = customerToken.getCustomerName();
+        context.customerTokenName = customerToken.getTokenName();
     }
 
     public static void markUsageDecision(UsageDecision usageDecision) {
@@ -146,6 +148,7 @@ public final class ProxyRequestTrace {
             return;
         }
         context.planId = usageDecision.getPlanId();
+        context.planName = usageDecision.getPlanName();
     }
 
     public static void markModel(Model model) {
@@ -154,6 +157,7 @@ public final class ProxyRequestTrace {
             return;
         }
         context.modelCode = model.getModelCode();
+        context.modelName = model.getModelName();
     }
 
     public static void markRouteResolved(Provider provider,
@@ -167,12 +171,17 @@ public final class ProxyRequestTrace {
         if (provider != null) {
             context.providerId = provider.getId();
             context.providerCode = provider.getProviderCode();
+            context.providerName = provider.getProviderName();
         }
         if (providerToken != null) {
             context.providerTokenId = providerToken.getId();
+            context.providerTokenName = providerToken.getTokenName();
         }
         if (providerModel != null && providerModel.getProviderModelCode() != null && !providerModel.getProviderModelCode().isBlank()) {
             context.providerModel = providerModel.getProviderModelCode();
+        }
+        if (providerModel != null && providerModel.getProviderModelName() != null && !providerModel.getProviderModelName().isBlank()) {
+            context.providerModelName = providerModel.getProviderModelName();
         }
         if (permitLease != null && permitLease.runtimePolicy() != null) {
             context.requestTimeoutMs = permitLease.runtimePolicy().requestTimeoutMs();
@@ -188,14 +197,21 @@ public final class ProxyRequestTrace {
         }
         context.requestId = invokeContext.getRequestId();
         context.protocol = invokeContext.getEndpointCode();
+        context.customerName = invokeContext.getCustomerName();
+        context.customerTokenName = invokeContext.getCustomerTokenName();
         context.accountId = invokeContext.getAccountId();
         context.customerTokenId = invokeContext.getCustomerTokenId();
         context.planId = invokeContext.getPlanId();
+        context.planName = invokeContext.getPlanName();
         context.modelCode = invokeContext.getModelCode();
+        context.modelName = invokeContext.getModelName();
         context.providerId = invokeContext.getProviderId();
         context.providerCode = invokeContext.getProviderCode();
+        context.providerName = invokeContext.getProviderName();
         context.providerTokenId = invokeContext.getProviderTokenId();
+        context.providerTokenName = invokeContext.getProviderTokenName();
         context.providerModel = invokeContext.getProviderModel();
+        context.providerModelName = invokeContext.getProviderModelName();
         context.requestTimeoutMs = invokeContext.getRequestTimeoutMs();
         context.streamFirstResponseTimeoutMs = invokeContext.getStreamFirstResponseTimeoutMs();
         context.streamIdleTimeoutMs = invokeContext.getStreamIdleTimeoutMs();
@@ -263,18 +279,25 @@ public final class ProxyRequestTrace {
                 .append(", stream=").append(context.stream)
                 .append(", customerModel=").append(nullSafe(context.customerModel))
                 .append(", modelCode=").append(nullSafe(context.modelCode))
+                .append(", modelName=").append(nullSafe(context.modelName))
                 .append('\n').append("开始时间=").append(formatTime(context.requestStartAt))
                 .append(", 首包时间=").append(formatTime(context.firstResponseAt))
                 .append(", 完成时间=").append(formatTime(completedAt))
                 .append(", 总耗时Ms=").append(elapsedMs)
                 .append(", 首包耗时Ms=").append(firstResponseMs == null ? "-" : firstResponseMs)
                 .append('\n').append("账号信息: accountId=").append(nullSafe(context.accountId))
+                .append(", customerName=").append(nullSafe(context.customerName))
                 .append(", customerTokenId=").append(nullSafe(context.customerTokenId))
+                .append(", customerTokenName=").append(nullSafe(context.customerTokenName))
                 .append(", planId=").append(nullSafe(context.planId))
+                .append(", planName=").append(nullSafe(context.planName))
                 .append('\n').append("路由结果: providerId=").append(nullSafe(context.providerId))
                 .append(", providerCode=").append(nullSafe(context.providerCode))
+                .append(", providerName=").append(nullSafe(context.providerName))
                 .append(", providerTokenId=").append(nullSafe(context.providerTokenId))
+                .append(", providerTokenName=").append(nullSafe(context.providerTokenName))
                 .append(", providerModel=").append(nullSafe(context.providerModel))
+                .append(", providerModelName=").append(nullSafe(context.providerModelName))
                 .append(", requestTimeoutMs=").append(nullSafe(context.requestTimeoutMs))
                 .append(", streamFirstResponseTimeoutMs=").append(nullSafe(context.streamFirstResponseTimeoutMs))
                 .append(", streamIdleTimeoutMs=").append(nullSafe(context.streamIdleTimeoutMs))
@@ -332,14 +355,21 @@ public final class ProxyRequestTrace {
         private String protocol;
         private boolean stream;
         private String customerModel;
+        private String customerName;
+        private String customerTokenName;
         private Long accountId;
         private Long customerTokenId;
         private Long planId;
+        private String planName;
         private String modelCode;
+        private String modelName;
         private Long providerId;
         private String providerCode;
+        private String providerName;
         private Long providerTokenId;
+        private String providerTokenName;
         private String providerModel;
+        private String providerModelName;
         private Integer requestTimeoutMs;
         private Integer streamFirstResponseTimeoutMs;
         private Integer streamIdleTimeoutMs;

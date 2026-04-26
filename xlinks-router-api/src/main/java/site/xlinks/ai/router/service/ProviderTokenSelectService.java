@@ -12,6 +12,7 @@ import site.xlinks.ai.router.service.routing.ProxyErrors;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Selects available provider tokens and acquires concurrency permits when needed.
@@ -42,6 +43,12 @@ public class ProviderTokenSelectService {
     }
 
     public SelectionResult selectTokenLeaseOrNull(Provider provider, String requestId) {
+        return selectTokenLeaseOrNull(provider, requestId, Set.of());
+    }
+
+    public SelectionResult selectTokenLeaseOrNull(Provider provider,
+                                                  String requestId,
+                                                  Set<Long> excludedProviderTokenIds) {
         if (provider == null || provider.getId() == null) {
             return SelectionResult.none(false);
         }
@@ -55,6 +62,10 @@ public class ProviderTokenSelectService {
 
         boolean concurrencyLimited = false;
         for (ProviderToken token : candidates) {
+            if (excludedProviderTokenIds != null && excludedProviderTokenIds.contains(token.getId())) {
+                ProxyRequestTrace.addRouteEvent("跳过已重试失败 providerToken=" + token.getId());
+                continue;
+            }
             ProviderPermitLease lease = providerConcurrencyGuard.tryAcquire(provider, token, requestId);
             if (lease == null) {
                 concurrencyLimited = true;

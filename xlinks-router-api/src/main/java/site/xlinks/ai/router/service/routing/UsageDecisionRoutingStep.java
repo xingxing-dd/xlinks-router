@@ -27,6 +27,7 @@ public class UsageDecisionRoutingStep implements RoutingStep {
         context.setUsageDecision(usageDecision);
         ProxyRequestTrace.markUsageDecision(usageDecision);
         ProxyRequestTrace.addRouteEvent("权益决策完成(planId=" + usageDecision.getPlanId()
+                + ", planName=" + usageDecision.getPlanName()
                 + ", currentUsageType=" + usageDecision.getCurrentUsageType()
                 + ", packageEnabled=" + usageDecision.isPackageEnabled()
                 + ", balanceEnabled=" + usageDecision.isBalanceEnabled() + ")");

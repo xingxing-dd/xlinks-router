@@ -9,9 +9,11 @@ import site.xlinks.ai.router.service.ProviderTokenSelectService;
 import site.xlinks.ai.router.service.RouteCacheService;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,7 +51,7 @@ class ProviderRouteResolverTest {
         when(routeCacheService.isProviderTemporarilyUnavailable(100L)).thenReturn(true);
         when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(secondProvider);
-        when(providerTokenSelectService.selectTokenLeaseOrNull(secondProvider, "req-1"))
+        when(providerTokenSelectService.selectTokenLeaseOrNull(secondProvider, "req-1", Set.of()))
                 .thenReturn(new ProviderTokenSelectService.SelectionResult(secondToken, null, false));
 
         ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
@@ -66,7 +68,7 @@ class ProviderRouteResolverTest {
         assertEquals(300L, route.providerToken().getId());
         verify(routeCacheService, never()).getProvider(100L);
         verify(providerTokenSelectService, never()).selectTokenLeaseOrNull(org.mockito.ArgumentMatchers.argThat(provider ->
-                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString());
+                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString(), any());
     }
 
     @Test
@@ -99,7 +101,7 @@ class ProviderRouteResolverTest {
         when(routeCacheService.getMerchantPreferredProviderId(500L, 10L)).thenReturn(200L);
         when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(preferredProvider);
-        when(providerTokenSelectService.selectTokenLeaseOrNull(preferredProvider, "req-2"))
+        when(providerTokenSelectService.selectTokenLeaseOrNull(preferredProvider, "req-2", Set.of()))
                 .thenReturn(new ProviderTokenSelectService.SelectionResult(preferredToken, null, false));
 
         ProviderRouteResolver.ResolvedProviderRoute route = resolver.resolve(
@@ -115,6 +117,6 @@ class ProviderRouteResolverTest {
         assertEquals(2L, route.providerModel().getId());
         verify(routeCacheService, never()).getProvider(100L);
         verify(providerTokenSelectService, never()).selectTokenLeaseOrNull(org.mockito.ArgumentMatchers.argThat(provider ->
-                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString());
+                provider != null && Long.valueOf(100L).equals(provider.getId())), org.mockito.ArgumentMatchers.anyString(), any());
     }
 }

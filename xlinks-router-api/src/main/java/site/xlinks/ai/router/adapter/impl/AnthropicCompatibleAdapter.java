@@ -17,6 +17,7 @@ import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.service.StreamFirstResponseTimeoutException;
+import site.xlinks.ai.router.service.UpstreamProviderException;
 import site.xlinks.ai.router.service.UpstreamTimeoutException;
 
 import java.io.IOException;
@@ -54,7 +55,7 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
             Call call = createScopedClient(context, false).newCall(httpRequest);
             try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
-                    throw buildProviderFailure(response);
+                    throw buildProviderFailure(response, context);
                 }
                 ResponseBody body = response.body();
                 if (body == null) {
@@ -81,7 +82,7 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
             Call call = createScopedClient(context, true).newCall(httpRequest);
             try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
-                    throw buildProviderFailure(response);
+                    throw buildProviderFailure(response, context);
                 }
                 ResponseBody body = response.body();
                 if (body == null) {
@@ -140,10 +141,21 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
         return rewriteModelAndStream(request, context);
     }
 
-    private RuntimeException buildProviderFailure(Response response) throws IOException {
+    private RuntimeException buildProviderFailure(Response response, ProviderInvokeContext context) throws IOException {
         String responseBody = response.body() == null ? "" : response.body().string();
-        log.error("Anthropic API call failed: {} - {}, body={}", response.code(), response.message(), responseBody);
-        return new RuntimeException("Provider API call failed: " + response.code());
+        log.error("Anthropic API call failed: requestId={}, providerId={}, providerTokenId={}, baseUrl={}, statusCode={}, message={}, body={}",
+                context == null ? null : context.getRequestId(),
+                context == null ? null : context.getProviderId(),
+                context == null ? null : context.getProviderTokenId(),
+                context == null ? null : context.getBaseUrl(),
+                response.code(),
+                response.message(),
+                responseBody);
+        return new UpstreamProviderException(
+                response.code(),
+                "Provider API call failed: " + response.code(),
+                responseBody
+        );
     }
 
     JsonNode parseJsonResponseBody(String responseBody, String contentType, String requestUrl) throws IOException {

@@ -22,6 +22,8 @@ public class UsageDecision {
      */
     private Long planId;
 
+    private String planName;
+
     private boolean packageEnabled;
 
     private boolean balanceEnabled;

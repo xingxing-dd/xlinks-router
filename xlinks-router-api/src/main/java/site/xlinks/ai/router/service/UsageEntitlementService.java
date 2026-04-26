@@ -60,6 +60,7 @@ public class UsageEntitlementService {
                 .customerTokenId(customerToken.getId())
                 .customerName(customerToken.getCustomerName())
                 .planId(plan == null ? null : plan.getId())
+                .planName(plan == null ? null : plan.getPlanName())
                 .packageEnabled(packageEnabled)
                 .balanceEnabled(balanceEnabled)
                 .currentUsageType(currentUsageType)

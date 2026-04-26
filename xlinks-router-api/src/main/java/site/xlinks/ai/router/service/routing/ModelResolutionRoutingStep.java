@@ -24,6 +24,7 @@ public class ModelResolutionRoutingStep implements RoutingStep {
         context.setModel(model);
         ProxyRequestTrace.markModel(model);
         ProxyRequestTrace.addRouteEvent("模型解析完成(modelId=" + model.getId()
-                + ", modelCode=" + model.getModelCode() + ")");
+                + ", modelCode=" + model.getModelCode()
+                + ", modelName=" + model.getModelName() + ")");
     }
 }

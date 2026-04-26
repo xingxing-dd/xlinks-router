@@ -10,6 +10,8 @@ import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.service.ProviderPermitLease;
 
+import java.util.Set;
+
 /**
  * Mutable state shared across routing pipeline steps.
  */
@@ -19,6 +21,8 @@ public class RoutingBuildContext {
     private final String token;
     private final ProxyRequest request;
     private final String requestId;
+    private final Set<Long> excludedProviderIds;
+    private final Set<Long> excludedProviderTokenIds;
 
     private CustomerToken customerToken;
     private UsageDecision usageDecision;

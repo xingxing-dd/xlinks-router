@@ -6,6 +6,7 @@ import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.service.ProxyRequestTrace;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Ordered routing pipeline used to build provider invocation context.
@@ -21,7 +22,21 @@ public class ProxyRoutingPipeline {
     private final ProviderRouteSelectionStep providerRouteSelectionStep;
 
     public RoutingBuildContext resolve(String token, ProxyRequest request, String requestId) {
-        RoutingBuildContext context = new RoutingBuildContext(token, request, requestId);
+        return resolve(token, request, requestId, Set.of(), Set.of());
+    }
+
+    public RoutingBuildContext resolve(String token,
+                                       ProxyRequest request,
+                                       String requestId,
+                                       Set<Long> excludedProviderIds,
+                                       Set<Long> excludedProviderTokenIds) {
+        RoutingBuildContext context = new RoutingBuildContext(
+                token,
+                request,
+                requestId,
+                excludedProviderIds == null ? Set.of() : Set.copyOf(excludedProviderIds),
+                excludedProviderTokenIds == null ? Set.of() : Set.copyOf(excludedProviderTokenIds)
+        );
         List<RoutingStep> steps = List.of(
                 requestValidationRoutingStep,
                 customerTokenRoutingStep,

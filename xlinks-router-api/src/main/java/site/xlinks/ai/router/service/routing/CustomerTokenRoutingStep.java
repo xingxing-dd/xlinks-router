@@ -24,6 +24,8 @@ public class CustomerTokenRoutingStep implements RoutingStep {
         context.setCustomerToken(customerToken);
         ProxyRequestTrace.markCustomerToken(customerToken);
         ProxyRequestTrace.addRouteEvent("客户令牌校验通过(accountId=" + customerToken.getAccountId()
-                + ", customerTokenId=" + customerToken.getId() + ")");
+                + ", customerName=" + customerToken.getCustomerName()
+                + ", customerTokenId=" + customerToken.getId()
+                + ", customerTokenName=" + customerToken.getTokenName() + ")");
     }
 }
