@@ -1,6 +1,4 @@
 package site.xlinks.ai.router.service;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerToken;
@@ -23,13 +21,14 @@ class CustomerTokenAuthServiceTest {
     void shouldRejectWhenCachedQuotaAlreadyReached() {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         CustomerTokenMapper customerTokenMapper = mock(CustomerTokenMapper.class);
-        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper, new ObjectMapper());
+        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper);
 
         CustomerToken token = buildToken();
         token.setDailyQuota(new BigDecimal("10"));
         token.setUsedQuota(new BigDecimal("10"));
 
         when(routeCacheService.getCustomerTokenByValue("sk-token")).thenReturn(token);
+        when(routeCacheService.isCustomerTokenModelAllowed(token, "gpt-4o")).thenReturn(true);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.validateRequestAccess("sk-token", "gpt-4o"));
@@ -43,7 +42,7 @@ class CustomerTokenAuthServiceTest {
     void shouldRejectWhenFreshDatabaseQuotaAlreadyReached() {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         CustomerTokenMapper customerTokenMapper = mock(CustomerTokenMapper.class);
-        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper, new ObjectMapper());
+        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper);
 
         CustomerToken cachedToken = buildToken();
         cachedToken.setDailyQuota(new BigDecimal("10"));
@@ -55,6 +54,8 @@ class CustomerTokenAuthServiceTest {
 
         when(routeCacheService.getCustomerTokenByValue("sk-token")).thenReturn(cachedToken);
         when(customerTokenMapper.selectById(cachedToken.getId())).thenReturn(freshToken);
+        when(routeCacheService.isCustomerTokenModelAllowed(cachedToken, "gpt-4o")).thenReturn(true);
+        when(routeCacheService.isCustomerTokenModelAllowed(freshToken, "gpt-4o")).thenReturn(true);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.validateRequestAccess("sk-token", "gpt-4o"));
@@ -68,7 +69,7 @@ class CustomerTokenAuthServiceTest {
     void shouldReturnFreshCustomerTokenWhenAccessAllowed() {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         CustomerTokenMapper customerTokenMapper = mock(CustomerTokenMapper.class);
-        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper, new ObjectMapper());
+        CustomerTokenAuthService service = new CustomerTokenAuthService(routeCacheService, customerTokenMapper);
 
         CustomerToken cachedToken = buildToken();
         cachedToken.setDailyQuota(new BigDecimal("10"));
@@ -80,6 +81,8 @@ class CustomerTokenAuthServiceTest {
 
         when(routeCacheService.getCustomerTokenByValue("sk-token")).thenReturn(cachedToken);
         when(customerTokenMapper.selectById(cachedToken.getId())).thenReturn(freshToken);
+        when(routeCacheService.isCustomerTokenModelAllowed(cachedToken, "gpt-4o")).thenReturn(true);
+        when(routeCacheService.isCustomerTokenModelAllowed(freshToken, "gpt-4o")).thenReturn(true);
 
         CustomerToken result = service.validateRequestAccess("sk-token", "gpt-4o");
 

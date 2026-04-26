@@ -104,6 +104,9 @@ public class ProviderTokenSelectService {
         if (token == null) {
             return false;
         }
+        if (routeCacheService.isProviderTokenTemporarilyUnavailable(token.getId())) {
+            return false;
+        }
         if (token.getTokenStatus() == null || token.getTokenStatus() != 1) {
             return false;
         }

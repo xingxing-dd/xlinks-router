@@ -1,9 +1,8 @@
 package site.xlinks.ai.router.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.mapper.CustomerTokenMapper;
@@ -11,12 +10,8 @@ import site.xlinks.ai.router.service.routing.ProxyErrors;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Customer token validation and permission checks.
@@ -26,13 +21,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CustomerTokenAuthService {
 
-    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
-    };
-
     private final RouteCacheService routeCacheService;
     private final CustomerTokenMapper customerTokenMapper;
-    private final ObjectMapper objectMapper;
-    private final ConcurrentHashMap<String, Set<String>> allowedModelsCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, FreshTokenSnapshot> freshTokenSnapshotCache = new ConcurrentHashMap<>();
+
+    @Value("${xlinks.router.auth.token-fresh-verify-ttl-ms:1000}")
+    private long tokenFreshVerifyTtlMs;
 
     /**
      * Validate customer bearer token state only.
@@ -52,9 +46,11 @@ public class CustomerTokenAuthService {
         LocalDateTime now = LocalDateTime.now();
         CustomerToken cachedToken = loadCustomerToken(token);
         assertRequestAllowed(cachedToken, model, now);
-        CustomerToken freshToken = loadFreshCustomerToken(cachedToken, token);
+        CustomerToken freshToken = resolveFreshCustomerToken(cachedToken, token);
         assertRequestAllowed(freshToken, model, now);
-        routeCacheService.cacheCustomerToken(freshToken);
+        if (freshToken != cachedToken) {
+            routeCacheService.cacheCustomerToken(freshToken);
+        }
         return freshToken;
     }
 
@@ -62,8 +58,7 @@ public class CustomerTokenAuthService {
      * Check whether a customer token can access given model.
      */
     public boolean hasPermissionForModel(CustomerToken customerToken, String model) {
-        String allowedModels = customerToken == null ? null : customerToken.getAllowedModels();
-        return isModelAllowed(allowedModels, model);
+        return routeCacheService.isCustomerTokenModelAllowed(customerToken, model);
     }
 
     private CustomerToken loadCustomerToken(String token) {
@@ -88,9 +83,34 @@ public class CustomerTokenAuthService {
         return freshToken;
     }
 
+    private CustomerToken resolveFreshCustomerToken(CustomerToken cachedToken, String token) {
+        if (cachedToken == null || cachedToken.getId() == null) {
+            throw ProxyErrors.invalidToken();
+        }
+        long ttlMs = Math.max(tokenFreshVerifyTtlMs, 0L);
+        if (ttlMs > 0) {
+            FreshTokenSnapshot snapshot = freshTokenSnapshotCache.get(cachedToken.getId());
+            long nowMs = System.currentTimeMillis();
+            if (snapshot != null
+                    && snapshot.expiresAtMs() >= nowMs
+                    && snapshot.customerToken() != null
+                    && token.equals(snapshot.customerToken().getTokenValue())) {
+                return snapshot.customerToken();
+            }
+        }
+        CustomerToken freshToken = loadFreshCustomerToken(cachedToken, token);
+        if (ttlMs > 0) {
+            freshTokenSnapshotCache.put(
+                    freshToken.getId(),
+                    new FreshTokenSnapshot(freshToken, System.currentTimeMillis() + ttlMs)
+            );
+        }
+        return freshToken;
+    }
+
     private void assertRequestAllowed(CustomerToken customerToken, String model, LocalDateTime now) {
         assertTokenState(customerToken, now);
-        assertModelAllowed(customerToken.getAllowedModels(), model);
+        assertModelAllowed(customerToken, model);
         assertQuotaAvailable(
                 customerToken.getDailyQuota(),
                 customerToken.getUsedQuota(),
@@ -118,26 +138,12 @@ public class CustomerTokenAuthService {
         }
     }
 
-    private void assertModelAllowed(String allowedModels, String model) {
+    private void assertModelAllowed(CustomerToken customerToken, String model) {
         if (model == null || model.isBlank()) {
             return;
         }
-        if (!isModelAllowed(allowedModels, model)) {
+        if (!routeCacheService.isCustomerTokenModelAllowed(customerToken, model)) {
             throw ProxyErrors.customerTokenModelNotAllowed();
-        }
-    }
-
-    private boolean isModelAllowed(String allowedModels, String model) {
-        if (allowedModels == null || allowedModels.isBlank()) {
-            return true;
-        }
-
-        try {
-            Set<String> allowedSet = allowedModelsCache.computeIfAbsent(allowedModels, this::parseAllowedModelsToSet);
-            return allowedSet.contains(model);
-        } catch (Exception e) {
-            log.warn("Failed to parse allowed models, granting access", e);
-            return true;
         }
     }
 
@@ -156,33 +162,10 @@ public class CustomerTokenAuthService {
         }
     }
 
-    private Set<String> parseAllowedModelsToSet(String allowedModels) {
-        if (allowedModels == null || allowedModels.isBlank()) {
-            return Collections.emptySet();
-        }
-
-        if (allowedModels.trim().startsWith("[")) {
-            try {
-                List<String> models = objectMapper.readValue(allowedModels, STRING_LIST_TYPE);
-                if (models == null || models.isEmpty()) {
-                    return Collections.emptySet();
-                }
-                return models.stream()
-                        .filter(item -> item != null && !item.isBlank())
-                        .map(String::trim)
-                        .collect(Collectors.toSet());
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Invalid allowedModels JSON", e);
-            }
-        }
-
-        return Arrays.stream(allowedModels.split(","))
-                .map(String::trim)
-                .filter(item -> !item.isBlank())
-                .collect(Collectors.toSet());
-    }
-
     private BigDecimal defaultDecimal(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private record FreshTokenSnapshot(CustomerToken customerToken, long expiresAtMs) {
     }
 }

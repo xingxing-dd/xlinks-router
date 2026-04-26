@@ -47,8 +47,6 @@ public class ProtocolProxyService {
 
     private static final int DEFAULT_STREAM_DISPATCH_QUEUE_CAPACITY = 128;
     private static final long STREAM_DISPATCH_OFFER_TIMEOUT_MS = 200L;
-    private static final long STREAM_DISPATCH_JOIN_TIMEOUT_MS = 3_000L;
-
     private final CustomerTokenAuthService customerTokenAuthService;
     private final ProviderProtocolAdapterFactory adapterFactory;
     private final RouteCacheService routeCacheService;
@@ -58,6 +56,8 @@ public class ProtocolProxyService {
     private final ProviderConcurrencyGuard providerConcurrencyGuard;
     @Qualifier("sseTaskExecutor")
     private final TaskExecutor sseTaskExecutor;
+    @Qualifier("sseWriterTaskExecutor")
+    private final TaskExecutor sseWriterTaskExecutor;
 
     @Value("${xlinks.router.debug.log-upstream-responses-stream-payload:false}")
     private boolean logUpstreamResponsesStreamPayload;
@@ -69,6 +69,8 @@ public class ProtocolProxyService {
     private boolean traceLogProviderTokenPlain;
     @Value("${xlinks.router.stream.dispatch.queue-capacity:128}")
     private int streamDispatchQueueCapacity;
+    @Value("${xlinks.router.stream.dispatch.join-timeout-ms:0}")
+    private long streamDispatchJoinTimeoutMs;
 
     public JsonNode forwardDirect(String token, ProxyRequest request) {
         String requestId = buildRequestId(request.getProtocol());
@@ -89,13 +91,13 @@ public class ProtocolProxyService {
             try {
                 response = adapter.forwardDirect(request, context);
             } catch (UpstreamTimeoutException ex) {
-                routeCacheService.recordProviderFailure(context.getProviderId());
+                recordSelectedRouteFailure(context);
                 throw ex;
             } catch (Exception ex) {
-                routeCacheService.recordProviderFailure(context.getProviderId());
+                recordSelectedRouteFailure(context);
                 throw ex;
             }
-            routeCacheService.clearProviderFailure(context.getProviderId());
+            clearSelectedRouteFailure(context);
             ProxyRequestTrace.addTimelineEvent("上游响应", "直连响应已返回");
             ProxyRequestTrace.markFirstResponse();
             UsageMetrics usageMetrics = usageExtractor.extract(response, context.getModelProvider());
@@ -152,7 +154,7 @@ public class ProtocolProxyService {
             AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
             CountDownLatch writerDone = new CountDownLatch(1);
             String modelProvider = context.getModelProvider();
-            sseTaskExecutor.execute(() -> runStreamWriter(streamDispatchQueue, onEvent, writerFailureRef, writerDone));
+            sseWriterTaskExecutor.execute(() -> runStreamWriter(streamDispatchQueue, onEvent, writerFailureRef, writerDone));
             try {
                 adapter.forwardStream(request, context, event -> {
                     appendStreamEvent(upstreamStreamPayloadBuilder, event);
@@ -180,18 +182,18 @@ public class ProtocolProxyService {
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
-            } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
-                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                waitStreamWriterDone(writerDone, writerFailureRef);
-                routeCacheService.recordProviderFailure(context.getProviderId());
-                throw ex;
-            } catch (Exception ex) {
-                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
-                waitStreamWriterDone(writerDone, writerFailureRef);
-                routeCacheService.recordProviderFailure(context.getProviderId());
-                throw ex;
-            }
-            routeCacheService.clearProviderFailure(context.getProviderId());
+                } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                    enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                    waitStreamWriterDone(writerDone, writerFailureRef);
+                    recordSelectedRouteFailure(context);
+                    throw ex;
+                } catch (Exception ex) {
+                    enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                    waitStreamWriterDone(writerDone, writerFailureRef);
+                    recordSelectedRouteFailure(context);
+                    throw ex;
+                }
+            clearSelectedRouteFailure(context);
             usageRecordService.recordAsync(
                     context,
                     usageMetricsRef.get(),
@@ -354,19 +356,39 @@ public class ProtocolProxyService {
                              String errorMessage,
                              long startAt,
                              String finishReason) {
+        if (context != null) {
+            usageRecordService.recordError(
+                    context,
+                    responseStatus,
+                    errorCode,
+                    errorMessage,
+                    System.currentTimeMillis() - startAt,
+                    finishReason
+            );
+        }
+        ProxyRequestTrace.markFailure(context, finishReason, errorCode, errorMessage);
+        ProxyRequestTrace.addRouteEvent("请求结束，结果=" + finishReason + "，错误码=" + errorCode);
+    }
+
+    private void recordSelectedRouteFailure(ProviderInvokeContext context) {
         if (context == null) {
             return;
         }
-        usageRecordService.recordError(
-                context,
-                responseStatus,
-                errorCode,
-                errorMessage,
-                System.currentTimeMillis() - startAt,
-                finishReason
-        );
-        ProxyRequestTrace.markFailure(context, finishReason, errorCode, errorMessage);
-        ProxyRequestTrace.addRouteEvent("请求结束，结果=" + finishReason + "，错误码=" + errorCode);
+        if (context.getProviderTokenId() != null) {
+            routeCacheService.recordProviderTokenFailure(context.getProviderTokenId());
+            return;
+        }
+        routeCacheService.recordProviderFailure(context.getProviderId());
+    }
+
+    private void clearSelectedRouteFailure(ProviderInvokeContext context) {
+        if (context == null) {
+            return;
+        }
+        if (context.getProviderTokenId() != null) {
+            routeCacheService.clearProviderTokenFailure(context.getProviderTokenId());
+        }
+        routeCacheService.clearProviderFailure(context.getProviderId());
     }
 
     private boolean isFirstResponseDataEvent(StreamEvent event) {
@@ -563,10 +585,14 @@ public class ProtocolProxyService {
     private void waitStreamWriterDone(CountDownLatch writerDone,
                                       AtomicReference<RuntimeException> writerFailureRef) {
         try {
-            if (!writerDone.await(STREAM_DISPATCH_JOIN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            if (streamDispatchJoinTimeoutMs <= 0) {
+                writerDone.await();
+                return;
+            }
+            if (!writerDone.await(streamDispatchJoinTimeoutMs, TimeUnit.MILLISECONDS)) {
                 RuntimeException timeoutError = new RuntimeException("Timed out waiting for stream writer to finish");
                 writerFailureRef.compareAndSet(null, timeoutError);
-                log.warn("Timed out waiting for stream writer to finish");
+                log.warn("Timed out waiting for stream writer to finish, timeoutMs={}", streamDispatchJoinTimeoutMs);
                 throw timeoutError;
             }
         } catch (InterruptedException e) {

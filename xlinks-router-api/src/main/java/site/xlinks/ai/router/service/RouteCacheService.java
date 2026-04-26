@@ -65,6 +65,7 @@ public class RouteCacheService {
 
     private final ReentrantLock refreshLock = new ReentrantLock();
     private final ConcurrentMap<Long, ProviderFailureMark> providerFailureCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, ProviderFailureMark> providerTokenFailureCache = new ConcurrentHashMap<>();
 
     private Clock clock = Clock.systemUTC();
 
@@ -483,22 +484,13 @@ public class RouteCacheService {
     }
 
     public List<String> getCustomerTokenAllowedModels(CustomerToken customerToken) {
-        if (customerToken == null) {
-            return Collections.emptyList();
-        }
-        Long tokenId = customerToken.getId();
-        if (tokenId != null) {
-            AllowedModelMatcher matcher = customerTokenAllowedModelCache.get(tokenId);
-            if (matcher != null) {
-                return matcher.toAllowedModelList();
-            }
-            cacheCustomerToken(customerToken);
-            matcher = customerTokenAllowedModelCache.get(tokenId);
-            if (matcher != null) {
-                return matcher.toAllowedModelList();
-            }
-        }
-        return Collections.emptyList();
+        AllowedModelMatcher matcher = resolveCustomerTokenAllowedModelMatcher(customerToken);
+        return matcher == null ? Collections.emptyList() : matcher.toAllowedModelList();
+    }
+
+    public boolean isCustomerTokenModelAllowed(CustomerToken customerToken, String modelCode) {
+        AllowedModelMatcher matcher = resolveCustomerTokenAllowedModelMatcher(customerToken);
+        return matcher != null && matcher.matches(modelCode);
     }
 
     public void updateCustomerTokenQuota(Long tokenId, BigDecimal usedQuota, BigDecimal totalUsedQuota) {
@@ -533,6 +525,26 @@ public class RouteCacheService {
         }
     }
 
+    public void recordProviderTokenFailure(Long providerTokenId) {
+        if (providerTokenId == null) {
+            return;
+        }
+        Instant now = Instant.now(clock);
+        ProviderFailureMark mark = providerTokenFailureCache.compute(providerTokenId, (ignored, existing) -> {
+            if (existing == null || existing.isExpired(now)) {
+                return new ProviderFailureMark(1, now);
+            }
+            return new ProviderFailureMark(existing.failureCount() + 1, existing.firstFailureAt());
+        });
+        if (mark != null && mark.failureCount() > PROVIDER_FAILURE_THRESHOLD) {
+            log.warn("Provider token marked temporarily unavailable after consecutive failures. providerTokenId={}, failureCount={}, firstFailureAt={}",
+                    providerTokenId, mark.failureCount(), mark.firstFailureAt());
+        } else if (mark != null) {
+            log.info("Provider token failure recorded. providerTokenId={}, failureCount={}, firstFailureAt={}",
+                    providerTokenId, mark.failureCount(), mark.firstFailureAt());
+        }
+    }
+
     public void clearProviderFailure(Long providerId) {
         if (providerId == null) {
             return;
@@ -541,6 +553,17 @@ public class RouteCacheService {
         if (removed != null) {
             log.info("Provider failure state cleared after successful response. providerId={}, clearedFailureCount={}",
                     providerId, removed.failureCount());
+        }
+    }
+
+    public void clearProviderTokenFailure(Long providerTokenId) {
+        if (providerTokenId == null) {
+            return;
+        }
+        ProviderFailureMark removed = providerTokenFailureCache.remove(providerTokenId);
+        if (removed != null) {
+            log.info("Provider token failure state cleared after successful response. providerTokenId={}, clearedFailureCount={}",
+                    providerTokenId, removed.failureCount());
         }
     }
 
@@ -556,6 +579,23 @@ public class RouteCacheService {
         if (mark.isExpired(now)) {
             providerFailureCache.remove(providerId, mark);
             log.info("Expired provider failure state cleaned on read. providerId={}", providerId);
+            return false;
+        }
+        return mark.failureCount() > PROVIDER_FAILURE_THRESHOLD;
+    }
+
+    public boolean isProviderTokenTemporarilyUnavailable(Long providerTokenId) {
+        if (providerTokenId == null) {
+            return false;
+        }
+        ProviderFailureMark mark = providerTokenFailureCache.get(providerTokenId);
+        if (mark == null) {
+            return false;
+        }
+        Instant now = Instant.now(clock);
+        if (mark.isExpired(now)) {
+            providerTokenFailureCache.remove(providerTokenId, mark);
+            log.info("Expired provider token failure state cleaned on read. providerTokenId={}", providerTokenId);
             return false;
         }
         return mark.failureCount() > PROVIDER_FAILURE_THRESHOLD;
@@ -643,6 +683,10 @@ public class RouteCacheService {
     private void cleanupExpiredProviderFailures() {
         Instant now = Instant.now(clock);
         providerFailureCache.entrySet().removeIf(entry -> {
+            ProviderFailureMark mark = entry.getValue();
+            return mark == null || mark.isExpired(now);
+        });
+        providerTokenFailureCache.entrySet().removeIf(entry -> {
             ProviderFailureMark mark = entry.getValue();
             return mark == null || mark.isExpired(now);
         });
@@ -855,6 +899,18 @@ public class RouteCacheService {
         return Collections.unmodifiableMap(map);
     }
 
+    private AllowedModelMatcher resolveCustomerTokenAllowedModelMatcher(CustomerToken customerToken) {
+        if (customerToken == null || customerToken.getId() == null) {
+            return null;
+        }
+        AllowedModelMatcher matcher = customerTokenAllowedModelCache.get(customerToken.getId());
+        if (matcher != null) {
+            return matcher;
+        }
+        cacheCustomerToken(customerToken);
+        return customerTokenAllowedModelCache.get(customerToken.getId());
+    }
+
     private PlanModelMatcher parsePlanModelMatcher(String rawAllowedModels) {
         AllowedModelMatcher matcher = parseAllowedModelMatcher(rawAllowedModels);
         return new PlanModelMatcher(matcher.allowAll(), matcher.allowedModels());
@@ -862,7 +918,7 @@ public class RouteCacheService {
 
     private AllowedModelMatcher parseAllowedModelMatcher(String rawAllowedModels) {
         if (rawAllowedModels == null || rawAllowedModels.isBlank()) {
-            return new AllowedModelMatcher(true, Collections.emptySet());
+            return AllowedModelMatcher.allowAllMatcher();
         }
         String trimmed = rawAllowedModels.trim();
         try {
@@ -883,12 +939,14 @@ public class RouteCacheService {
                         .collect(Collectors.toSet());
             }
             if (values.isEmpty()) {
-                return new AllowedModelMatcher(true, Collections.emptySet());
+                return AllowedModelMatcher.allowAllMatcher();
             }
-            return new AllowedModelMatcher(false, Collections.unmodifiableSet(values));
+            Set<String> immutableValues = Collections.unmodifiableSet(values);
+            List<String> immutableList = values.stream().sorted().toList();
+            return new AllowedModelMatcher(false, immutableValues, immutableList);
         } catch (Exception ex) {
             log.warn("Failed to parse allowed models: {}", rawAllowedModels, ex);
-            return new AllowedModelMatcher(true, Collections.emptySet());
+            return AllowedModelMatcher.allowAllMatcher();
         }
     }
 
@@ -942,12 +1000,29 @@ public class RouteCacheService {
         }
     }
 
-    private record AllowedModelMatcher(boolean allowAll, Set<String> allowedModels) {
+    private record AllowedModelMatcher(boolean allowAll, Set<String> allowedModels, List<String> allowedModelList) {
+        static AllowedModelMatcher allowAllMatcher() {
+            return new AllowedModelMatcher(true, Collections.emptySet(), Collections.emptyList());
+        }
+
+        boolean matches(String modelCode) {
+            if (modelCode == null || modelCode.isBlank()) {
+                return allowAll;
+            }
+            if (allowAll) {
+                return true;
+            }
+            if (allowedModels == null || allowedModels.isEmpty()) {
+                return true;
+            }
+            return allowedModels.contains(modelCode.trim());
+        }
+
         List<String> toAllowedModelList() {
             if (allowAll || allowedModels == null || allowedModels.isEmpty()) {
                 return Collections.emptyList();
             }
-            return allowedModels.stream().sorted().toList();
+            return allowedModelList == null ? Collections.emptyList() : allowedModelList;
         }
     }
 

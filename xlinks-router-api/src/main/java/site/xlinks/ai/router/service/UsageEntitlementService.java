@@ -2,6 +2,7 @@ package site.xlinks.ai.router.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import site.xlinks.ai.router.context.UsageDecision;
@@ -15,6 +16,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Usage entitlement decision service.
@@ -27,22 +30,31 @@ public class UsageEntitlementService {
     private final CustomerPlanMapper customerPlanMapper;
     private final RouteCacheService routeCacheService;
     private final WalletService walletService;
+    private final ConcurrentMap<Long, AccountPlanSnapshot> availablePlanCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, BalanceAvailabilitySnapshot> balanceAvailabilityCache = new ConcurrentHashMap<>();
+
+    @Value("${xlinks.router.entitlement.plan-cache-ttl-ms:1000}")
+    private long planCacheTtlMs;
+
+    @Value("${xlinks.router.entitlement.balance-cache-ttl-ms:1000}")
+    private long balanceCacheTtlMs;
 
     /**
      * Decide available usage strategy for current request.
      */
     public UsageDecision decide(CustomerToken customerToken, String requestModel) {
-        log.debug("Deciding usage type for customer: {}, model: {}",
+        log.debug("开始进行权益决策, customer={}, model={}",
                 customerToken.getCustomerName(), requestModel);
 
         List<String> packageAllowedModels = routeCacheService.getCustomerTokenAllowedModels(customerToken);
+        boolean tokenModelAllowed = routeCacheService.isCustomerTokenModelAllowed(customerToken, requestModel);
 
         CustomerPlan plan = selectAvailablePlan(customerToken.getAccountId(), requestModel);
         boolean packageEnabled = plan != null;
         boolean balanceEnabled = !packageEnabled && hasUsableBalance(customerToken.getAccountId());
 
         int currentUsageType = calculateUsageType(packageEnabled, balanceEnabled,
-                packageAllowedModels, requestModel);
+                tokenModelAllowed);
 
         return UsageDecision.builder()
                 .customerTokenId(customerToken.getId())
@@ -65,7 +77,7 @@ public class UsageEntitlementService {
             return null;
         }
 
-        List<CustomerPlan> availablePlans = customerPlanMapper.selectAvailablePlans(accountId, LocalDate.now());
+        List<CustomerPlan> availablePlans = loadAvailablePlans(accountId, LocalDate.now());
         if (availablePlans == null || availablePlans.isEmpty()) {
             return null;
         }
@@ -126,24 +138,36 @@ public class UsageEntitlementService {
         if (accountId == null) {
             return false;
         }
+        long ttlMs = Math.max(balanceCacheTtlMs, 0L);
+        long nowMs = System.currentTimeMillis();
+        if (ttlMs > 0) {
+            BalanceAvailabilitySnapshot snapshot = balanceAvailabilityCache.get(accountId);
+            if (snapshot != null && snapshot.expiresAtMs() >= nowMs) {
+                return snapshot.available();
+            }
+        }
+        boolean available = false;
         try {
             WalletBundle bundle = walletService.ensureWallet(accountId);
             CustomerMainWallet wallet = bundle == null ? null : bundle.getMainWallet();
             if (wallet == null) {
-                return false;
+                available = false;
+            } else if (wallet.getStatus() == null || wallet.getStatus() != 1) {
+                available = false;
+            } else if (wallet.getAllowOut() == null || wallet.getAllowOut() != 1) {
+                available = false;
+            } else {
+                BigDecimal availableBalance = wallet.getAvailableBalance() == null ? BigDecimal.ZERO : wallet.getAvailableBalance();
+                available = availableBalance.compareTo(BigDecimal.ZERO) > 0;
             }
-            if (wallet.getStatus() == null || wallet.getStatus() != 1) {
-                return false;
-            }
-            if (wallet.getAllowOut() == null || wallet.getAllowOut() != 1) {
-                return false;
-            }
-            BigDecimal availableBalance = wallet.getAvailableBalance() == null ? BigDecimal.ZERO : wallet.getAvailableBalance();
-            return availableBalance.compareTo(BigDecimal.ZERO) > 0;
         } catch (Exception ex) {
             log.warn("Failed to check wallet balance for account={}", accountId, ex);
-            return false;
+            available = false;
         }
+        if (ttlMs > 0) {
+            balanceAvailabilityCache.put(accountId, new BalanceAvailabilitySnapshot(available, nowMs + ttlMs));
+        }
+        return available;
     }
 
     /**
@@ -151,9 +175,9 @@ public class UsageEntitlementService {
      * 0: package priority, 1: package only, 2: balance only.
      */
     private int calculateUsageType(boolean packageEnabled, boolean balanceEnabled,
-                                   List<String> packageAllowedModels, String requestModel) {
+                                   boolean tokenModelAllowed) {
         if (packageEnabled && balanceEnabled) {
-            if (packageAllowedModels.isEmpty() || packageAllowedModels.contains(requestModel)) {
+            if (tokenModelAllowed) {
                 return 0;
             } else {
                 return 2;
@@ -169,5 +193,31 @@ public class UsageEntitlementService {
 
     private BigDecimal defaultMultiplier(BigDecimal multiplier) {
         return multiplier == null || multiplier.compareTo(BigDecimal.ZERO) <= 0 ? BigDecimal.ONE : multiplier;
+    }
+
+    private List<CustomerPlan> loadAvailablePlans(Long accountId, LocalDate today) {
+        long ttlMs = Math.max(planCacheTtlMs, 0L);
+        long nowMs = System.currentTimeMillis();
+        if (ttlMs > 0) {
+            AccountPlanSnapshot snapshot = availablePlanCache.get(accountId);
+            if (snapshot != null && snapshot.expiresAtMs() >= nowMs && today.equals(snapshot.today())) {
+                return snapshot.availablePlans();
+            }
+        }
+        List<CustomerPlan> plans = customerPlanMapper.selectAvailablePlans(accountId, today);
+        if (ttlMs > 0) {
+            availablePlanCache.put(accountId, new AccountPlanSnapshot(
+                    plans == null ? List.of() : List.copyOf(plans),
+                    today,
+                    nowMs + ttlMs
+            ));
+        }
+        return plans;
+    }
+
+    private record AccountPlanSnapshot(List<CustomerPlan> availablePlans, LocalDate today, long expiresAtMs) {
+    }
+
+    private record BalanceAvailabilitySnapshot(boolean available, long expiresAtMs) {
     }
 }

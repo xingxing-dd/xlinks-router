@@ -83,10 +83,10 @@ public class OpenAIProxyController {
         try {
             return Result.success(proxyService.listModels(token));
         } catch (BusinessException e) {
-            log.warn("Models list error: {}", e.getMessage());
+            log.warn("模型列表查询失败: {}", e.getMessage());
             return Result.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
-            log.error("Unexpected error while listing models", e);
+            log.error("查询模型列表时发生未预期异常", e);
             return Result.error(500, "Internal server error");
         }
     }
@@ -98,7 +98,7 @@ public class OpenAIProxyController {
         ProxyRequest request = parseRequest(protocol, requestBody);
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
 
-        log.debug("Received {} request, endpointCode={}, model={}, stream={}",
+        log.debug("收到 {} 请求, endpointCode={}, model={}, stream={}",
                 protocol, protocol.getCode(), request.getModel(), request.isStream());
 
         if (!request.isStream()) {
@@ -127,10 +127,10 @@ public class OpenAIProxyController {
     private SseEmitter stream(String token, ProxyRequest request, HttpServletResponse servletResponse) {
         prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
-        emitter.onCompletion(() -> log.debug("SSE completed for endpointCode={}, protocol={}",
+        emitter.onCompletion(() -> log.debug("SSE 已完成, endpointCode={}, protocol={}",
                 request.getProtocol().getCode(), request.getProtocol()));
         emitter.onTimeout(() -> {
-            log.warn("SSE timeout for endpointCode={}, protocol={}",
+            log.warn("SSE 处理超时, endpointCode={}, protocol={}",
                     request.getProtocol().getCode(), request.getProtocol());
             emitter.complete();
         });
@@ -140,10 +140,10 @@ public class OpenAIProxyController {
                 proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
                 emitter.complete();
             } catch (ClientAbortException e) {
-                log.info("Client disconnected from OpenAI SSE stream: {}", e.getMessage());
+                log.info("客户端已断开 OpenAI SSE 连接: {}", e.getMessage());
                 emitter.complete();
             } catch (Exception e) {
-                log.warn("SSE forwarding failed for endpointCode={}, protocol={}: {}",
+                log.warn("SSE 转发失败, endpointCode={}, protocol={}: {}",
                         request.getProtocol().getCode(), request.getProtocol(), e.getMessage(), e);
                 sendStreamErrorQuietly(emitter, request.getProtocol(), e);
                 if (request.getProtocol() == ProxyProtocol.CHAT_COMPLETIONS) {

@@ -88,6 +88,53 @@ class RouteCacheServiceTest {
         assertFalse(service.isProviderTemporarilyUnavailable(100L));
     }
 
+    @Test
+    void shouldMarkProviderTokenUnavailableAfterMoreThanThreeConsecutiveFailures() {
+        RouteCacheService service = buildService();
+
+        service.recordProviderTokenFailure(1000L);
+        service.recordProviderTokenFailure(1000L);
+        service.recordProviderTokenFailure(1000L);
+
+        assertFalse(service.isProviderTokenTemporarilyUnavailable(1000L));
+
+        service.recordProviderTokenFailure(1000L);
+
+        assertTrue(service.isProviderTokenTemporarilyUnavailable(1000L));
+        assertFalse(service.isProviderTemporarilyUnavailable(100L));
+    }
+
+    @Test
+    void shouldClearProviderTokenFailureStateAfterSuccessfulResponse() {
+        RouteCacheService service = buildService();
+
+        for (int i = 0; i < 4; i++) {
+            service.recordProviderTokenFailure(1000L);
+        }
+        assertTrue(service.isProviderTokenTemporarilyUnavailable(1000L));
+
+        service.clearProviderTokenFailure(1000L);
+
+        assertFalse(service.isProviderTokenTemporarilyUnavailable(1000L));
+    }
+
+    @Test
+    void shouldExpireProviderTokenFailureStateAfterTtl() {
+        RouteCacheService service = buildService();
+        Instant firstFailureAt = Instant.parse("2026-04-21T00:00:00Z");
+        ReflectionTestUtils.setField(service, "clock", Clock.fixed(firstFailureAt, ZoneOffset.UTC));
+
+        for (int i = 0; i < 4; i++) {
+            service.recordProviderTokenFailure(1000L);
+        }
+        assertTrue(service.isProviderTokenTemporarilyUnavailable(1000L));
+
+        ReflectionTestUtils.setField(service, "clock",
+                Clock.fixed(firstFailureAt.plusSeconds(601), ZoneOffset.UTC));
+
+        assertFalse(service.isProviderTokenTemporarilyUnavailable(1000L));
+    }
+
     private RouteCacheService buildService() {
         return new RouteCacheService(
                 mock(ModelMapper.class),

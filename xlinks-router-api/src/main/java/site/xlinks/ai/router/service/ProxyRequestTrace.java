@@ -97,11 +97,10 @@ public final class ProxyRequestTrace {
             return;
         }
         context.streamEventCount++;
-        boolean firstEvent = context.streamFirstEventDetail == null;
+        boolean firstEvent = context.streamEventCount == 1;
         boolean terminalEvent = isTerminalStreamEvent(event);
         if (firstEvent) {
-            context.streamFirstEventDetail = buildStreamEventDetail(context, event);
-            addTimelineEvent("流式响应事件", "首包, " + context.streamFirstEventDetail);
+            addTimelineEvent("流式响应事件", "首包到达");
             return;
         }
         if (!terminalEvent) {
@@ -111,7 +110,7 @@ public final class ProxyRequestTrace {
             return;
         }
         context.streamTerminalEventLogged = true;
-        addTimelineEvent("流式响应事件", "结束包, " + buildStreamEventDetail(context, event));
+        addTimelineEvent("流式响应事件", "流结束");
     }
 
     private static boolean isTerminalStreamEvent(StreamEvent event) {
@@ -130,19 +129,6 @@ public final class ProxyRequestTrace {
                 || lower.endsWith(".failed")
                 || lower.endsWith(".error")
                 || "error".equals(lower);
-    }
-
-    private static String buildStreamEventDetail(TraceContext context, StreamEvent event) {
-        String eventName = event.getEvent();
-        String data = event.joinedData();
-        int dataLength = data == null ? 0 : data.length();
-        boolean doneSignal = event.isDoneSignal();
-        String preview = abbreviateSingleLine(data, context.streamEventPreviewLimit);
-        return "序号=" + context.streamEventCount
-                + ", event=" + nullSafe(eventName)
-                + ", data长度=" + dataLength
-                + ", done=" + doneSignal
-                + ", 预览=" + preview;
     }
 
     public static void markCustomerToken(CustomerToken customerToken) {
@@ -245,7 +231,9 @@ public final class ProxyRequestTrace {
         if (context == null) {
             return;
         }
-        markInvokeContext(invokeContext);
+        if (invokeContext != null) {
+            markInvokeContext(invokeContext);
+        }
         context.success = false;
         context.finishReason = finishReason;
         context.errorCode = errorCode;
@@ -328,17 +316,6 @@ public final class ProxyRequestTrace {
                 + nullSafe(detail);
     }
 
-    private static String abbreviateSingleLine(String value, int limit) {
-        if (value == null || value.isBlank()) {
-            return "-";
-        }
-        String normalized = value.replace('\n', ' ').replace('\r', ' ');
-        if (normalized.length() <= limit) {
-            return normalized;
-        }
-        return normalized.substring(0, Math.max(limit, 1)) + "...";
-    }
-
     private static String formatTime(long epochMillis) {
         if (epochMillis <= 0) {
             return "-";
@@ -380,7 +357,6 @@ public final class ProxyRequestTrace {
         private boolean timelineEnabled;
         private int streamEventPreviewLimit;
         private int streamEventCount;
-        private String streamFirstEventDetail;
         private boolean streamTerminalEventLogged;
         private boolean timelineEventsTruncated;
         private final List<String> routeEvents = new ArrayList<>(12);

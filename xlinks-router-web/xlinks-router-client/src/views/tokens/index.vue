@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus,
@@ -83,6 +83,10 @@ const importPrimaryModel = ref('')
 const importSonnetModel = ref('')
 const importOpusModel = ref('')
 const importDropdownOpen = ref('')
+const CODEX_DEFAULT_MODEL = 'gpt-5.4'
+const DEFAULT_PREFERRED_APPS = ['codex', 'openclaw']
+const DEFAULT_WIRE_API = 'responses'
+const DEFAULT_OPENCLAW_API = 'openai-responses'
 
 const importModelOptions = computed(() => {
   const tokenModels = Array.isArray(importToken.value?.allowedModels) ? importToken.value.allowedModels : []
@@ -94,12 +98,23 @@ const getImportModelLabel = (value) => {
   return value || t('tokens.ccswitchSelectModel')
 }
 
+const getPreferredPrimaryModel = (options) => {
+  if (!options.length) {
+    return ''
+  }
+  if (DEFAULT_PREFERRED_APPS.includes(importApp.value) && options.includes(CODEX_DEFAULT_MODEL)) {
+    return CODEX_DEFAULT_MODEL
+  }
+  return options[0]
+}
+
 const syncImportModels = () => {
   const options = importModelOptions.value
+  const preferredPrimaryModel = getPreferredPrimaryModel(options)
   const firstModel = options[0] || ''
 
   if (!options.includes(importPrimaryModel.value)) {
-    importPrimaryModel.value = firstModel
+    importPrimaryModel.value = preferredPrimaryModel
   }
   if (!options.includes(importSonnetModel.value)) {
     importSonnetModel.value = firstModel
@@ -144,6 +159,14 @@ const selectImportModel = (key, model) => {
   importDropdownOpen.value = ''
 }
 
+watch(importApp, () => {
+  if (DEFAULT_PREFERRED_APPS.includes(importApp.value)) {
+    importPrimaryModel.value = getPreferredPrimaryModel(importModelOptions.value)
+  } else if (!importModelOptions.value.includes(importPrimaryModel.value)) {
+    importPrimaryModel.value = importModelOptions.value[0] || ''
+  }
+})
+
 const handleImportToCCSwitch = () => {
   if (!importToken.value) {
     return
@@ -159,11 +182,12 @@ const handleImportToCCSwitch = () => {
 
   try {
     const origin = window.location.origin.replace(/\/$/, '')
+    const endpoint = importApp.value === 'claude' ? origin : `${origin}/v1`
     const params = new URLSearchParams({
       resource: 'provider',
       app: importApp.value,
       name: importName.value.trim(),
-      endpoint: importApp.value === 'codex' ? `${origin}/v1` : origin,
+      endpoint,
       apiKey: importToken.value.key,
       model: importPrimaryModel.value,
       homepage: origin,
@@ -178,6 +202,42 @@ const handleImportToCCSwitch = () => {
       if (importOpusModel.value) {
         params.set('opusModel', importOpusModel.value)
       }
+    }
+
+    if (importApp.value === 'codex') {
+      const config = {
+        auth: {
+          OPENAI_API_KEY: importToken.value.key,
+        },
+        config: [
+          'model_provider = "custom"',
+          `model = "${importPrimaryModel.value}"`,
+          'disable_response_storage = true',
+          '',
+          '[model_providers.custom]',
+          'name = "custom"',
+          `base_url = "${endpoint}"`,
+          `wire_api = "${DEFAULT_WIRE_API}"`,
+          'requires_openai_auth = true',
+        ].join('\n'),
+      }
+      params.set('configFormat', 'json')
+      params.set('config', btoa(JSON.stringify(config)))
+    } else if (importApp.value === 'openclaw') {
+      const config = {
+        baseUrl: endpoint,
+        apiKey: importToken.value.key,
+        api: DEFAULT_OPENCLAW_API,
+        models: [
+          {
+            id: importPrimaryModel.value,
+            name: importPrimaryModel.value,
+          },
+        ],
+      }
+      params.set('api', DEFAULT_OPENCLAW_API)
+      params.set('configFormat', 'json')
+      params.set('config', btoa(JSON.stringify(config)))
     }
 
     window.location.href = `ccswitch://v1/import?${params.toString()}`
@@ -644,15 +704,15 @@ onMounted(loadTokens)
     </div>
 
     <div v-if="isImportModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div class="relative w-full max-w-lg overflow-visible rounded-2xl bg-white shadow-2xl">
         <div class="bg-gradient-button p-6 text-white">
           <h2 class="text-2xl font-bold">{{ t('tokens.ccswitchModalTitle') }}</h2>
           <p class="mt-1 text-sm text-white/80">{{ importToken?.name }}</p>
         </div>
-        <div class="space-y-4 p-6">
+        <div class="space-y-4 overflow-visible p-6">
           <div>
             <label class="mb-2 block text-sm font-semibold text-slate-900">{{ t('tokens.ccswitchApp') }}</label>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 @click="importApp = 'codex'"
@@ -668,6 +728,14 @@ onMounted(loadTokens)
                 :class="importApp === 'claude' ? 'border-transparent bg-gradient-button text-white shadow-lg shadow-primary/20' : 'border-slate-300 bg-white text-slate-700'"
               >
                 {{ t('tokens.ccswitchClaude') }}
+              </button>
+              <button
+                type="button"
+                @click="importApp = 'openclaw'"
+                class="rounded-xl border px-4 py-3 text-sm font-semibold transition"
+                :class="importApp === 'openclaw' ? 'border-transparent bg-gradient-button text-white shadow-lg shadow-primary/20' : 'border-slate-300 bg-white text-slate-700'"
+              >
+                {{ t('tokens.ccswitchOpenClaw') }}
               </button>
             </div>
           </div>
@@ -1100,4 +1168,3 @@ onMounted(loadTokens)
   background: transparent;
 }
 </style>
-
