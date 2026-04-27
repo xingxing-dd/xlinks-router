@@ -6,10 +6,16 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.common.constants.WalletConstants;
+import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
+import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.UsageMetrics;
+import site.xlinks.ai.router.entity.CustomerToken;
+import site.xlinks.ai.router.entity.Model;
 import site.xlinks.ai.router.entity.UsageRecord;
+import site.xlinks.ai.router.context.UsageDecision;
+import site.xlinks.ai.router.service.routing.RoutingBuildContext;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,6 +26,8 @@ import java.math.RoundingMode;
 @Service
 @RequiredArgsConstructor
 public class UsageRecordService {
+
+    private static final String BASIC_WALLET_BALANCE_INSUFFICIENT = "basic wallet balance is insufficient";
 
     private final site.xlinks.ai.router.mapper.UsageRecordMapper usageRecordMapper;
     private final CustomerPlanService customerPlanService;
@@ -56,7 +64,7 @@ public class UsageRecordService {
         record.setFinishReason(finishReason);
         try {
             insertUsageRecordWithRetry(record, context.getRequestId());
-            consumeUsageBalanceOrPlan(context, record);
+            consumeUsageBalanceOrPlanSafely(context, record);
             syncCustomerTokenQuotaUsage(context, record);
             log.debug("Usage record saved: {}", context.getRequestId());
         } catch (Exception e) {
@@ -95,15 +103,42 @@ public class UsageRecordService {
             return;
         }
         UsageRecord record = buildRecord(context, null);
+        fillErrorRecord(record, responseStatus, errorCode, errorMessage, sessionMs, finishReason);
+        persistErrorRecord(record, context.getRequestId(), "Error usage record saved: {}");
+    }
+
+    public void recordRoutingError(RoutingBuildContext context,
+                                   int responseStatus,
+                                   String errorCode,
+                                   String errorMessage,
+                                   long sessionMs,
+                                   String finishReason) {
+        if (context == null || context.getCustomerToken() == null) {
+            return;
+        }
+        UsageRecord record = buildRoutingErrorRecord(context);
+        fillErrorRecord(record, responseStatus, errorCode, errorMessage, sessionMs, finishReason);
+        persistErrorRecord(record, context.getRequestId(), "Routing error usage record saved: {}");
+    }
+
+    private void fillErrorRecord(UsageRecord record,
+                                 int responseStatus,
+                                 String errorCode,
+                                 String errorMessage,
+                                 long sessionMs,
+                                 String finishReason) {
         record.setResponseStatus(responseStatus);
         record.setSessionMs(normalizeDurationMs(sessionMs));
         record.setResponseMs(null);
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
         record.setFinishReason(finishReason);
+    }
+
+    private void persistErrorRecord(UsageRecord record, String requestId, String successLogTemplate) {
         try {
-            insertUsageRecordWithRetry(record, context.getRequestId());
-            log.debug("Error usage record saved: {}", context.getRequestId());
+            insertUsageRecordWithRetry(record, requestId);
+            log.debug(successLogTemplate, requestId);
         } catch (Exception e) {
             log.error("Failed to save error usage record", e);
         }
@@ -181,6 +216,54 @@ public class UsageRecordService {
         return record;
     }
 
+    private UsageRecord buildRoutingErrorRecord(RoutingBuildContext context) {
+        UsageRecord record = new UsageRecord();
+        CustomerToken customerToken = context.getCustomerToken();
+        UsageDecision usageDecision = context.getUsageDecision();
+        Model model = context.getModel();
+
+        record.setRequestId(context.getRequestId());
+        record.setAccountId(customerToken.getAccountId());
+        record.setCustomerToken(context.getToken());
+        record.setProviderToken(null);
+        record.setProviderTokenId(null);
+        record.setUsageType(resolveUsageType(usageDecision));
+        record.setUsageFrom(usageDecision != null && usageDecision.getPlanId() != null
+                ? String.valueOf(usageDecision.getPlanId())
+                : null);
+        record.setProviderId(null);
+        record.setProviderCode(null);
+        record.setProviderName(null);
+        record.setEndpointCode(context.getRequest() == null || context.getRequest().getProtocol() == null
+                ? null
+                : context.getRequest().getProtocol().getCode());
+        record.setModelId(model == null ? null : model.getId());
+        record.setModelCode(model == null ? null : model.getModelCode());
+        record.setModelName(model == null ? null : model.getModelName());
+        record.setPromptTokens(0);
+        record.setCompletionTokens(0);
+        record.setTotalTokens(0);
+        record.setCacheHitTokens(0);
+        record.setPromptCost(BigDecimal.ZERO);
+        record.setCacheHitCost(BigDecimal.ZERO);
+        record.setCompletionCost(BigDecimal.ZERO);
+        record.setTotalCost(BigDecimal.ZERO);
+        return record;
+    }
+
+    private String resolveUsageType(UsageDecision usageDecision) {
+        if (usageDecision == null) {
+            return null;
+        }
+        if (usageDecision.getPlanId() != null) {
+            return "plan";
+        }
+        if (usageDecision.isBalanceEnabled()) {
+            return "balance";
+        }
+        return null;
+    }
+
     private void consumeUsageBalanceOrPlan(ProviderInvokeContext context, UsageRecord record) {
         if (context == null || record == null) {
             return;
@@ -205,6 +288,22 @@ public class UsageRecordService {
         );
     }
 
+    private void consumeUsageBalanceOrPlanSafely(ProviderInvokeContext context, UsageRecord record) {
+        try {
+            consumeUsageBalanceOrPlan(context, record);
+        } catch (BusinessException e) {
+            if (isAllowedBasicWalletOverdraft(e)) {
+                log.warn("请求计费时基础钱包余额不足，已按允许的小额透支处理，requestId={}, accountId={}, modelCode={}, totalCost={}",
+                        context == null ? null : context.getRequestId(),
+                        context == null ? null : context.getAccountId(),
+                        context == null ? null : context.getModelCode(),
+                        record == null ? null : record.getTotalCost());
+                return;
+            }
+            throw e;
+        }
+    }
+
     private void syncCustomerTokenQuotaUsage(ProviderInvokeContext context, UsageRecord record) {
         if (context == null || record == null || context.getCustomerTokenId() == null) {
             return;
@@ -226,6 +325,14 @@ public class UsageRecordService {
             todayUsed = BigDecimal.ZERO;
         }
         customerTokenQuotaService.syncQuotaUsage(context.getCustomerTokenId(), todayUsed, totalCost);
+    }
+
+    private boolean isAllowedBasicWalletOverdraft(BusinessException exception) {
+        if (exception == null) {
+            return false;
+        }
+        return exception.getCode() == ErrorCode.FORBIDDEN.getCode()
+                && BASIC_WALLET_BALANCE_INSUFFICIENT.equals(exception.getMessage());
     }
 
     private int normalizeCacheHitTokens(Integer cacheHitTokens, int promptTokens, String modelProvider) {

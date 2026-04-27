@@ -26,6 +26,7 @@ import site.xlinks.ai.router.service.RetryRouteExclusions;
 import site.xlinks.ai.router.service.routing.ProxyErrors;
 import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
 import site.xlinks.ai.router.service.routing.RoutingBuildContext;
+import site.xlinks.ai.router.service.routing.RoutingStepException;
 
 import java.util.List;
 import java.util.Map;
@@ -99,7 +100,7 @@ public class ProtocolProxyService {
             ProxyRequestTrace.markSuccess(context, usageMetrics);
             return response;
         } catch (BusinessException e) {
-            recordBusinessError(context, e, startAt);
+            recordBusinessError(context, extractRoutingContext(e), e, startAt);
             throw e;
         } catch (UpstreamTimeoutException e) {
             throw handleTimeoutError(context, e, startAt);
@@ -144,7 +145,7 @@ public class ProtocolProxyService {
             recordError(context, 500, "CLIENT_ABORT", e.getMessage(), startAt, "client_abort");
         } catch (BusinessException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
-            recordBusinessError(context, e, startAt);
+            recordBusinessError(context, extractRoutingContext(e), e, startAt);
             throw e;
         } catch (StreamFirstResponseTimeoutException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
@@ -416,9 +417,12 @@ public class ProtocolProxyService {
         return protocol.getRequestIdPrefix() + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private void recordBusinessError(ProviderInvokeContext context, BusinessException e, long startAt) {
-        String finishReason = e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
-        recordError(context, 500, String.valueOf(e.getCode()), e.getMessage(), startAt, finishReason);
+    private void recordBusinessError(ProviderInvokeContext context,
+                                     RoutingBuildContext routingContext,
+                                     BusinessException e,
+                                     long startAt) {
+        String finishReason = classifyBusinessFinishReason(e);
+        recordError(context, routingContext, 500, String.valueOf(e.getCode()), e.getMessage(), startAt, finishReason);
     }
 
     private BusinessException handleTimeoutError(ProviderInvokeContext context,
@@ -450,6 +454,16 @@ public class ProtocolProxyService {
                              String errorMessage,
                              long startAt,
                              String finishReason) {
+        recordError(context, null, responseStatus, errorCode, errorMessage, startAt, finishReason);
+    }
+
+    private void recordError(ProviderInvokeContext context,
+                             RoutingBuildContext routingContext,
+                             int responseStatus,
+                             String errorCode,
+                             String errorMessage,
+                             long startAt,
+                             String finishReason) {
         if (context != null) {
             usageRecordService.recordError(
                     context,
@@ -459,9 +473,60 @@ public class ProtocolProxyService {
                     System.currentTimeMillis() - startAt,
                     finishReason
             );
+        } else if (routingContext != null && routingContext.getCustomerToken() != null) {
+            usageRecordService.recordRoutingError(
+                    routingContext,
+                    responseStatus,
+                    errorCode,
+                    errorMessage,
+                    System.currentTimeMillis() - startAt,
+                    finishReason
+            );
         }
         ProxyRequestTrace.markFailure(context, finishReason, errorCode, errorMessage);
         ProxyRequestTrace.addRouteEvent("请求结束，结果=" + finishReason + "，错误码=" + errorCode);
+    }
+
+    private RoutingBuildContext extractRoutingContext(BusinessException e) {
+        if (e instanceof RoutingStepException routingStepException) {
+            return routingStepException.getRoutingContext();
+        }
+        return null;
+    }
+
+    private String classifyBusinessFinishReason(BusinessException e) {
+        if (e == null) {
+            return "business_error";
+        }
+        String message = e.getMessage();
+        if (message == null) {
+            return e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
+        }
+        if ("No available plan or wallet balance".equals(message)) {
+            return "entitlement_unavailable";
+        }
+        if ("Customer token total quota reached".equals(message)) {
+            return "token_total_quota_reached";
+        }
+        if ("Customer token daily quota reached".equals(message)) {
+            return "token_daily_quota_reached";
+        }
+        if ("Customer token model is not allowed".equals(message)) {
+            return "token_model_not_allowed";
+        }
+        if (message.startsWith("Model does not exist or is unavailable: ")) {
+            return "model_unavailable";
+        }
+        if (message.startsWith("No available provider mapping for model and protocol: ")) {
+            return "provider_mapping_unavailable";
+        }
+        if (message.startsWith("No available provider token for model and protocol: ")) {
+            return "provider_token_unavailable";
+        }
+        if ("Provider token concurrency limit reached".equals(message)) {
+            return "provider_rate_limited";
+        }
+        return e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
     }
 
     private void recordSelectedRouteFailure(ProviderInvokeContext context) {

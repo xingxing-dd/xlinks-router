@@ -2,6 +2,7 @@ package site.xlinks.ai.router.service.routing;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.service.ProxyRequestTrace;
 
@@ -46,7 +47,15 @@ public class ProxyRoutingPipeline {
         );
         for (RoutingStep step : steps) {
             ProxyRequestTrace.addRouteEvent("执行路由步骤: " + step.getClass().getSimpleName());
-            step.apply(context);
+            try {
+                step.apply(context);
+            } catch (RoutingStepException e) {
+                throw e;
+            } catch (BusinessException e) {
+                throw new RoutingStepException(context, e);
+            } catch (RuntimeException e) {
+                throw new RoutingStepException(context, e);
+            }
         }
         return context;
     }
