@@ -11,14 +11,17 @@ import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.ClientAbortException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAICompatibleAdapterTest {
@@ -206,6 +209,25 @@ class OpenAICompatibleAdapterTest {
         assertEquals("[DONE]", events.get(1).joinedData());
     }
 
+    @Test
+    void shouldAbortBeforeExecutingWhenStreamAlreadyCancelled() {
+        ClientAbortException exception = assertThrows(
+                ClientAbortException.class,
+                () -> adapter.forwardStream(
+                        ProxyRequest.builder()
+                                .protocol(ProxyProtocol.RESPONSES)
+                                .stream(true)
+                                .build(),
+                        context(),
+                        event -> {
+                        },
+                        new AtomicBoolean(true)
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("cancelled before upstream call execution"));
+    }
+
     private ProviderInvokeContext context() {
         return ProviderInvokeContext.builder()
                 .baseUrl("https://example.com/v1")
@@ -214,4 +236,3 @@ class OpenAICompatibleAdapterTest {
                 .build();
     }
 }
-

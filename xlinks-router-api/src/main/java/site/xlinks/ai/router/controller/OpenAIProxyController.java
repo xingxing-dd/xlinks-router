@@ -31,6 +31,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HTTP entrypoint for OpenAI-compatible proxy APIs.
@@ -117,6 +118,7 @@ public class OpenAIProxyController {
     private SseEmitter stream(String token, ProxyRequest request, HttpServletResponse servletResponse) {
         prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
+        AtomicBoolean downstreamClosed = new AtomicBoolean(false);
         emitter.onCompletion(() -> log.debug("SSE 已完成, endpointCode={}, protocol={}",
                 request.getProtocol().getCode(), request.getProtocol()));
         emitter.onTimeout(() -> {
@@ -127,7 +129,7 @@ public class OpenAIProxyController {
 
         taskExecutor.execute(() -> {
             try {
-                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
+                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event), downstreamClosed);
                 emitter.complete();
             } catch (ClientAbortException e) {
                 log.info("客户端已断开 OpenAI SSE 连接: {}", e.getMessage());

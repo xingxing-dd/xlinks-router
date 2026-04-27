@@ -14,11 +14,13 @@ import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.ClientAbortException;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -140,6 +142,22 @@ class AnthropicCompatibleAdapterTest {
         assertTrue(exception.getMessage().contains("https://timicc.com/messages"));
     }
 
+    @Test
+    void shouldAbortBeforeExecutingWhenStreamAlreadyCancelled() {
+        ClientAbortException exception = assertThrows(
+                ClientAbortException.class,
+                () -> adapter.forwardStream(
+                        streamRequest(),
+                        context(),
+                        event -> {
+                        },
+                        new AtomicBoolean(true)
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("cancelled before upstream call execution"));
+    }
+
     private AnthropicCompatibleAdapter createAdapterResponding(String contentType, String body) {
         Interceptor interceptor = chain -> new Response.Builder()
                 .request(chain.request())
@@ -172,4 +190,3 @@ class AnthropicCompatibleAdapterTest {
                 .build();
     }
 }
-

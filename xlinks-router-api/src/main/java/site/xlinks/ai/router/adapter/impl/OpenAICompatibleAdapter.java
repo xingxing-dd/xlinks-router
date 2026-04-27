@@ -19,12 +19,15 @@ import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 import site.xlinks.ai.router.openai.error.OpenAIErrorResponse;
+import site.xlinks.ai.router.service.ClientAbortException;
 import site.xlinks.ai.router.service.StreamFirstResponseTimeoutException;
+import site.xlinks.ai.router.service.UpstreamTransportException;
 import site.xlinks.ai.router.service.UpstreamProviderException;
 import site.xlinks.ai.router.service.UpstreamTimeoutException;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -78,9 +81,21 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
     public void forwardStream(ProxyRequest request,
                               ProviderInvokeContext context,
                               Consumer<StreamEvent> onEvent) {
+        forwardStream(request, context, onEvent, new AtomicBoolean(false));
+    }
+
+    @Override
+    public void forwardStream(ProxyRequest request,
+                              ProviderInvokeContext context,
+                              Consumer<StreamEvent> onEvent,
+                              AtomicBoolean cancelled) {
+        if (cancelled != null && cancelled.get()) {
+            throw new ClientAbortException("Stream cancelled before upstream call execution");
+        }
         try {
             Request httpRequest = buildRequest(request, context);
             Call call = createScopedClient(context, true).newCall(httpRequest);
+            Thread cancellationWatcher = startCancellationWatcher(call, cancelled);
             try (Response response = call.execute()) {
                 if (!response.isSuccessful()) {
                     throw buildProviderFailure(response, context);
@@ -127,12 +142,17 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
 
                 onEvent.accept(StreamEvent.builder().dataLine(fallbackData).build());
                 onEvent.accept(StreamEvent.builder().dataLine("[DONE]").build());
+            } finally {
+                stopCancellationWatcher(cancellationWatcher);
             }
         } catch (InterruptedIOException e) {
             throw new StreamFirstResponseTimeoutException("Stream first response timeout", e);
         } catch (IOException e) {
+            if (cancelled != null && cancelled.get()) {
+                throw new ClientAbortException("Downstream client disconnected while reading upstream stream", e);
+            }
             log.error("Error calling provider API", e);
-            throw new RuntimeException("Failed to call provider API: " + e.getMessage(), e);
+            throw new UpstreamTransportException("Failed to call provider API: " + e.getMessage(), e);
         }
     }
 

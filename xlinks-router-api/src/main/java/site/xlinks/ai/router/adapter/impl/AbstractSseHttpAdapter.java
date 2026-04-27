@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.ResponseBody;
 import okio.BufferedSource;
@@ -19,6 +20,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -288,6 +290,39 @@ public abstract class AbstractSseHttpAdapter {
             return value;
         }
         return value.substring(0, maxLen - 3) + "...";
+    }
+
+    protected Thread startCancellationWatcher(Call call, AtomicBoolean cancelled) {
+        if (call == null || cancelled == null) {
+            return null;
+        }
+        if (cancelled.get()) {
+            call.cancel();
+            return null;
+        }
+        Thread watcher = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted() && !call.isCanceled()) {
+                if (cancelled.get()) {
+                    call.cancel();
+                    return;
+                }
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "upstream-stream-cancel");
+        watcher.setDaemon(true);
+        watcher.start();
+        return watcher;
+    }
+
+    protected void stopCancellationWatcher(Thread watcher) {
+        if (watcher != null) {
+            watcher.interrupt();
+        }
     }
 
     private long requestTimeoutMs(ProviderInvokeContext context) {

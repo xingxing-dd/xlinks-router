@@ -33,8 +33,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -104,6 +105,8 @@ public class ProtocolProxyService {
             throw e;
         } catch (UpstreamTimeoutException e) {
             throw handleTimeoutError(context, e, startAt);
+        } catch (UpstreamTransportException e) {
+            throw handleTransportError(context, e, startAt);
         } catch (Exception e) {
             unexpectedError = e;
             throw handleUnexpectedError("Proxy request failed", context, e, startAt);
@@ -115,6 +118,13 @@ public class ProtocolProxyService {
     public void forwardStream(String token,
                               ProxyRequest request,
                               Consumer<StreamEvent> onEvent) {
+        forwardStream(token, request, onEvent, new AtomicBoolean(false));
+    }
+
+    public void forwardStream(String token,
+                              ProxyRequest request,
+                              Consumer<StreamEvent> onEvent,
+                              AtomicBoolean downstreamCancelled) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
@@ -124,7 +134,15 @@ public class ProtocolProxyService {
         ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
-            StreamInvokeResult streamInvokeResult = forwardStreamWithRetry(token, request, requestId, onEvent, upstreamStreamPayloadBuilder, startAt);
+            StreamInvokeResult streamInvokeResult = forwardStreamWithRetry(
+                    token,
+                    request,
+                    requestId,
+                    onEvent,
+                    upstreamStreamPayloadBuilder,
+                    startAt,
+                    downstreamCancelled == null ? new AtomicBoolean(false) : downstreamCancelled
+            );
             context = streamInvokeResult.context();
             AtomicReference<UsageMetrics> usageMetricsRef = streamInvokeResult.usageMetricsRef();
             AtomicReference<Integer> responseMsRef = streamInvokeResult.responseMsRef();
@@ -156,6 +174,9 @@ public class ProtocolProxyService {
         } catch (UpstreamTimeoutException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             throw handleTimeoutError(context, e, startAt);
+        } catch (UpstreamTransportException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            throw handleTransportError(context, e, startAt);
         } catch (Exception e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             unexpectedError = e;
@@ -283,6 +304,9 @@ public class ProtocolProxyService {
             } catch (UpstreamTimeoutException ex) {
                 recordSelectedRouteFailure(context);
                 throw ex;
+            } catch (UpstreamTransportException ex) {
+                recordSelectedRouteFailure(context);
+                throw ex;
             } catch (UpstreamProviderException ex) {
                 recordSelectedRouteFailure(context);
                 ProxyRequestTrace.addRouteEvent("上游失败("
@@ -297,7 +321,6 @@ public class ProtocolProxyService {
                 ProxyRequestTrace.addRouteEvent("准备重试下一个 provider/token("
                         + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
             } catch (Exception ex) {
-                recordSelectedRouteFailure(context);
                 throw ex;
             } finally {
                 providerConcurrencyGuard.cancelAutoRenew(renewFuture);
@@ -314,7 +337,8 @@ public class ProtocolProxyService {
                                                       String requestId,
                                                       Consumer<StreamEvent> onEvent,
                                                       StringBuilder upstreamStreamPayloadBuilder,
-                                                      long startAt) {
+                                                      long startAt,
+                                                      AtomicBoolean downstreamCancelled) {
         RetryRouteExclusions exclusions = new RetryRouteExclusions();
         ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
         UpstreamProviderException lastRetryableFailure = null;
@@ -329,6 +353,7 @@ public class ProtocolProxyService {
             ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue = new ArrayBlockingQueue<>(queueCapacity);
             AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
             CountDownLatch writerDone = new CountDownLatch(1);
+            AtomicBoolean streamCancelled = downstreamCancelled == null ? new AtomicBoolean(false) : downstreamCancelled;
             try {
                 logRetryAttempt("流式", attempt, context, exclusions);
                 ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
@@ -351,7 +376,7 @@ public class ProtocolProxyService {
                         usageMetricsRef.set(usageMetrics);
                     }
                     enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
-                });
+                }, streamCancelled);
                 ProxyRequestTrace.addTimelineEvent("流式读取", "上游流读取完成");
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
@@ -366,15 +391,24 @@ public class ProtocolProxyService {
                 }
                 return new StreamInvokeResult(context, usageMetricsRef, responseMsRef);
             } catch (ClientAbortException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
             } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                streamCancelled.set(true);
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } catch (UpstreamTransportException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 recordSelectedRouteFailure(context);
                 throw ex;
             } catch (UpstreamProviderException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 recordSelectedRouteFailure(context);
@@ -391,9 +425,9 @@ public class ProtocolProxyService {
                 ProxyRequestTrace.addRouteEvent("流式首包前准备重试下一个 provider/token("
                         + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
             } catch (Exception ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
-                recordSelectedRouteFailure(context);
                 throw ex;
             } finally {
                 providerConcurrencyGuard.cancelAutoRenew(renewFuture);
@@ -429,6 +463,13 @@ public class ProtocolProxyService {
                                                  UpstreamTimeoutException e,
                                                  long startAt) {
         recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, "upstream_timeout");
+        return ProxyErrors.upstreamTimeout();
+    }
+
+    private BusinessException handleTransportError(ProviderInvokeContext context,
+                                                   UpstreamTransportException e,
+                                                   long startAt) {
+        recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, "upstream_transport_error");
         return ProxyErrors.upstreamTimeout();
     }
 

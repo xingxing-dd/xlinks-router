@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Anthropic-compatible messages proxy endpoint.
@@ -133,20 +134,25 @@ public class AnthropicProxyController {
     private SseEmitter stream(String token, ProxyRequest request, HttpServletResponse servletResponse) {
         prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
+        AtomicBoolean downstreamClosed = new AtomicBoolean(false);
         emitter.onCompletion(() -> log.debug("Anthropic SSE completed, protocol={}", request.getProtocol()));
+        emitter.onCompletion(() -> downstreamClosed.set(true));
         emitter.onTimeout(() -> {
+            downstreamClosed.set(true);
             log.warn("Anthropic SSE timeout, protocol={}", request.getProtocol());
             emitter.complete();
         });
 
         taskExecutor.execute(() -> {
             try {
-                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
+                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event), downstreamClosed);
                 emitter.complete();
             } catch (ClientAbortException e) {
+                downstreamClosed.set(true);
                 log.info("Client disconnected from Anthropic SSE stream: {}", e.getMessage());
                 emitter.complete();
             } catch (Exception e) {
+                downstreamClosed.set(true);
                 log.warn("Anthropic SSE forwarding failed: {}", e.getMessage(), e);
                 sendErrorEventQuietly(emitter, e);
                 emitter.complete();
