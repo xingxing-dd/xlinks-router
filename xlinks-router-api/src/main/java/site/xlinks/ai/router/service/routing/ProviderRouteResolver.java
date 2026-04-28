@@ -8,8 +8,8 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.service.ProviderPermitLease;
-import site.xlinks.ai.router.service.ProxyRequestTrace;
 import site.xlinks.ai.router.service.ProviderTokenSelectService;
+import site.xlinks.ai.router.service.ProxyRequestTrace;
 import site.xlinks.ai.router.service.RouteCacheService;
 
 import java.util.ArrayList;
@@ -50,27 +50,53 @@ public class ProviderRouteResolver {
         providerModels = prioritizeMerchantConfiguredProvider(accountId, modelId, providerModels);
         boolean concurrencyLimited = false;
         Long preferredProviderId = routeCacheService.getMerchantPreferredProviderId(accountId, modelId);
-        ProxyRequestTrace.addRouteEvent("开始选择上游 provider，候选数=" + providerModels.size()
+        ProxyRequestTrace.addRouteEvent("Start resolving upstream provider, candidateCount=" + providerModels.size()
                 + ", preferredProviderId=" + preferredProviderId);
+        log.info("Provider route resolve start. requestId={}, accountId={}, modelId={}, modelCode={}, protocol={}, candidateCount={}, preferredProviderId={}, excludedProviderIds={}, excludedProviderTokenIds={}",
+                requestId,
+                accountId,
+                modelId,
+                modelCode,
+                protocol,
+                providerModels.size(),
+                preferredProviderId,
+                excludedProviderIds,
+                excludedProviderTokenIds);
 
         for (ProviderModel candidate : providerModels) {
             if (candidate == null || candidate.getProviderId() == null) {
                 continue;
             }
+            log.info("Provider route candidate evaluating. requestId={}, providerId={}, providerModelId={}, providerModelName={}",
+                    requestId,
+                    candidate.getProviderId(),
+                    candidate.getId(),
+                    candidate.getProviderModelName());
             if (excludedProviderIds != null && excludedProviderIds.contains(candidate.getProviderId())) {
-                ProxyRequestTrace.addRouteEvent("跳过已重试失败 provider(providerId="
-                        + candidate.getProviderId() + ")");
+                ProxyRequestTrace.addRouteEvent("Skip excluded provider(providerId=" + candidate.getProviderId() + ")");
+                log.info("Provider route candidate skipped because provider is excluded. requestId={}, providerId={}, providerModelId={}",
+                        requestId,
+                        candidate.getProviderId(),
+                        candidate.getId());
                 continue;
             }
             if (routeCacheService.isProviderTemporarilyUnavailable(candidate.getProviderId())) {
-                ProxyRequestTrace.addRouteEvent("触发降级，跳过临时不可用 provider(providerId="
-                        + candidate.getProviderId() + ")");
+                ProxyRequestTrace.addRouteEvent("Skip temporarily unavailable provider(providerId=" + candidate.getProviderId() + ")");
+                log.info("Provider route candidate skipped because provider is temporarily unavailable. requestId={}, providerId={}, providerModelId={}",
+                        requestId,
+                        candidate.getProviderId(),
+                        candidate.getId());
                 continue;
             }
             Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());
             if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
-                ProxyRequestTrace.addRouteEvent("跳过不可用 provider(providerId=" + candidate.getProviderId()
+                ProxyRequestTrace.addRouteEvent("Skip unavailable provider(providerId=" + candidate.getProviderId()
                         + ", providerStatus=" + (candidateProvider == null ? null : candidateProvider.getStatus()) + ")");
+                log.info("Provider route candidate skipped because provider status is unavailable. requestId={}, providerId={}, providerModelId={}, providerStatus={}",
+                        requestId,
+                        candidate.getProviderId(),
+                        candidate.getId(),
+                        candidateProvider == null ? null : candidateProvider.getStatus());
                 continue;
             }
             ProviderTokenSelectService.SelectionResult selectionResult =
@@ -81,16 +107,29 @@ public class ProviderRouteResolver {
                     );
             if (selectionResult.token() == null) {
                 concurrencyLimited = concurrencyLimited || selectionResult.concurrencyLimited();
-                ProxyRequestTrace.addRouteEvent("provider=" + candidateProvider.getId()
-                        + " 未选到可用 token，继续尝试下一个 provider(concurrencyLimited="
-                        + selectionResult.concurrencyLimited() + ")");
+                ProxyRequestTrace.addRouteEvent("Provider did not select available token, continue next provider(providerId="
+                        + candidateProvider.getId() + ", concurrencyLimited=" + selectionResult.concurrencyLimited() + ")");
+                log.info("Provider route candidate token selection missed. requestId={}, providerId={}, providerCode={}, providerModelId={}, concurrencyLimited={}",
+                        requestId,
+                        candidateProvider.getId(),
+                        candidateProvider.getProviderCode(),
+                        candidate.getId(),
+                        selectionResult.concurrencyLimited());
                 continue;
             }
-            ProxyRequestTrace.addRouteEvent("上游 provider 选择成功(providerId=" + candidateProvider.getId()
+            ProxyRequestTrace.addRouteEvent("Upstream provider selected(providerId=" + candidateProvider.getId()
                     + ", providerName=" + candidateProvider.getProviderName()
                     + ", providerModelId=" + candidate.getId()
                     + ", providerModelName=" + candidate.getProviderModelName()
                     + ", providerTokenId=" + selectionResult.token().getId() + ")");
+            log.info("Provider route resolve success. requestId={}, providerId={}, providerCode={}, providerModelId={}, providerModelName={}, providerTokenId={}, permitAllocated={}",
+                    requestId,
+                    candidateProvider.getId(),
+                    candidateProvider.getProviderCode(),
+                    candidate.getId(),
+                    candidate.getProviderModelName(),
+                    selectionResult.token().getId(),
+                    selectionResult.lease() != null && selectionResult.lease().hasPermit());
             return new ResolvedProviderRoute(
                     candidateProvider,
                     candidate,
@@ -100,10 +139,22 @@ public class ProviderRouteResolver {
         }
 
         if (concurrencyLimited) {
-            ProxyRequestTrace.addRouteEvent("所有候选 provider 均因限流未命中");
+            ProxyRequestTrace.addRouteEvent("All candidate providers missed because of concurrency limit");
+            log.info("Provider route resolve finished with concurrency limited. requestId={}, accountId={}, modelId={}, modelCode={}, protocol={}",
+                    requestId,
+                    accountId,
+                    modelId,
+                    modelCode,
+                    protocol);
             throw ProxyErrors.providerTokenRateLimited();
         }
-        ProxyRequestTrace.addRouteEvent("所有候选 provider 均无可用 token");
+        ProxyRequestTrace.addRouteEvent("All candidate providers have no available token");
+        log.info("Provider route resolve finished without available token. requestId={}, accountId={}, modelId={}, modelCode={}, protocol={}",
+                requestId,
+                accountId,
+                modelId,
+                modelCode,
+                protocol);
         throw ProxyErrors.noProviderToken(modelCode);
     }
 

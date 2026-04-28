@@ -4,7 +4,7 @@ import { getApi, postApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
 
 const DEFAULT_USAGE_PAGE_SIZE = 20
-const RECHARGE_PAYMENT_RATE = 0.2
+const RECHARGE_PAYMENT_RATE = 0.4
 
 export function useDashboard() {
   const { t } = useI18n()

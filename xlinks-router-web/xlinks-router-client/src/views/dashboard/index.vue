@@ -558,7 +558,7 @@ const getInputTokenTagClass = (inputTokens) => {
           </div>
           <div class="flex items-center justify-between mb-2">
             <span class="text-slate-600">{{ t('dashboard.exchangeRate') }}</span>
-            <span class="font-semibold text-slate-900">1 : 0.2</span>
+            <span class="font-semibold text-slate-900">1 : 0.4</span>
           </div>
           <div class="flex items-center justify-between pt-2 border-t border-slate-200">
             <span class="text-slate-900 font-semibold">

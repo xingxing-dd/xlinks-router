@@ -138,7 +138,7 @@ export default {
     exchangeRate: 'Exchange Rate',
     payAmount: 'Payment Amount',
     paymentMethod: 'Payment Method',
-    rechargeRateHint: 'Enter the USD balance amount. The actual CNY payment is calculated at 1 : 0.2.',
+    rechargeRateHint: 'Enter the USD balance amount. The actual CNY payment is calculated at 1 : 0.4.',
     inputAmountPlaceholder: 'Please enter recharge amount in USD',
     minAmount: 'Minimum amount',
     maxAmount: 'Maximum amount',

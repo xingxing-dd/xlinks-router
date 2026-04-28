@@ -54,31 +54,40 @@ public class ProviderTokenSelectService {
         }
         LocalDateTime now = LocalDateTime.now();
         List<ProviderToken> candidates = listAvailableTokens(provider.getId(), now);
-        ProxyRequestTrace.addRouteEvent("开始选择 provider=" + provider.getId() + " 的 token，候选数=" + candidates.size());
+        ProxyRequestTrace.addRouteEvent("Start selecting token for provider=" + provider.getId() + ", candidateCount=" + candidates.size());
         if (candidates.isEmpty()) {
-            ProxyRequestTrace.addRouteEvent("provider=" + provider.getId() + " 下无可用 token");
+            ProxyRequestTrace.addRouteEvent("Provider=" + provider.getId() + " has no available token");
             return SelectionResult.none(false);
         }
 
         boolean concurrencyLimited = false;
         for (ProviderToken token : candidates) {
             if (excludedProviderTokenIds != null && excludedProviderTokenIds.contains(token.getId())) {
-                ProxyRequestTrace.addRouteEvent("跳过已重试失败 providerToken=" + token.getId());
+                ProxyRequestTrace.addRouteEvent("Skip excluded providerToken=" + token.getId());
                 continue;
             }
             ProviderPermitLease lease = providerConcurrencyGuard.tryAcquire(provider, token, requestId);
             if (lease == null) {
                 concurrencyLimited = true;
-                ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " 当前不可用，继续尝试下一个候选");
+                ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " currently unavailable, continue next candidate");
                 continue;
             }
             token.setLastUsedAt(now);
             routeCacheService.touchProviderToken(token.getId(), now);
-            ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " 选择成功");
+            long selectionCount = routeCacheService.incrementProviderTokenSelectionCount(token.getId());
+            log.info("Provider token selected. requestId={}, providerId={}, providerCode={}, providerTokenId={}, tokenName={}, selectionCount={}, lastUsedAt={}",
+                    requestId,
+                    provider.getId(),
+                    provider.getProviderCode(),
+                    token.getId(),
+                    token.getTokenName(),
+                    selectionCount,
+                    now);
+            ProxyRequestTrace.addRouteEvent("providerToken=" + token.getId() + " selected successfully");
             return new SelectionResult(token, lease, false);
         }
-        ProxyRequestTrace.addRouteEvent("provider=" + provider.getId()
-                + " 的 token 选择失败(concurrencyLimited=" + concurrencyLimited + ")");
+        ProxyRequestTrace.addRouteEvent("Provider=" + provider.getId()
+                + " token selection failed(concurrencyLimited=" + concurrencyLimited + ")");
         return SelectionResult.none(concurrencyLimited);
     }
 
@@ -132,22 +141,16 @@ public class ProviderTokenSelectService {
 
     private Comparator<ProviderToken> tokenComparator() {
         return Comparator
-                .comparingLong(this::remainingQuota)
-                .reversed()
+                .comparingLong(this::selectionCount)
                 .thenComparing(ProviderToken::getLastUsedAt, this::compareLastUsed)
                 .thenComparing(token -> normalizeId(token.getId()));
     }
 
-    private long remainingQuota(ProviderToken token) {
-        if (token == null) {
-            return Long.MIN_VALUE;
-        }
-        Long total = token.getQuotaTotal();
-        if (total == null) {
+    private long selectionCount(ProviderToken token) {
+        if (token == null || token.getId() == null) {
             return Long.MAX_VALUE;
         }
-        long used = token.getQuotaUsed() == null ? 0L : token.getQuotaUsed();
-        return total - used;
+        return routeCacheService.getProviderTokenSelectionCount(token.getId());
     }
 
     private int compareLastUsed(LocalDateTime left, LocalDateTime right) {
