@@ -8,6 +8,7 @@ import CustomerTokens from '../views/customer-tokens/index.vue'
 import Models from '../views/models/index.vue'
 import Plans from '../views/plans/index.vue'
 import Subscriptions from '../views/subscriptions/index.vue'
+import CustomerOrders from '../views/customer-orders/index.vue'
 import ActivationCodes from '../views/activation-codes/index.vue'
 import ActivationUsage from '../views/activation-usage/index.vue'
 import UsageRecords from '../views/usage-records/index.vue'
@@ -32,6 +33,7 @@ const routes = [
       { path: 'models', name: 'Models', component: Models },
       { path: 'plans', name: 'Plans', component: Plans },
       { path: 'subscriptions', name: 'Subscriptions', component: Subscriptions },
+      { path: 'customer-orders', name: 'CustomerOrders', component: CustomerOrders },
       { path: 'activation-codes', name: 'ActivationCodes', component: ActivationCodes },
       { path: 'activation-usage', name: 'ActivationUsage', component: ActivationUsage },
       { path: 'usage-records', name: 'UsageRecords', component: UsageRecords },

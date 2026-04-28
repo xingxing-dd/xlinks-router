@@ -14,7 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -60,44 +62,64 @@ public class ApiCacheRefreshNotifier {
             log.debug("Skip cache refresh notify because feature is disabled. payload={}", payload);
             return;
         }
-        if (apiUrl == null || apiUrl.isBlank() || token == null || token.isBlank()) {
+        List<String> apiUrls = resolveApiUrls();
+        if (apiUrls.isEmpty() || token == null || token.isBlank()) {
             log.warn("Skip cache refresh notify because apiUrl or token is blank. payload={}", payload);
             return;
         }
+        for (String targetUrl : apiUrls) {
+            sendToTarget(targetUrl, payload);
+        }
+    }
+
+    private List<String> resolveApiUrls() {
+        if (apiUrl == null || apiUrl.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(apiUrl.split("[,\\r\\n]+"))
+                .map(String::trim)
+                .filter(url -> !url.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private void sendToTarget(String targetUrl, Map<String, Object> payload) {
         try {
             String json = objectMapper.writeValueAsString(payload);
             Request request = new Request.Builder()
-                    .url(apiUrl)
+                    .url(targetUrl)
                     .addHeader("Authorization", "Bearer " + token)
                     .post(RequestBody.create(json, JSON))
                     .build();
-            okHttpClient.newCall(request).enqueue(new LoggingCallback(payload));
+            okHttpClient.newCall(request).enqueue(new LoggingCallback(targetUrl, payload));
         } catch (Exception ex) {
-            log.warn("Failed to submit cache refresh notify request. payload={}", payload, ex);
+            log.warn("Failed to submit cache refresh notify request. targetUrl={} payload={}", targetUrl, payload, ex);
         }
     }
 
     private static class LoggingCallback implements Callback {
+        private final String targetUrl;
         private final Map<String, Object> payload;
 
-        private LoggingCallback(Map<String, Object> payload) {
+        private LoggingCallback(String targetUrl, Map<String, Object> payload) {
+            this.targetUrl = targetUrl;
             this.payload = payload;
         }
 
         @Override
         public void onFailure(Call call, IOException e) {
-            log.warn("Cache refresh notify failed. payload={}", payload, e);
+            log.warn("Cache refresh notify failed. targetUrl={} payload={}", targetUrl, payload, e);
         }
 
         @Override
         public void onResponse(Call call, Response response) throws IOException {
             try (response) {
                 if (!response.isSuccessful()) {
-                    log.warn("Cache refresh notify returned non-success status={} payload={}",
-                            response.code(), payload);
+                    log.warn("Cache refresh notify returned non-success status={} targetUrl={} payload={}",
+                            response.code(), targetUrl, payload);
                     return;
                 }
-                log.debug("Cache refresh notify succeeded. payload={}", payload);
+                log.debug("Cache refresh notify succeeded. targetUrl={} payload={}", targetUrl, payload);
             }
         }
     }

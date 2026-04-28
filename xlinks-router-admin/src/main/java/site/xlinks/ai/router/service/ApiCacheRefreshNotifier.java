@@ -13,7 +13,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -71,14 +73,32 @@ public class ApiCacheRefreshNotifier {
             log.debug("Skip cache refresh notify because feature is disabled. payload={}", payload);
             return;
         }
-        if (apiUrl == null || apiUrl.isBlank() || token == null || token.isBlank()) {
+        List<String> apiUrls = resolveApiUrls();
+        if (apiUrls.isEmpty() || token == null || token.isBlank()) {
             log.warn("Skip cache refresh notify because apiUrl or token is blank. payload={}", payload);
             return;
         }
+        for (String targetUrl : apiUrls) {
+            sendToTarget(targetUrl, payload);
+        }
+    }
+
+    private List<String> resolveApiUrls() {
+        if (apiUrl == null || apiUrl.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(apiUrl.split("[,\\r\\n]+"))
+                .map(String::trim)
+                .filter(url -> !url.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private void sendToTarget(String targetUrl, Map<String, Object> payload) {
         try {
             String json = objectMapper.writeValueAsString(payload);
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
+                    .uri(URI.create(targetUrl))
                     .timeout(Duration.ofSeconds(30))
                     .header("Authorization", "Bearer " + token)
                     .header("Content-Type", "application/json")
@@ -87,16 +107,16 @@ public class ApiCacheRefreshNotifier {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("Cache refresh notify returned non-success status={} payload={} body={}",
-                        response.statusCode(), payload, response.body());
+                log.warn("Cache refresh notify returned non-success status={} targetUrl={} payload={} body={}",
+                        response.statusCode(), targetUrl, payload, response.body());
                 return;
             }
-            log.info("Cache refresh notify succeeded. payload={}", payload);
+            log.info("Cache refresh notify succeeded. targetUrl={} payload={}", targetUrl, payload);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            log.warn("Cache refresh notify interrupted. payload={}", payload, ex);
+            log.warn("Cache refresh notify interrupted. targetUrl={} payload={}", targetUrl, payload, ex);
         } catch (Exception ex) {
-            log.warn("Failed to send cache refresh notify request. payload={}", payload, ex);
+            log.warn("Failed to send cache refresh notify request. targetUrl={} payload={}", targetUrl, payload, ex);
         }
     }
 }
