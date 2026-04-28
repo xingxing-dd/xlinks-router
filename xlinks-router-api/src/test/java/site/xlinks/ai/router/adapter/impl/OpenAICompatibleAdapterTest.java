@@ -26,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAICompatibleAdapterTest {
 
+    private static final String DEFAULT_FORWARD_USER_AGENT =
+            "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)";
+
     private OpenAICompatibleAdapter adapter;
     private ObjectMapper objectMapper;
 
@@ -65,6 +68,8 @@ class OpenAICompatibleAdapterTest {
 
         assertEquals("text/event-stream", streamingRequest.header("Accept"));
         assertEquals("application/json", nonStreamingRequest.header("Accept"));
+        assertEquals(DEFAULT_FORWARD_USER_AGENT, streamingRequest.header("User-Agent"));
+        assertEquals(DEFAULT_FORWARD_USER_AGENT, nonStreamingRequest.header("User-Agent"));
     }
 
 

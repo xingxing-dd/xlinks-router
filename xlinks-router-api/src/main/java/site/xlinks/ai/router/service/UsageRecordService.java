@@ -7,8 +7,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.common.constants.WalletConstants;
 import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
 import site.xlinks.ai.router.common.enums.ErrorCode;
+import site.xlinks.ai.router.common.enums.ProviderCacheHitStrategy;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.UsageMetrics;
 import site.xlinks.ai.router.entity.CustomerToken;
@@ -33,6 +33,7 @@ public class UsageRecordService {
     private final CustomerPlanService customerPlanService;
     private final CustomerTokenQuotaService customerTokenQuotaService;
     private final WalletService walletService;
+    private final UsageEntitlementService usageEntitlementService;
 
     public void record(ProviderInvokeContext context,
                        UsageMetrics usageMetrics,
@@ -64,7 +65,7 @@ public class UsageRecordService {
         record.setFinishReason(finishReason);
         try {
             insertUsageRecordWithRetry(record, context.getRequestId());
-            consumeUsageBalanceOrPlanSafely(context, record);
+            consumeUsageBalanceOrPlan(context, record);
             syncCustomerTokenQuotaUsage(context, record);
             log.debug("Usage record saved: {}", context.getRequestId());
         } catch (Exception e) {
@@ -279,13 +280,28 @@ public class UsageRecordService {
         if (context.getAccountId() == null) {
             return;
         }
-        walletService.debitBasic(
+        WalletService.BasicWalletDebitResult debitResult = walletService.debitBasicAllowOverdraftToZero(
                 context.getAccountId(),
                 record.getTotalCost(),
                 WalletConstants.BIZ_TYPE_API_USAGE,
                 context.getRequestId(),
                 "API usage completed: " + context.getModelCode()
         );
+        if (debitResult != null && debitResult.walletBundle() != null && debitResult.walletBundle().getMainWallet() != null) {
+            usageEntitlementService.syncBalanceAvailability(
+                    context.getAccountId(),
+                    debitResult.walletBundle().getMainWallet().getAvailableBalance()
+            );
+        }
+        if (debitResult != null && debitResult.overdraftApplied()) {
+            log.warn("请求计费时基础钱包余额不足，已按允许的小额超额使用处理并将余额归零，requestId={}, accountId={}, modelCode={}, totalCost={}, debitedAmount={}, shortfallAmount={}",
+                    context.getRequestId(),
+                    context.getAccountId(),
+                    context.getModelCode(),
+                    record.getTotalCost(),
+                    debitResult.debitedAmount(),
+                    debitResult.shortfallAmount());
+        }
     }
 
     private void consumeUsageBalanceOrPlanSafely(ProviderInvokeContext context, UsageRecord record) {

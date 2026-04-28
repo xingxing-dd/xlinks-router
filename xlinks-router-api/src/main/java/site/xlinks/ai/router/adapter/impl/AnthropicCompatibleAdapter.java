@@ -10,6 +10,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.adapter.ProviderProtocolAdapter;
 import site.xlinks.ai.router.context.ProviderInvokeContext;
@@ -40,7 +41,12 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
     private static final String HEADER_X_API_KEY = "x-api-key";
     private static final String HEADER_AUTHORIZATION = "Authorization";
     private static final String DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
+    private static final String DEFAULT_FORWARD_USER_AGENT =
+            "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    @Value("${xlinks.router.forward.user-agent:" + DEFAULT_FORWARD_USER_AGENT + "}")
+    private String forwardUserAgent = DEFAULT_FORWARD_USER_AGENT;
 
     public AnthropicCompatibleAdapter(OkHttpClient httpClient, ObjectMapper objectMapper) {
         super(httpClient, objectMapper);
@@ -145,6 +151,7 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
                 .url(url)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", request.isStream() ? EVENT_STREAM_CONTENT_TYPE : "application/json")
+                .addHeader("User-Agent", forwardUserAgent)
                 .addHeader(HEADER_X_API_KEY, context.getProviderToken())
                 .addHeader(HEADER_AUTHORIZATION, "Bearer " + context.getProviderToken())
                 .addHeader(HEADER_ANTHROPIC_VERSION, anthropicVersion);

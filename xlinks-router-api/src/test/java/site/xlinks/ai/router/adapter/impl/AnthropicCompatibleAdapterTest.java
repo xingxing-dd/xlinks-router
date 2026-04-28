@@ -30,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnthropicCompatibleAdapterTest {
 
+    private static final String DEFAULT_FORWARD_USER_AGENT =
+            "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)";
+
     private AnthropicCompatibleAdapter adapter;
     private ObjectMapper objectMapper;
 
@@ -66,6 +69,7 @@ class AnthropicCompatibleAdapterTest {
         assertEquals("Bearer provider-token", httpRequest.header("Authorization"));
         assertEquals("2023-06-01", httpRequest.header("anthropic-version"));
         assertEquals("prompt-caching-2024-07-31", httpRequest.header("anthropic-beta"));
+        assertEquals(DEFAULT_FORWARD_USER_AGENT, httpRequest.header("User-Agent"));
     }
 
     @Test

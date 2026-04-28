@@ -31,6 +31,7 @@ const form = reactive({
 
 const pageCount = computed(() => Math.max(1, Math.ceil((page.total || 0) / page.pageSize)))
 const formatTokenCount = (value) => Number(value || 0).toLocaleString('en-US')
+const formatQuotaAmount = (value) => `$${Number(value || 0).toFixed(6)}`
 
 const resetForm = () => {
   Object.assign(form, {
@@ -215,8 +216,8 @@ onMounted(loadTokens)
                 <th>客户标识</th>
                 <th>Token 名称</th>
                 <th>允许模型</th>
-                <th>今日 Token</th>
-                <th>累计 Token</th>
+                <th>今日消耗</th>
+                <th>累计消耗</th>
                 <th>到期时间</th>
                 <th>状态</th>
                 <th>更新时间</th>
@@ -234,8 +235,18 @@ onMounted(loadTokens)
                   <div class="text-xs text-slate-400 mt-1">{{ record.remark || '-' }}</div>
                 </td>
                 <td class="max-w-[280px] break-all">{{ summarizeJsonArray(record.allowedModels) }}</td>
-                <td class="font-mono text-sm text-slate-700">{{ formatTokenCount(record.todayUsedTokens) }}</td>
-                <td class="font-mono text-sm text-slate-700">{{ formatTokenCount(record.totalUsedTokens) }}</td>
+                <td>
+                  <div class="font-mono text-sm text-slate-700">{{ formatQuotaAmount(record.usedQuota) }}</div>
+                  <div v-if="Number(record.todayUsedTokens) > 0" class="text-xs text-slate-400 mt-1">
+                    Token: {{ formatTokenCount(record.todayUsedTokens) }}
+                  </div>
+                </td>
+                <td>
+                  <div class="font-mono text-sm text-slate-700">{{ formatQuotaAmount(record.totalUsedQuota) }}</div>
+                  <div v-if="Number(record.totalUsedTokens) > 0" class="text-xs text-slate-400 mt-1">
+                    Token: {{ formatTokenCount(record.totalUsedTokens) }}
+                  </div>
+                </td>
                 <td>{{ formatDateTime(record.expireTime) }}</td>
                 <td>
                   <span class="badge" :class="Number(record.status) === 1 ? 'badge-success' : 'badge-danger'">
