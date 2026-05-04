@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.common.result.Result;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
@@ -32,6 +31,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HTTP entrypoint for OpenAI-compatible proxy APIs.
@@ -77,18 +77,9 @@ public class OpenAIProxyController {
 
     @GetMapping("/models")
     @Operation(summary = "Models List", description = "Get the list of available models.")
-    public Result<Object> modelsList(HttpServletRequest servletRequest) {
+    public Object modelsList(HttpServletRequest servletRequest) {
         String token = (String) servletRequest.getAttribute(BearerTokenInterceptor.ATTR_BEARER_TOKEN);
-
-        try {
-            return Result.success(proxyService.listModels(token));
-        } catch (BusinessException e) {
-            log.warn("模型列表查询失败: {}", e.getMessage());
-            return Result.error(e.getCode(), e.getMessage());
-        } catch (Exception e) {
-            log.error("查询模型列表时发生未预期异常", e);
-            return Result.error(500, "Internal server error");
-        }
+        return proxyService.listModels(token);
     }
 
     private Object handleRequest(HttpServletRequest servletRequest,
@@ -127,6 +118,7 @@ public class OpenAIProxyController {
     private SseEmitter stream(String token, ProxyRequest request, HttpServletResponse servletResponse) {
         prepareSseResponseHeaders(servletResponse);
         SseEmitter emitter = new SseEmitter(sseTimeoutMs);
+        AtomicBoolean downstreamClosed = new AtomicBoolean(false);
         emitter.onCompletion(() -> log.debug("SSE 已完成, endpointCode={}, protocol={}",
                 request.getProtocol().getCode(), request.getProtocol()));
         emitter.onTimeout(() -> {
@@ -137,7 +129,7 @@ public class OpenAIProxyController {
 
         taskExecutor.execute(() -> {
             try {
-                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event));
+                proxyService.forwardStream(token, request, event -> sendEvent(emitter, event), downstreamClosed);
                 emitter.complete();
             } catch (ClientAbortException e) {
                 log.info("客户端已断开 OpenAI SSE 连接: {}", e.getMessage());

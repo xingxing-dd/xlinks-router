@@ -22,7 +22,7 @@ const protocolOptions = ref([...defaultProtocolOptions])
 const filters = reactive({
   providerCode: '',
   providerName: '',
-  status: '',
+  status: 1,
 })
 
 const page = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -305,7 +305,7 @@ const handleDelete = async (record) => {
 }
 
 const resetFilters = async () => {
-  Object.assign(filters, { providerCode: '', providerName: '', status: '' })
+  Object.assign(filters, { providerCode: '', providerName: '', status: 1 })
   page.page = 1
   await loadProviders()
 }

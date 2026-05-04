@@ -52,6 +52,7 @@ export const deletePlan = (id) => request(`/api/plans/${id}`, { method: 'DELETE'
 export const listSubscriptions = (params) => request('/api/subscriptions', { query: params })
 export const getSubscriptionDetail = (id) => request(`/api/subscriptions/${id}`)
 export const createSubscription = (body) => request('/api/subscriptions', { method: 'POST', body })
+export const listCustomerOrders = (params) => request('/api/customer-orders', { query: params })
 
 export const listActivationCodes = (params) => request('/api/activation-codes', { query: params })
 export const generateActivationCodes = (body) => request('/api/activation-codes/generate', { method: 'POST', body })

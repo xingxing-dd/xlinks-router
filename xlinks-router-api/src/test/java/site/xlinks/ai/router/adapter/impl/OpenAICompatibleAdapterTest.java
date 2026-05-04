@@ -11,18 +11,24 @@ import site.xlinks.ai.router.context.ProviderInvokeContext;
 import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
+import site.xlinks.ai.router.service.ClientAbortException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenAICompatibleAdapterTest {
+
+    private static final String DEFAULT_FORWARD_USER_AGENT =
+            "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)";
 
     private OpenAICompatibleAdapter adapter;
     private ObjectMapper objectMapper;
@@ -63,6 +69,8 @@ class OpenAICompatibleAdapterTest {
 
         assertEquals("text/event-stream", streamingRequest.header("Accept"));
         assertEquals("application/json", nonStreamingRequest.header("Accept"));
+        assertEquals(DEFAULT_FORWARD_USER_AGENT, streamingRequest.header("User-Agent"));
+        assertEquals(DEFAULT_FORWARD_USER_AGENT, nonStreamingRequest.header("User-Agent"));
     }
 
     @Test
@@ -226,6 +234,25 @@ class OpenAICompatibleAdapterTest {
         JsonNode payload = objectMapper.readTree(first.joinedData());
         assertEquals("internal_error", payload.path("error").path("code").asText());
         assertEquals("[DONE]", events.get(1).joinedData());
+    }
+
+    @Test
+    void shouldAbortBeforeExecutingWhenStreamAlreadyCancelled() {
+        ClientAbortException exception = assertThrows(
+                ClientAbortException.class,
+                () -> adapter.forwardStream(
+                        ProxyRequest.builder()
+                                .protocol(ProxyProtocol.RESPONSES)
+                                .stream(true)
+                                .build(),
+                        context(),
+                        event -> {
+                        },
+                        new AtomicBoolean(true)
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("cancelled before upstream call execution"));
     }
 
     private ProviderInvokeContext context() {

@@ -161,6 +161,49 @@ public class WalletService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public BasicWalletDebitResult debitBasicAllowOverdraftToZero(Long accountId,
+                                                                 BigDecimal amount,
+                                                                 String bizType,
+                                                                 String orderNo,
+                                                                 String remark) {
+        BigDecimal normalizedAmount = normalizeMoney(amount, "amount");
+        WalletBundle bundle = lockWallet(accountId);
+        CustomerMainWallet mainWallet = bundle.getMainWallet();
+        assertAllowOut(mainWallet);
+        if (hasProcessed(mainWallet.getId(), orderNo, bizType)) {
+            WalletBundle latestBundle = loadWallet(accountId);
+            return new BasicWalletDebitResult(
+                    latestBundle,
+                    BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP),
+                    BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP)
+            );
+        }
+
+        CustomerSubWallet basicWallet = requireSubWallet(bundle, WalletConstants.SUB_WALLET_BASIC);
+        BigDecimal totalBefore = defaultMoney(mainWallet.getTotalBalance());
+        BigDecimal availableBefore = defaultMoney(mainWallet.getAvailableBalance());
+        BigDecimal basicBefore = defaultMoney(basicWallet.getBalance());
+        BigDecimal actualDebit = basicBefore.min(normalizedAmount);
+        BigDecimal shortfallAmount = normalizedAmount.subtract(actualDebit).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+
+        if (actualDebit.compareTo(BigDecimal.ZERO) > 0) {
+            mainWallet.setTotalBalance(totalBefore.subtract(actualDebit));
+            mainWallet.setAvailableBalance(availableBefore.subtract(actualDebit));
+            basicWallet.setBalance(basicBefore.subtract(actualDebit));
+
+            customerMainWalletMapper.updateById(mainWallet);
+            customerSubWalletMapper.updateById(basicWallet);
+
+            insertMainFlow(mainWallet, orderNo, bizType, WalletConstants.FLOW_DIRECTION_OUT, actualDebit,
+                    totalBefore, mainWallet.getTotalBalance(), availableBefore, mainWallet.getAvailableBalance(), remark);
+            insertSubFlow(mainWallet, basicWallet, orderNo, bizType, WalletConstants.FLOW_DIRECTION_OUT, actualDebit,
+                    basicBefore, basicWallet.getBalance(), remark);
+        }
+
+        return new BasicWalletDebitResult(loadWallet(accountId), actualDebit, shortfallAmount);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public WalletBundle freezeFromBasic(Long accountId,
                                         BigDecimal amount,
                                         String bizType,
@@ -527,5 +570,14 @@ public class WalletService {
     private String generateWalletNo(String prefix, Long accountId) {
         long suffix = ThreadLocalRandom.current().nextLong(1000, 9999);
         return prefix + accountId + WALLET_NO_TIME_FORMATTER.format(LocalDateTime.now()) + suffix;
+    }
+
+    public record BasicWalletDebitResult(WalletBundle walletBundle,
+                                         BigDecimal debitedAmount,
+                                         BigDecimal shortfallAmount) {
+
+        public boolean overdraftApplied() {
+            return shortfallAmount != null && shortfallAmount.compareTo(BigDecimal.ZERO) > 0;
+        }
     }
 }

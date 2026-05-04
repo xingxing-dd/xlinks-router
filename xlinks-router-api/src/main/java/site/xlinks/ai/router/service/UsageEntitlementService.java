@@ -216,6 +216,18 @@ public class UsageEntitlementService {
         return plans;
     }
 
+    public void syncBalanceAvailability(Long accountId, BigDecimal availableBalance) {
+        if (accountId == null) {
+            return;
+        }
+        long ttlMs = Math.max(balanceCacheTtlMs, 0L);
+        if (ttlMs <= 0) {
+            return;
+        }
+        boolean available = availableBalance != null && availableBalance.compareTo(BigDecimal.ZERO) > 0;
+        balanceAvailabilityCache.put(accountId, new BalanceAvailabilitySnapshot(available, System.currentTimeMillis() + ttlMs));
+    }
+
     private record AccountPlanSnapshot(List<CustomerPlan> availablePlans, LocalDate today, long expiresAtMs) {
     }
 

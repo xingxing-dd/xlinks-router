@@ -33,10 +33,15 @@ public class CustomerTokenAuthService {
      */
     public CustomerToken validateToken(String token) {
         LocalDateTime now = LocalDateTime.now();
-        CustomerToken customerToken = loadCustomerToken(token);
-        assertTokenState(customerToken, now);
-        log.debug("Token validated for customer: {}", customerToken.getCustomerName());
-        return customerToken;
+        CustomerToken cachedToken = loadCustomerToken(token);
+        assertTokenState(cachedToken, now);
+        CustomerToken freshToken = resolveFreshCustomerToken(cachedToken, token);
+        assertTokenState(freshToken, now);
+        if (freshToken != cachedToken) {
+            routeCacheService.cacheCustomerToken(freshToken);
+        }
+        log.debug("Token validated for customer: {}", freshToken.getCustomerName());
+        return freshToken;
     }
 
     /**
@@ -63,10 +68,12 @@ public class CustomerTokenAuthService {
 
     private CustomerToken loadCustomerToken(String token) {
         if (token == null || token.isBlank()) {
+            log.warn("Customer token missing. token={}", rawToken(token));
             throw ProxyErrors.missingBearerToken();
         }
         CustomerToken customerToken = routeCacheService.getCustomerTokenByValue(token);
         if (customerToken == null) {
+            log.warn("Customer token not found in cache/db lookup. token={}", rawToken(token));
             throw ProxyErrors.invalidToken();
         }
         return customerToken;
@@ -74,10 +81,13 @@ public class CustomerTokenAuthService {
 
     private CustomerToken loadFreshCustomerToken(CustomerToken cachedToken, String token) {
         if (cachedToken == null || cachedToken.getId() == null) {
+            log.warn("Customer token fresh lookup failed because cached token is missing. token={}", rawToken(token));
             throw ProxyErrors.invalidToken();
         }
         CustomerToken freshToken = customerTokenMapper.selectById(cachedToken.getId());
         if (freshToken == null || freshToken.getTokenValue() == null || !freshToken.getTokenValue().equals(token)) {
+            log.warn("Customer token fresh lookup mismatch. token={}, cachedTokenId={}",
+                    rawToken(token), cachedToken.getId());
             throw ProxyErrors.invalidToken();
         }
         return freshToken;
@@ -164,6 +174,17 @@ public class CustomerTokenAuthService {
 
     private BigDecimal defaultDecimal(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private String rawToken(String token) {
+        if (token == null) {
+            return "null";
+        }
+        String normalized = token.trim();
+        if (normalized.isEmpty()) {
+            return "blank";
+        }
+        return normalized;
     }
 
     private record FreshTokenSnapshot(CustomerToken customerToken, long expiresAtMs) {

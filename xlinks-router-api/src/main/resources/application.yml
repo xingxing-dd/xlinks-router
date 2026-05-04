@@ -63,6 +63,8 @@ xlinks:
     auth:
       token-cache-ttl-seconds: 15
       internal-cache-refresh-token: ${INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}
+    forward:
+      user-agent: "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)"
     debug:
       log-upstream-responses-stream-payload: false
       trace-timeline-enabled: true

@@ -10,17 +10,23 @@ import site.xlinks.ai.router.client.config.PromotionProperties;
 import site.xlinks.ai.router.client.dto.promotion.PromotionInfoResponse;
 import site.xlinks.ai.router.client.dto.promotion.PromotionRecordItemResponse;
 import site.xlinks.ai.router.client.dto.promotion.PromotionRuleResponse;
+import site.xlinks.ai.router.common.constants.WalletConstants;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.entity.CustomerAccount;
+import site.xlinks.ai.router.entity.CustomerOrder;
 import site.xlinks.ai.router.entity.PromotionRecord;
 import site.xlinks.ai.router.entity.PromotionRule;
 import site.xlinks.ai.router.mapper.CustomerAccountMapper;
+import site.xlinks.ai.router.mapper.CustomerOrderMapper;
 import site.xlinks.ai.router.mapper.PromotionRecordMapper;
 import site.xlinks.ai.router.mapper.PromotionRuleMapper;
+import site.xlinks.ai.router.service.WalletService;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +35,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 推广模块服务。
+ * Promotion and referral service.
  */
 @Service
 @RequiredArgsConstructor
@@ -43,26 +49,27 @@ public class PromotionService {
     private static final int REWARD_TYPE_REGISTER = 1;
     private static final int REWARD_TYPE_FIRST_RECHARGE = 2;
     private static final int REWARD_TYPE_REBATE = 3;
+    private static final String PROMOTION_REWARD_BIZ_TYPE = "promotion_reward";
+    private static final BigDecimal FIXED_FIRST_RECHARGE_REWARD = new BigDecimal("5.00");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final CustomerAccountMapper customerAccountMapper;
+    private final CustomerOrderMapper customerOrderMapper;
     private final PromotionRecordMapper promotionRecordMapper;
     private final PromotionRuleMapper promotionRuleMapper;
     private final PromotionProperties promotionProperties;
+    private final WalletService walletService;
 
     public PromotionInfoResponse getPromotionInfo(Long accountId) {
         CustomerAccount account = getAccountOrThrow(accountId);
         ensureInviteCode(account);
 
-        int totalReferrals = Math.toIntExact(countInvitees(accountId, null));
-        int activeReferrals = Math.toIntExact(countInvitees(accountId, STATUS_ACTIVE));
-
         PromotionInfoResponse response = new PromotionInfoResponse();
         response.setReferralCode(account.getInviteCode());
         response.setReferralLink(buildReferralLink(account.getInviteCode()));
-        response.setTotalReferrals(totalReferrals);
-        response.setActiveReferrals(activeReferrals);
+        response.setTotalReferrals(Math.toIntExact(countInvitees(accountId, null)));
+        response.setActiveReferrals(Math.toIntExact(countInvitees(accountId, STATUS_ACTIVE)));
         response.setTotalEarnings(sumRewards(accountId, null));
         response.setPendingEarnings(sumRewards(accountId, STATUS_PENDING));
         return response;
@@ -95,28 +102,13 @@ public class PromotionService {
 
     public PromotionRuleResponse getPromotionRules() {
         List<PromotionRule> rules = listActiveRules();
-        if (rules.isEmpty()) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "推广规则未配置");
-        }
-
         PromotionRuleResponse response = new PromotionRuleResponse();
         response.setRules(rules.stream().map(this::toRuleItem).toList());
-
-        rules.forEach(rule -> {
-            if (REWARD_TYPE_REGISTER == (rule.getRewardType() == null ? -1 : rule.getRewardType())) {
-                response.setRegisterReward(defaultDecimal(rule.getRewardAmount()));
-            } else if (REWARD_TYPE_FIRST_RECHARGE == (rule.getRewardType() == null ? -1 : rule.getRewardType())) {
-                response.setFirstRechargeRate(defaultDecimal(rule.getRewardRate()));
-            } else if (REWARD_TYPE_REBATE == (rule.getRewardType() == null ? -1 : rule.getRewardType())) {
-                response.setConsumptionRate(defaultDecimal(rule.getRewardRate()));
-            }
-
-            if (rule.getSettlementDay() != null) {
-                response.setSettlementDay(rule.getSettlementDay());
-                response.setSettlementDescription(rule.getDescription());
-            }
-        });
-
+        response.setRegisterReward(BigDecimal.ZERO);
+        response.setFirstRechargeRate(FIXED_FIRST_RECHARGE_REWARD);
+        response.setConsumptionRate(BigDecimal.ZERO);
+        response.setSettlementDay(null);
+        response.setSettlementDescription("Reward is credited immediately after the invitee completes the first successful recharge.");
         return response;
     }
 
@@ -135,16 +127,14 @@ public class PromotionService {
             throw new BusinessException(ErrorCode.INVITE_CODE_INVALID);
         }
         if (inviter.getId().equals(account.getId())) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "不能填写自己的邀请码");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "cannot use your own invite code");
         }
         if (account.getInvitedBy() != null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "该账户已绑定邀请人");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "account already has an inviter");
         }
 
         account.setInvitedBy(inviter.getId());
         customerAccountMapper.updateById(account);
-
-        createRegisterReward(inviter, account);
     }
 
     public void createRegisterReward(CustomerAccount inviter, CustomerAccount invitee) {
@@ -165,19 +155,38 @@ public class PromotionService {
         if (rechargeAmount == null || rechargeAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
+
         CustomerAccount invitee = getAccountOrThrow(inviteeAccountId);
         if (invitee.getInvitedBy() == null) {
             return;
         }
-        if (existsRewardRecord(inviteeAccountId, REWARD_TYPE_FIRST_RECHARGE, orderNo)) {
+        if (existsRewardRecord(inviteeAccountId, REWARD_TYPE_FIRST_RECHARGE, null)) {
             return;
         }
+        if (!isFirstSuccessfulRechargeOrder(inviteeAccountId, orderNo)) {
+            return;
+        }
+
         CustomerAccount inviter = getAccountOrThrow(invitee.getInvitedBy());
-        PromotionRule firstRechargeRule = getRequiredRuleByRewardType(REWARD_TYPE_FIRST_RECHARGE);
-        BigDecimal rate = percentageToRatio(firstRechargeRule.getRewardRate());
-        PromotionRecord record = buildRewardRecord(inviter, invitee, REWARD_TYPE_FIRST_RECHARGE,
-                rechargeAmount.multiply(rate).setScale(2, BigDecimal.ROUND_HALF_UP), rate.multiply(new BigDecimal("100")), orderNo,
-                firstRechargeRule.getDescription());
+        walletService.creditBasic(
+                inviter.getId(),
+                FIXED_FIRST_RECHARGE_REWARD,
+                PROMOTION_REWARD_BIZ_TYPE,
+                orderNo,
+                "Referral reward for first successful recharge"
+        );
+
+        PromotionRecord record = buildRewardRecord(
+                inviter,
+                invitee,
+                REWARD_TYPE_FIRST_RECHARGE,
+                FIXED_FIRST_RECHARGE_REWARD,
+                BigDecimal.ZERO,
+                orderNo,
+                "Invitee completed first successful recharge"
+        );
+        record.setStatus(STATUS_ACTIVE);
+        record.setSettleAt(LocalDateTime.now());
         promotionRecordMapper.insert(record);
     }
 
@@ -192,9 +201,15 @@ public class PromotionService {
         CustomerAccount inviter = getAccountOrThrow(invitee.getInvitedBy());
         PromotionRule rebateRule = getRequiredRuleByRewardType(REWARD_TYPE_REBATE);
         BigDecimal rate = percentageToRatio(rebateRule.getRewardRate());
-        PromotionRecord record = buildRewardRecord(inviter, invitee, REWARD_TYPE_REBATE,
-                consumptionAmount.multiply(rate).setScale(2, BigDecimal.ROUND_HALF_UP), rate.multiply(new BigDecimal("100")), orderNo,
-                rebateRule.getDescription());
+        PromotionRecord record = buildRewardRecord(
+                inviter,
+                invitee,
+                REWARD_TYPE_REBATE,
+                consumptionAmount.multiply(rate).setScale(2, RoundingMode.HALF_UP),
+                rate.multiply(new BigDecimal("100")),
+                orderNo,
+                rebateRule.getDescription()
+        );
         promotionRecordMapper.insert(record);
     }
 
@@ -253,6 +268,28 @@ public class PromotionService {
         return promotionRecordMapper.selectCount(wrapper) > 0;
     }
 
+    private boolean isFirstSuccessfulRechargeOrder(Long inviteeAccountId, String orderNo) {
+        if (inviteeAccountId == null || !StringUtils.hasText(orderNo)) {
+            return false;
+        }
+
+        Long paidRechargeCount = customerOrderMapper.selectCount(new LambdaQueryWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getAccountId, inviteeAccountId)
+                .eq(CustomerOrder::getOrderType, WalletConstants.ORDER_TYPE_RECHARGE)
+                .eq(CustomerOrder::getStatus, 1));
+        if (paidRechargeCount == null || paidRechargeCount != 1L) {
+            return false;
+        }
+
+        CustomerOrder currentOrder = customerOrderMapper.selectOne(new LambdaQueryWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getOrderNo, orderNo)
+                .eq(CustomerOrder::getAccountId, inviteeAccountId)
+                .eq(CustomerOrder::getOrderType, WalletConstants.ORDER_TYPE_RECHARGE)
+                .eq(CustomerOrder::getStatus, 1)
+                .last("limit 1"));
+        return currentOrder != null;
+    }
+
     private long countInvitees(Long accountId, Integer status) {
         LambdaQueryWrapper<CustomerAccount> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CustomerAccount::getInvitedBy, accountId);
@@ -293,7 +330,7 @@ public class PromotionService {
                 .last("limit 1");
         PromotionRule rule = promotionRuleMapper.selectOne(wrapper);
         if (rule == null) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "推广规则未配置: " + rewardType);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "promotion rule not configured: " + rewardType);
         }
         return rule;
     }
@@ -317,7 +354,7 @@ public class PromotionService {
     }
 
     private BigDecimal percentageToRatio(BigDecimal percentage) {
-        return defaultDecimal(percentage).divide(new BigDecimal("100"), 4, BigDecimal.ROUND_HALF_UP);
+        return defaultDecimal(percentage).divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
     }
 
     private String resolveDisplayName(CustomerAccount account) {
@@ -331,7 +368,7 @@ public class PromotionService {
             String emailPrefix = account.getEmail().split("@", 2)[0];
             return emailPrefix.length() <= 2 ? emailPrefix + "**" : emailPrefix.substring(0, 2) + "**";
         }
-        return "用户" + account.getId();
+        return "User" + account.getId();
     }
 
     private String maskEmail(String email) {
@@ -347,7 +384,13 @@ public class PromotionService {
     }
 
     private String mapStatus(Integer status) {
-        return STATUS_ACTIVE == (status == null ? STATUS_PENDING : status) ? "active" : "pending";
+        if (STATUS_ACTIVE == (status == null ? STATUS_PENDING : status)) {
+            return "active";
+        }
+        if (STATUS_INVALID == (status == null ? STATUS_PENDING : status)) {
+            return "inactive";
+        }
+        return "pending";
     }
 
     private PromotionRecord buildRewardRecord(CustomerAccount inviter,
@@ -379,7 +422,7 @@ public class PromotionService {
                 return candidate;
             }
         }
-        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "邀请码生成失败，请稍后再试");
+        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "failed to generate invite code");
     }
 
     private String randomInviteCode() {

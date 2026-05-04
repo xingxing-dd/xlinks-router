@@ -5,6 +5,10 @@ package site.xlinks.ai.router.service;
  */
 public class ClientAbortException extends RuntimeException {
 
+    public ClientAbortException(String message) {
+        super(message);
+    }
+
     public ClientAbortException(String message, Throwable cause) {
         super(message, cause);
     }

@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import site.xlinks.ai.router.entity.UsageRecord;
+import site.xlinks.ai.router.vo.CustomerTokenUsageStatsVO;
 import site.xlinks.ai.router.vo.UsageRecordAccountSummaryVO;
 import site.xlinks.ai.router.vo.UsageRecordModelSummaryVO;
 
@@ -13,6 +14,29 @@ import java.util.List;
 
 @Mapper
 public interface UsageRecordAdminMapper extends BaseMapper<UsageRecord> {
+
+    @Select("""
+            <script>
+            SELECT
+              SHA2(u.customer_token, 256) AS tokenHash,
+              COALESCE(SUM(CASE
+                WHEN u.created_at <![CDATA[>=]]> #{startAt}
+                 AND u.created_at <![CDATA[<]]> #{endAt}
+                THEN u.total_tokens ELSE 0 END), 0) AS todayUsedTokens,
+              COALESCE(SUM(u.total_tokens), 0) AS totalUsedTokens
+            FROM usage_records u
+            WHERE u.customer_token IS NOT NULL
+              AND u.customer_token != ''
+              AND SHA2(u.customer_token, 256) IN
+              <foreach item='hash' collection='tokenHashes' open='(' separator=',' close=')'>
+                #{hash}
+              </foreach>
+            GROUP BY SHA2(u.customer_token, 256)
+            </script>
+            """)
+    List<CustomerTokenUsageStatsVO> aggregateCustomerTokenUsage(@Param("tokenHashes") List<String> tokenHashes,
+                                                                @Param("startAt") LocalDateTime startAt,
+                                                                @Param("endAt") LocalDateTime endAt);
 
     @Select("""
             <script>

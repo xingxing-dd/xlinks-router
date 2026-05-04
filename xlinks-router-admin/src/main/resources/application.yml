@@ -81,5 +81,5 @@ xlinks:
   internal:
     cache-refresh:
       enabled: true
-      api-url: ${XLS_INTERNAL_CACHE_REFRESH_API_URL:https://ai.xlinks.site/api/internal/cache/refresh}
+      api-url: ${XLS_INTERNAL_CACHE_REFRESH_API_URL:https://ai.xlinks.site/api/internal/cache/refresh,https://kr.xlinks.site/api/internal/cache/refresh}
       token: ${XLS_INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}

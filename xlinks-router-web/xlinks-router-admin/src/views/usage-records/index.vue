@@ -164,6 +164,17 @@ const formatResponseStatus = (value) => {
   return value ?? '-'
 }
 
+const maskToken = (value) => {
+  if (!value) {
+    return '-'
+  }
+  const token = `${value}`.trim()
+  if (token.length <= 8) {
+    return '****'
+  }
+  return `${token.slice(0, 4)}****${token.slice(-4)}`
+}
+
 onMounted(async () => {
   await loadFilterOptions()
   await loadRecords()
@@ -174,7 +185,7 @@ onMounted(async () => {
   <div class="p-6 space-y-6">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Token 使用记录</h1>
+        <h1 class="text-2xl font-bold text-slate-900">调用日志</h1>
         <p class="text-slate-500">支持查询流水、按账户汇总、按模型汇总，并按时间范围筛选。</p>
       </div>
       <div class="flex gap-2">
@@ -280,7 +291,10 @@ onMounted(async () => {
                   <div>{{ item.modelName || '-' }}</div>
                   <div class="text-xs text-slate-400 mt-1">{{ item.modelCode || '-' }}</div>
                 </td>
-                <td>{{ item.providerCode || '-' }}</td>
+                <td>
+                  <div>{{ item.providerName || item.providerCode || '-' }}</div>
+                  <div class="text-xs text-slate-400 mt-1">{{ maskToken(item.providerToken) }}</div>
+                </td>
                 <td>{{ item.usageType || '-' }}</td>
                 <td>{{ formatResponseStatus(item.responseStatus) }}</td>
                 <td>{{ formatNumber(item.promptTokens) }}</td>

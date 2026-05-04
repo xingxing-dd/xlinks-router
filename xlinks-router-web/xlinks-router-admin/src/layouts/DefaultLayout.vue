@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +23,9 @@ import {
   Layers3,
   FolderKanban,
   WalletCards,
+  ShoppingCart,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -33,6 +36,7 @@ const authStore = useAuthStore()
 const isMobileMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const loggingOut = ref(false)
+const sidebarCollapsed = ref(localStorage.getItem('admin_sidebar_collapsed') === '1')
 
 const groupOpenState = reactive({
   overview: true,
@@ -69,9 +73,10 @@ const navGroups = computed(() => [
     children: [
       { path: '/plans', label: t('nav.plans'), icon: Package },
       { path: '/subscriptions', label: t('nav.subscriptions'), icon: ReceiptText },
+      { path: '/customer-orders', label: '用户订单', icon: ShoppingCart },
       { path: '/activation-codes', label: t('nav.activationCodes'), icon: Ticket },
       { path: '/activation-usage', label: t('nav.activationUsage'), icon: History },
-      { path: '/usage-records', label: 'Token使用记录', icon: History },
+      { path: '/usage-records', label: '调用日志', icon: History },
     ],
   },
   {
@@ -94,6 +99,11 @@ const isGroupExpanded = (group) => groupOpenState[group.key] || isGroupActive(gr
 
 const toggleGroup = (groupKey) => {
   groupOpenState[groupKey] = !groupOpenState[groupKey]
+}
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('admin_sidebar_collapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
 const currentLabel = computed(() => {
@@ -128,20 +138,41 @@ const handleLogout = async () => {
 
 <template>
   <div class="flex h-screen bg-gradient-main">
-    <aside class="hidden md:flex md:flex-col md:w-72 bg-white shadow-xl border-r border-slate-200 overflow-hidden">
-      <div class="p-6 border-b border-slate-200">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-            <Shield class="w-5 h-5 text-white" />
+    <aside
+      class="hidden md:flex md:flex-col bg-white shadow-xl border-r border-slate-200 overflow-hidden transition-all duration-300"
+      :class="sidebarCollapsed ? 'md:w-20' : 'md:w-72'"
+    >
+      <div class="p-4 border-b border-slate-200">
+        <div class="flex items-center" :class="sidebarCollapsed ? 'justify-center' : 'justify-between'">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 bg-gradient-icon rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <Shield class="w-5 h-5 text-white" />
+            </div>
+            <div v-if="!sidebarCollapsed">
+              <h1 class="text-xl font-bold bg-gradient-icon bg-clip-text text-transparent tracking-tight">Xlinks Admin</h1>
+              <p class="text-xs text-slate-400 mt-1">中转平台运营后台</p>
+            </div>
           </div>
-          <div>
-            <h1 class="text-xl font-bold bg-gradient-icon bg-clip-text text-transparent tracking-tight">Xlinks Admin</h1>
-            <p class="text-xs text-slate-400 mt-1">中转平台运营后台</p>
-          </div>
+          <button
+            v-if="!sidebarCollapsed"
+            class="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            title="收起菜单"
+            @click="toggleSidebar"
+          >
+            <ChevronLeft class="w-4 h-4 text-slate-500" />
+          </button>
+          <button
+            v-else
+            class="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            title="展开菜单"
+            @click="toggleSidebar"
+          >
+            <ChevronRight class="w-4 h-4 text-slate-500" />
+          </button>
         </div>
       </div>
 
-      <nav class="flex-1 p-4 space-y-3 overflow-y-auto">
+      <nav v-if="!sidebarCollapsed" class="flex-1 p-4 space-y-3 overflow-y-auto">
         <section
           v-for="group in navGroups"
           :key="group.key"
@@ -190,6 +221,23 @@ const handleLogout = async () => {
             </router-link>
           </div>
         </section>
+      </nav>
+
+      <nav v-else class="flex-1 p-3 space-y-2 overflow-y-auto">
+        <router-link
+          v-for="item in flatNavItems"
+          :key="item.path"
+          :to="item.path"
+          class="flex items-center justify-center p-3 rounded-xl transition-all duration-200 group"
+          :class="[
+            isActive(item.path)
+              ? 'bg-gradient-button text-white shadow-lg shadow-primary/25'
+              : 'text-slate-600 hover:bg-slate-100'
+          ]"
+          :title="item.label"
+        >
+          <component :is="item.icon" class="w-5 h-5 transition-transform duration-300" :class="[isActive(item.path) ? '' : 'group-hover:scale-110']" />
+        </router-link>
       </nav>
     </aside>
 

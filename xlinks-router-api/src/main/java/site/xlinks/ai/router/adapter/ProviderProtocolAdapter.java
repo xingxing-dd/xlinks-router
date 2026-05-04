@@ -6,6 +6,7 @@ import site.xlinks.ai.router.dto.ProxyProtocol;
 import site.xlinks.ai.router.dto.ProxyRequest;
 import site.xlinks.ai.router.dto.StreamEvent;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -31,5 +32,14 @@ public interface ProviderProtocolAdapter {
                                Consumer<StreamEvent> onEvent) {
         throw new UnsupportedOperationException("Stream not supported yet");
     }
-}
 
+    /**
+     * Forward a streaming request with a downstream cancellation signal.
+     */
+    default void forwardStream(ProxyRequest request,
+                               ProviderInvokeContext context,
+                               Consumer<StreamEvent> onEvent,
+                               AtomicBoolean cancelled) {
+        forwardStream(request, context, onEvent);
+    }
+}

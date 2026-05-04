@@ -52,7 +52,7 @@ class AnthropicProxyControllerTest {
                     .dataLine("{\"type\":\"message_start\"}")
                     .build());
             return null;
-        }).when(proxyService).forwardStream(eq("customer-token"), any(), any());
+        }).when(proxyService).forwardStream(eq("customer-token"), any(), any(), any());
 
         MvcResult result = mockMvc.perform(post("/v1/messages")
                         .header("x-api-key", "customer-token")

@@ -35,6 +35,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -56,6 +59,11 @@ public class RouteCacheService {
     private final ObjectMapper objectMapper;
 
     private final ReentrantLock refreshLock = new ReentrantLock();
+    private final ConcurrentMap<Long, ProviderFailureMark> providerFailureCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, ProviderFailureMark> providerTokenFailureCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, AtomicLong> providerTokenSelectionCountCache = new ConcurrentHashMap<>();
+
+    private Clock clock = Clock.systemUTC();
 
     private volatile Map<String, Model> modelCache = Collections.emptyMap();
     private volatile Map<Long, Provider> providerCache = Collections.emptyMap();
@@ -426,6 +434,23 @@ public class RouteCacheService {
         }
     }
 
+    public long getProviderTokenSelectionCount(Long tokenId) {
+        if (tokenId == null) {
+            return Long.MAX_VALUE;
+        }
+        AtomicLong counter = providerTokenSelectionCountCache.get(tokenId);
+        return counter == null ? 0L : counter.get();
+    }
+
+    public long incrementProviderTokenSelectionCount(Long tokenId) {
+        if (tokenId == null) {
+            return 0L;
+        }
+        return providerTokenSelectionCountCache
+                .computeIfAbsent(tokenId, ignored -> new AtomicLong())
+                .incrementAndGet();
+    }
+
     public CustomerToken getCustomerTokenByValue(String tokenValue) {
         if (tokenValue == null || tokenValue.isBlank()) {
             return null;
@@ -449,6 +474,14 @@ public class RouteCacheService {
             return;
         }
         Map<String, CustomerToken> nextByValue = new HashMap<>(customerTokenByValueCache);
+        if (customerToken.getId() != null) {
+            nextByValue.entrySet().removeIf(entry -> {
+                CustomerToken existing = entry.getValue();
+                return existing != null
+                        && customerToken.getId().equals(existing.getId())
+                        && !customerToken.getTokenValue().equals(entry.getKey());
+            });
+        }
         nextByValue.put(customerToken.getTokenValue(), customerToken);
 
         Map<Long, CustomerToken> nextById = new HashMap<>(customerTokenByIdCache);

@@ -26,14 +26,16 @@ import site.xlinks.ai.router.service.RetryRouteExclusions;
 import site.xlinks.ai.router.service.routing.ProxyErrors;
 import site.xlinks.ai.router.service.routing.ProxyRoutingPipeline;
 import site.xlinks.ai.router.service.routing.RoutingBuildContext;
+import site.xlinks.ai.router.service.routing.RoutingStepException;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -99,10 +101,12 @@ public class ProtocolProxyService {
             ProxyRequestTrace.markSuccess(context, usageMetrics);
             return response;
         } catch (BusinessException e) {
-            recordBusinessError(context, e, startAt);
+            recordBusinessError(context, extractRoutingContext(e), e, startAt);
             throw e;
         } catch (UpstreamTimeoutException e) {
             throw handleTimeoutError(context, e, startAt);
+        } catch (UpstreamTransportException e) {
+            throw handleTransportError(context, e, startAt);
         } catch (Exception e) {
             unexpectedError = e;
             throw handleUnexpectedError("Proxy request failed", context, e, startAt);
@@ -114,6 +118,13 @@ public class ProtocolProxyService {
     public void forwardStream(String token,
                               ProxyRequest request,
                               Consumer<StreamEvent> onEvent) {
+        forwardStream(token, request, onEvent, new AtomicBoolean(false));
+    }
+
+    public void forwardStream(String token,
+                              ProxyRequest request,
+                              Consumer<StreamEvent> onEvent,
+                              AtomicBoolean downstreamCancelled) {
         String requestId = buildRequestId(request.getProtocol());
         long startAt = System.currentTimeMillis();
         ProviderInvokeContext context = null;
@@ -123,7 +134,15 @@ public class ProtocolProxyService {
         ProxyRequestTrace.begin(requestId, request, traceTimelineEnabled, traceStreamEventPreviewLimit);
         ProxyRequestTrace.addRouteEvent("收到代理请求，开始处理");
         try {
-            StreamInvokeResult streamInvokeResult = forwardStreamWithRetry(token, request, requestId, onEvent, upstreamStreamPayloadBuilder, startAt);
+            StreamInvokeResult streamInvokeResult = forwardStreamWithRetry(
+                    token,
+                    request,
+                    requestId,
+                    onEvent,
+                    upstreamStreamPayloadBuilder,
+                    startAt,
+                    downstreamCancelled == null ? new AtomicBoolean(false) : downstreamCancelled
+            );
             context = streamInvokeResult.context();
             AtomicReference<UsageMetrics> usageMetricsRef = streamInvokeResult.usageMetricsRef();
             AtomicReference<Integer> responseMsRef = streamInvokeResult.responseMsRef();
@@ -144,7 +163,7 @@ public class ProtocolProxyService {
             recordError(context, 500, "CLIENT_ABORT", e.getMessage(), startAt, "client_abort");
         } catch (BusinessException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
-            recordBusinessError(context, e, startAt);
+            recordBusinessError(context, extractRoutingContext(e), e, startAt);
             throw e;
         } catch (StreamFirstResponseTimeoutException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
@@ -155,6 +174,9 @@ public class ProtocolProxyService {
         } catch (UpstreamTimeoutException e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             throw handleTimeoutError(context, e, startAt);
+        } catch (UpstreamTransportException e) {
+            logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
+            throw handleTransportError(context, e, startAt);
         } catch (Exception e) {
             logUpstreamResponsesStreamPayload(context, upstreamStreamPayloadBuilder);
             unexpectedError = e;
@@ -166,7 +188,6 @@ public class ProtocolProxyService {
 
     public Object listModels(String token) {
         CustomerToken customerToken = customerTokenAuthService.validateToken(token);
-        long createdEpoch = System.currentTimeMillis() / 1000;
         List<Model> models = routeCacheService.listModels();
         List<Object> modelList = models.stream()
                 .filter(model -> model.getModelCode() != null && !model.getModelCode().isBlank())
@@ -174,8 +195,8 @@ public class ProtocolProxyService {
                 .map(model -> Map.of(
                         "id", model.getModelCode(),
                         "object", "model",
-                        "created", createdEpoch,
-                        "owned_by", "xlinks-router"
+                        "created", 0,
+                        "owned_by", "openai"
                 ))
                 .collect(Collectors.toList());
 
@@ -281,6 +302,9 @@ public class ProtocolProxyService {
                 return new DirectInvokeResult(context, response);
             } catch (UpstreamTimeoutException ex) {
                 throw ex;
+            } catch (UpstreamTransportException ex) {
+                recordSelectedRouteFailure(context);
+                throw ex;
             } catch (UpstreamProviderException ex) {
                 ProxyRequestTrace.addRouteEvent("上游失败("
                         + buildRetryFailureDetail(attempt, context, ex) + ")");
@@ -310,7 +334,8 @@ public class ProtocolProxyService {
                                                       String requestId,
                                                       Consumer<StreamEvent> onEvent,
                                                       StringBuilder upstreamStreamPayloadBuilder,
-                                                      long startAt) {
+                                                      long startAt,
+                                                      AtomicBoolean downstreamCancelled) {
         RetryRouteExclusions exclusions = new RetryRouteExclusions();
         ProviderProtocolAdapter adapter = resolveAdapter(request.getProtocol());
         UpstreamProviderException lastRetryableFailure = null;
@@ -325,6 +350,7 @@ public class ProtocolProxyService {
             ArrayBlockingQueue<StreamDispatchItem> streamDispatchQueue = new ArrayBlockingQueue<>(queueCapacity);
             AtomicReference<RuntimeException> writerFailureRef = new AtomicReference<>();
             CountDownLatch writerDone = new CountDownLatch(1);
+            AtomicBoolean streamCancelled = downstreamCancelled == null ? new AtomicBoolean(false) : downstreamCancelled;
             try {
                 logRetryAttempt("流式", attempt, context, exclusions);
                 ProxyRequestTrace.addTimelineEvent("路由完成", "调用上下文已构建");
@@ -347,7 +373,7 @@ public class ProtocolProxyService {
                         usageMetricsRef.set(usageMetrics);
                     }
                     enqueueStreamEvent(streamDispatchQueue, event, writerFailureRef);
-                });
+                }, streamCancelled);
                 ProxyRequestTrace.addTimelineEvent("流式读取", "上游流读取完成");
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
@@ -361,14 +387,23 @@ public class ProtocolProxyService {
                 }
                 return new StreamInvokeResult(context, usageMetricsRef, responseMsRef);
             } catch (ClientAbortException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
             } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
+                streamCancelled.set(true);
+                enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
+                waitStreamWriterDone(writerDone, writerFailureRef);
+                recordSelectedRouteFailure(context);
+                throw ex;
+            } catch (UpstreamTransportException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
             } catch (UpstreamProviderException ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 ProxyRequestTrace.addRouteEvent("流式上游失败("
@@ -384,6 +419,7 @@ public class ProtocolProxyService {
                 ProxyRequestTrace.addRouteEvent("流式首包前准备重试下一个 provider/token("
                         + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
             } catch (Exception ex) {
+                streamCancelled.set(true);
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
                 throw ex;
@@ -409,15 +445,25 @@ public class ProtocolProxyService {
         return protocol.getRequestIdPrefix() + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private void recordBusinessError(ProviderInvokeContext context, BusinessException e, long startAt) {
-        String finishReason = e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
-        recordError(context, 500, String.valueOf(e.getCode()), e.getMessage(), startAt, finishReason);
+    private void recordBusinessError(ProviderInvokeContext context,
+                                     RoutingBuildContext routingContext,
+                                     BusinessException e,
+                                     long startAt) {
+        String finishReason = classifyBusinessFinishReason(e);
+        recordError(context, routingContext, 500, String.valueOf(e.getCode()), e.getMessage(), startAt, finishReason);
     }
 
     private BusinessException handleTimeoutError(ProviderInvokeContext context,
                                                  UpstreamTimeoutException e,
                                                  long startAt) {
         recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, "upstream_timeout");
+        return ProxyErrors.upstreamTimeout();
+    }
+
+    private BusinessException handleTransportError(ProviderInvokeContext context,
+                                                   UpstreamTransportException e,
+                                                   long startAt) {
+        recordError(context, 500, ErrorCode.UPSTREAM_TIMEOUT.name(), e.getMessage(), startAt, "upstream_transport_error");
         return ProxyErrors.upstreamTimeout();
     }
 
@@ -443,6 +489,16 @@ public class ProtocolProxyService {
                              String errorMessage,
                              long startAt,
                              String finishReason) {
+        recordError(context, null, responseStatus, errorCode, errorMessage, startAt, finishReason);
+    }
+
+    private void recordError(ProviderInvokeContext context,
+                             RoutingBuildContext routingContext,
+                             int responseStatus,
+                             String errorCode,
+                             String errorMessage,
+                             long startAt,
+                             String finishReason) {
         if (context != null) {
             usageRecordService.recordError(
                     context,
@@ -452,9 +508,81 @@ public class ProtocolProxyService {
                     System.currentTimeMillis() - startAt,
                     finishReason
             );
+        } else if (routingContext != null && routingContext.getCustomerToken() != null) {
+            usageRecordService.recordRoutingError(
+                    routingContext,
+                    responseStatus,
+                    errorCode,
+                    errorMessage,
+                    System.currentTimeMillis() - startAt,
+                    finishReason
+            );
         }
         ProxyRequestTrace.markFailure(context, finishReason, errorCode, errorMessage);
         ProxyRequestTrace.addRouteEvent("请求结束，结果=" + finishReason + "，错误码=" + errorCode);
+    }
+
+    private RoutingBuildContext extractRoutingContext(BusinessException e) {
+        if (e instanceof RoutingStepException routingStepException) {
+            return routingStepException.getRoutingContext();
+        }
+        return null;
+    }
+
+    private String classifyBusinessFinishReason(BusinessException e) {
+        if (e == null) {
+            return "business_error";
+        }
+        String message = e.getMessage();
+        if (message == null) {
+            return e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
+        }
+        if ("No available plan or wallet balance".equals(message)) {
+            return "entitlement_unavailable";
+        }
+        if ("Customer token total quota reached".equals(message)) {
+            return "token_total_quota_reached";
+        }
+        if ("Customer token daily quota reached".equals(message)) {
+            return "token_daily_quota_reached";
+        }
+        if ("Customer token model is not allowed".equals(message)) {
+            return "token_model_not_allowed";
+        }
+        if (message.startsWith("Model does not exist or is unavailable: ")) {
+            return "model_unavailable";
+        }
+        if (message.startsWith("No available provider mapping for model and protocol: ")) {
+            return "provider_mapping_unavailable";
+        }
+        if (message.startsWith("No available provider token for model and protocol: ")) {
+            return "provider_token_unavailable";
+        }
+        if ("Provider token concurrency limit reached".equals(message)) {
+            return "provider_rate_limited";
+        }
+        return e.getCode() == ErrorCode.RATE_LIMITED.getCode() ? "rate_limited" : "business_error";
+    }
+
+    private void recordSelectedRouteFailure(ProviderInvokeContext context) {
+        if (context == null) {
+            return;
+        }
+        if (context.getProviderTokenId() != null) {
+            routeCacheService.recordProviderTokenFailure(context.getProviderTokenId());
+            return;
+        }
+        routeCacheService.recordProviderFailure(context.getProviderId());
+    }
+
+    private void clearSelectedRouteFailure(ProviderInvokeContext context) {
+        if (context == null) {
+            return;
+        }
+        if (context.getProviderTokenId() != null) {
+            routeCacheService.clearProviderTokenFailure(context.getProviderTokenId());
+        }
+        routeCacheService.clearProviderFailure(context.getProviderId());
     }
 
     private boolean shouldRetryProviderFailure(UpstreamProviderException exception, int attempt) {
