@@ -47,6 +47,7 @@ macOS / Linux:
 ## Options
 - `-Scope all|backend|frontend` (default: `all`)
 - `-BackendApps <name[,name...]>` 指定后端应用（可选值：`api`,`api-test`,`client`,`admin`）
+- `-BackendHosts <host-or-alias[,host-or-alias...]>` 指定后端发布节点；未指定时发布到该应用的全部已配置节点
 - `-FrontendApps <name[,name...]>` 指定前端应用（可选值：`client`,`admin`）
 - `-DryRun` print commands only, do not execute
 - `-SkipBackendBuild`
@@ -69,6 +70,9 @@ powershell -File .\scripts\deploy-all.ps1 -Scope backend
 
 # Deploy only backend api + admin
 powershell -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api,admin
+
+# Deploy backend api to one specific prod node only
+powershell -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api -BackendHosts 47.101.46.196
 
 # Deploy only frontend admin
 powershell -File .\scripts\deploy-all.ps1 -Scope frontend -FrontendApps admin
@@ -93,6 +97,9 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
 # Deploy only backend api + admin
 ./scripts/deploy-all.sh --scope backend --backend-apps api,admin
 
+# Deploy backend api to one specific prod node only
+./scripts/deploy-all.sh --scope backend --backend-apps api --backend-hosts 47.101.46.196
+
 # Deploy only frontend admin
 ./scripts/deploy-all.sh --scope frontend --frontend-apps admin
 
@@ -111,8 +118,10 @@ powershell -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
   - client -> `101.35.218.196:/app/simple-nginx/docker`
   - admin -> `123.60.29.123:/app/simple-nginx/docker`
 - Backend deploy targets:
-  - api -> `101.35.218.196:/app/x-links-api/docker/target` (prod)
+  - api -> `101.35.218.196:/app/x-links-api/docker/target` (prod, alias `api-prod-1`)
+  - api -> `47.101.46.196:/app/x-links-api/docker/target` (prod, alias `api-prod-2`)
   - api-test -> `119.28.150.166:/app/x-links-api/docker/target` (test)
+- `api` 默认会发布到全部生产节点；若要单点发布，可使用 `-BackendHosts` / `--backend-hosts` 指定 IP 或别名。
 - `api-test` 当前复用和 `api` 相同的远端目录与 `docker-compose` 根目录；如果测试环境目录不同，请同步修改两个脚本。
 - SSH host keys are pinned in script for configured servers.
 - Server addresses and passwords are currently in-script constants. Adjust in `scripts/deploy-all.ps1` or `scripts/deploy-all.sh` if needed.

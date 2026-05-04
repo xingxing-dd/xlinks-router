@@ -13,6 +13,7 @@ SKIP_BACKEND_DEPLOY=0
 SKIP_FRONTEND_BUILD=0
 SKIP_FRONTEND_DEPLOY=0
 SELECTED_BACKEND_NAMES=()
+SELECTED_BACKEND_HOSTS=()
 SELECTED_FRONTEND_NAMES=()
 
 VALID_BACKEND_NAMES=("api" "api-test" "client" "admin")
@@ -27,6 +28,7 @@ Usage: ./scripts/deploy-all.sh [options]
 Options:
   --scope, -Scope <all|backend|frontend>
   --backend-apps, -BackendApps <name[,name...]>
+  --backend-hosts, -BackendHosts <host-or-alias[,host-or-alias...]>
   --frontend-apps, -FrontendApps <name[,name...]>
   --dry-run, -DryRun
   --maven-repo-local, -MavenRepoLocal <path>
@@ -83,6 +85,8 @@ append_unique_name() {
 
   if [[ "$array_name" == "backend" ]]; then
     contains_name "$normalized" "${SELECTED_BACKEND_NAMES[@]}" || SELECTED_BACKEND_NAMES+=("$normalized")
+  elif [[ "$array_name" == "backend_host" ]]; then
+    contains_name "$normalized" "${SELECTED_BACKEND_HOSTS[@]}" || SELECTED_BACKEND_HOSTS+=("$normalized")
   else
     contains_name "$normalized" "${SELECTED_FRONTEND_NAMES[@]}" || SELECTED_FRONTEND_NAMES+=("$normalized")
   fi
@@ -196,6 +200,27 @@ backend_compose_root() {
   esac
 }
 
+backend_target_rows() {
+  case "$1" in
+    api)
+      printf '%s\n' "api-prod-1|101.35.218.196|root|132311aA.|/app/x-links-api/docker/target|/app/x-links-api"
+      printf '%s\n' "api-prod-2|47.101.46.196|root|132311aA.|/app/x-links-api/docker/target|/app/x-links-api"
+      ;;
+    api-test)
+      printf '%s\n' "api-test|119.28.150.166|root|132311aA.|/app/x-links-api/docker/target|/app/x-links-api"
+      ;;
+    client)
+      printf '%s\n' "client|106.14.134.62|root|132311aA.|/app/x-links-client/docker/target|/app/x-links-client"
+      ;;
+    admin)
+      printf '%s\n' "admin|106.14.134.62|root|132311aA.|/app/x-links-admin/docker/target|/app/x-links-admin"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 frontend_app_dir() {
   case "$1" in
     client) printf '%s\n' "xlinks-router-web/xlinks-router-client" ;;
@@ -231,11 +256,80 @@ frontend_compose_root() {
 host_key_fingerprint() {
   case "$1" in
     101.35.218.196) printf '%s\n' "SHA256:PfiPY69KeproT34U+fYlVw2A3URhqcCI0sKC6eguGJc" ;;
+    47.101.46.196) printf '%s\n' "SHA256:ouNs2XcECtFANmnrR/HjEBwEXu9C/bvJEv1h9dpJagY" ;;
     119.28.150.166) printf '%s\n' "SHA256:/s5Kmh1ukYkGpz/d7r0EvGG3gxtSnCVcriSOqvZSNhw" ;;
     106.14.134.62) printf '%s\n' "SHA256:Y0bjWgodEzH/lJSp5J+uDcaX9T8Q+Ud2BoIunmpELps" ;;
     123.60.29.123) printf '%s\n' "SHA256:ggDyPPYBU3G0NgqWzwJ4TK0F9gxc4RYlg+R/g357E+I" ;;
     *) printf '\n' ;;
   esac
+}
+
+backend_target_matches_host_filter() {
+  local target_name="$1"
+  local remote_host="$2"
+  local selector
+
+  if [[ "${#SELECTED_BACKEND_HOSTS[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  for selector in "${SELECTED_BACKEND_HOSTS[@]}"; do
+    if [[ "$selector" == "$target_name" || "$selector" == "$remote_host" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_backend_targets() {
+  local service="$1"
+  local row
+
+  while IFS= read -r row; do
+    [[ -n "$row" ]] || continue
+    IFS='|' read -r target_name remote_host _ <<<"$row"
+    if backend_target_matches_host_filter "$target_name" "$remote_host"; then
+      printf '%s\n' "$row"
+    fi
+  done < <(backend_target_rows "$service")
+}
+
+all_backend_host_selectors() {
+  local service
+  local row
+
+  for service in "${VALID_BACKEND_NAMES[@]}"; do
+    while IFS= read -r row; do
+      [[ -n "$row" ]] || continue
+      IFS='|' read -r target_name remote_host _ <<<"$row"
+      printf '%s\n' "$target_name"
+      printf '%s\n' "$remote_host"
+    done < <(backend_target_rows "$service")
+  done
+}
+
+validate_backend_host_selectors() {
+  local selectors=("$@")
+  local known_selectors=()
+  local selector
+  local expected
+
+  if [[ "${#selectors[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  while IFS= read -r selector; do
+    [[ -n "$selector" ]] || continue
+    contains_name "$selector" "${known_selectors[@]}" || known_selectors+=("$selector")
+  done < <(all_backend_host_selectors)
+
+  for selector in "${selectors[@]}"; do
+    if ! contains_name "$selector" "${known_selectors[@]}"; then
+      expected="$(printf '%s, ' "${known_selectors[@]}")"
+      expected="${expected%, }"
+      die "Unknown backend host selector: $selector. Available: $expected"
+    fi
+  done
 }
 
 known_hosts_file_for() {
@@ -428,11 +522,15 @@ run_backend_pipeline() {
   local module_dir
   local module_path
   local jar_path
+  local target_row
+  local service_targets=()
+  local target_name
   local remote_host
   local deploy_user
   local deploy_password
   local jar_target_dir
   local compose_root
+  local deployed_target_count=0
   local parent_pom_args=("-N" "install")
   local common_build_args=("clean" "install")
   local module_build_args=("clean" "package")
@@ -477,18 +575,30 @@ run_backend_pipeline() {
     module_dir="$(backend_module_dir "$service")"
     module_path="$REPO_ROOT/$module_dir"
     jar_path="$(get_latest_jar "$module_path")"
-    remote_host="$(backend_deploy_host "$service")"
-    deploy_user="$(backend_deploy_user "$service")"
-    deploy_password="$(backend_deploy_password "$service")"
-    jar_target_dir="$(backend_jar_target_dir "$service")"
-    compose_root="$(backend_compose_root "$service")"
+    service_targets=()
+    while IFS= read -r target_row; do
+      [[ -n "$target_row" ]] || continue
+      service_targets+=("$target_row")
+    done < <(resolve_backend_targets "$service")
+    if [[ "${#service_targets[@]}" -eq 0 ]]; then
+      echo "Skip backend deploy for '$service': no target matched current --backend-hosts filter."
+      continue
+    fi
+    for target_row in "${service_targets[@]}"; do
+      IFS='|' read -r target_name remote_host deploy_user deploy_password jar_target_dir compose_root <<<"$target_row"
 
-    write_step "Upload jar: $service -> $remote_host:$jar_target_dir"
-    upload_file "$jar_path" "$remote_host" "$deploy_user" "$deploy_password" "$jar_target_dir"
+      write_step "Upload jar: $service@$target_name -> $remote_host:$jar_target_dir"
+      upload_file "$jar_path" "$remote_host" "$deploy_user" "$deploy_password" "$jar_target_dir"
 
-    write_step "Restart docker compose: $service"
-    restart_remote_compose "$remote_host" "$deploy_user" "$deploy_password" "$compose_root"
+      write_step "Restart docker compose: $service@$target_name"
+      restart_remote_compose "$remote_host" "$deploy_user" "$deploy_password" "$compose_root"
+      deployed_target_count=$((deployed_target_count + 1))
+    done
   done
+
+  if [[ "$deployed_target_count" -eq 0 ]]; then
+    die "No backend deploy target matched the selected apps and backend host selectors."
+  fi
 }
 
 run_frontend_pipeline() {
@@ -563,6 +673,15 @@ while [[ "$#" -gt 0 ]]; do
       append_name_list "backend" "${1#*=}"
       shift
       ;;
+    --backend-hosts|-BackendHosts)
+      [[ "$#" -ge 2 ]] || die "Missing value for $1"
+      append_name_list "backend_host" "$2"
+      shift 2
+      ;;
+    --backend-hosts=*)
+      append_name_list "backend_host" "${1#*=}"
+      shift
+      ;;
     --frontend-apps|-FrontendApps)
       [[ "$#" -ge 2 ]] || die "Missing value for $1"
       append_name_list "frontend" "$2"
@@ -620,6 +739,7 @@ case "$SCOPE" in
 esac
 
 validate_names "backend" "${SELECTED_BACKEND_NAMES[@]}"
+validate_backend_host_selectors "${SELECTED_BACKEND_HOSTS[@]}"
 validate_names "frontend" "${SELECTED_FRONTEND_NAMES[@]}"
 
 SELECTED_BACKEND_SERVICES=("${SELECTED_BACKEND_NAMES[@]}")
@@ -673,6 +793,11 @@ fi
 
 if [[ "$RUN_BACKEND" == "1" ]]; then
   echo "Selected backend apps : ${SELECTED_BACKEND_SERVICES[*]}"
+  if [[ "${#SELECTED_BACKEND_HOSTS[@]}" -gt 0 ]]; then
+    echo "Selected backend hosts: ${SELECTED_BACKEND_HOSTS[*]}"
+  else
+    echo "Selected backend hosts: all configured nodes"
+  fi
 else
   echo "No backend app selected under current scope, backend pipeline will be skipped."
 fi

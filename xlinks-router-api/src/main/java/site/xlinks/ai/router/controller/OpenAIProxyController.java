@@ -207,6 +207,10 @@ public class OpenAIProxyController {
             if (current instanceof ClientAbortException || current instanceof EOFException) {
                 return true;
             }
+            String simpleName = current.getClass().getSimpleName();
+            if (simpleName != null && simpleName.toLowerCase(Locale.ROOT).contains("asyncrequestnotusableexception")) {
+                return true;
+            }
             if (current instanceof IOException ioException) {
                 String msg = ioException.getMessage();
                 if (containsDisconnectKeywords(msg)) {

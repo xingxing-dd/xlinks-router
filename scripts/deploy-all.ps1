@@ -4,6 +4,7 @@
     [switch]$DryRun,
     [string]$MavenRepoLocal = "",
     [string[]]$BackendApps = @(),
+    [string[]]$BackendHosts = @(),
     [string[]]$FrontendApps = @(),
     [switch]$SkipBackendBuild,
     [switch]$SkipBackendDeploy,
@@ -21,38 +22,66 @@ $BackendServices = @(
     @{
         Name = "api"
         ModuleDir = "xlinks-router-api"
-        DeployHost = "101.35.218.196"
-        DeployUser = "root"
-        DeployPassword = "132311aA."
-        JarTargetDir = "/app/x-links-api/docker/target"
-        ComposeRoot = "/app/x-links-api"
+        DeployTargets = @(
+            @{
+                Name = "api-prod-1"
+                Host = "101.35.218.196"
+                User = "root"
+                Password = "132311aA."
+                JarTargetDir = "/app/x-links-api/docker/target"
+                ComposeRoot = "/app/x-links-api"
+            },
+            @{
+                Name = "api-prod-2"
+                Host = "47.101.46.196"
+                User = "root"
+                Password = "132311aA."
+                JarTargetDir = "/app/x-links-api/docker/target"
+                ComposeRoot = "/app/x-links-api"
+            }
+        )
     },
     @{
         Name = "api-test"
         ModuleDir = "xlinks-router-api"
-        DeployHost = "119.28.150.166"
-        DeployUser = "root"
-        DeployPassword = "132311aA."
-        JarTargetDir = "/app/x-links-api/docker/target"
-        ComposeRoot = "/app/x-links-api"
+        DeployTargets = @(
+            @{
+                Name = "api-test"
+                Host = "119.28.150.166"
+                User = "root"
+                Password = "132311aA."
+                JarTargetDir = "/app/x-links-api/docker/target"
+                ComposeRoot = "/app/x-links-api"
+            }
+        )
     },
     @{
         Name = "client"
         ModuleDir = "xlinks-router-client"
-        DeployHost = "106.14.134.62"
-        DeployUser = "root"
-        DeployPassword = "132311aA."
-        JarTargetDir = "/app/x-links-client/docker/target"
-        ComposeRoot = "/app/x-links-client"
+        DeployTargets = @(
+            @{
+                Name = "client"
+                Host = "106.14.134.62"
+                User = "root"
+                Password = "132311aA."
+                JarTargetDir = "/app/x-links-client/docker/target"
+                ComposeRoot = "/app/x-links-client"
+            }
+        )
     },
     @{
         Name = "admin"
         ModuleDir = "xlinks-router-admin"
-        DeployHost = "106.14.134.62"
-        DeployUser = "root"
-        DeployPassword = "132311aA."
-        JarTargetDir = "/app/x-links-admin/docker/target"
-        ComposeRoot = "/app/x-links-admin"
+        DeployTargets = @(
+            @{
+                Name = "admin"
+                Host = "106.14.134.62"
+                User = "root"
+                Password = "132311aA."
+                JarTargetDir = "/app/x-links-admin/docker/target"
+                ComposeRoot = "/app/x-links-admin"
+            }
+        )
     }
 )
 
@@ -91,6 +120,7 @@ function Get-HostKeyFingerprint {
     param([string]$RemoteHost)
     switch ($RemoteHost) {
         "101.35.218.196" { return "ssh-ed25519 255 SHA256:PfiPY69KeproT34U+fYlVw2A3URhqcCI0sKC6eguGJc" }
+        "47.101.46.196" { return "ssh-ed25519 255 SHA256:ouNs2XcECtFANmnrR/HjEBwEXu9C/bvJEv1h9dpJagY" }
         "119.28.150.166" { return "ssh-ed25519 255 SHA256:/s5Kmh1ukYkGpz/d7r0EvGG3gxtSnCVcriSOqvZSNhw" }
         "106.14.134.62" { return "ssh-ed25519 255 SHA256:Y0bjWgodEzH/lJSp5J+uDcaX9T8Q+Ud2BoIunmpELps" }
         "123.60.29.123" { return "ssh-ed25519 255 SHA256:ggDyPPYBU3G0NgqWzwJ4TK0F9gxc4RYlg+R/g357E+I" }
@@ -133,6 +163,68 @@ function Normalize-NameList {
     }
 
     return $result
+}
+
+function Get-BackendHostSelectors {
+    param([object[]]$Services)
+
+    $selectors = @()
+    foreach ($service in $Services) {
+        $targets = @($service.DeployTargets)
+        foreach ($target in $targets) {
+            if ($null -ne $target.Name) {
+                $normalized = $target.Name.ToString().Trim().ToLowerInvariant()
+                if (-not [string]::IsNullOrWhiteSpace($normalized) -and ($selectors -notcontains $normalized)) {
+                    $selectors += $normalized
+                }
+            }
+            if ($null -ne $target.Host) {
+                $normalized = $target.Host.ToString().Trim().ToLowerInvariant()
+                if (-not [string]::IsNullOrWhiteSpace($normalized) -and ($selectors -notcontains $normalized)) {
+                    $selectors += $normalized
+                }
+            }
+        }
+    }
+    return $selectors
+}
+
+function Validate-BackendHostSelectors {
+    param(
+        [string[]]$SelectedSelectors,
+        [object[]]$Services
+    )
+
+    if (-not $SelectedSelectors -or $SelectedSelectors.Count -eq 0) {
+        return
+    }
+
+    $availableSelectors = @(Get-BackendHostSelectors -Services $Services)
+    $unknown = @($SelectedSelectors | Where-Object { $availableSelectors -notcontains $_ })
+    if ($unknown.Count -gt 0) {
+        $expected = ($availableSelectors | Sort-Object) -join ", "
+        throw "Unknown backend host selector: $($unknown -join ', '). Available: $expected"
+    }
+}
+
+function Resolve-BackendTargets {
+    param(
+        [object]$Service,
+        [string[]]$HostSelectors
+    )
+
+    $targets = @($Service.DeployTargets)
+    if (-not $HostSelectors -or $HostSelectors.Count -eq 0) {
+        return $targets
+    }
+
+    $filtered = @($targets | Where-Object {
+        $targetName = if ($null -eq $_.Name) { "" } else { $_.Name.ToString().Trim().ToLowerInvariant() }
+        $targetHost = if ($null -eq $_.Host) { "" } else { $_.Host.ToString().Trim().ToLowerInvariant() }
+        $HostSelectors -contains $targetName -or $HostSelectors -contains $targetHost
+    })
+
+    return $filtered
 }
 
 function Select-ConfiguredItems {
@@ -304,7 +396,8 @@ function Run-BackendPipeline {
     param(
         [string]$PlinkPath,
         [string]$PscpPath,
-        [object[]]$Services
+        [object[]]$Services,
+        [string[]]$BackendHostSelectors
     )
 
     Write-Step "Backend pipeline"
@@ -350,15 +443,28 @@ function Run-BackendPipeline {
         return
     }
 
+    $deployedTargetCount = 0
     foreach ($svc in $Services) {
         $modulePath = Join-Path $RepoRoot $svc.ModuleDir
         $jarPath = Get-LatestJar -ModuleAbsolutePath $modulePath
+        $targets = @(Resolve-BackendTargets -Service $svc -HostSelectors $BackendHostSelectors)
+        if ($targets.Count -eq 0) {
+            Write-Host "Skip backend deploy for '$($svc.Name)': no target matched current -BackendHosts filter." -ForegroundColor Yellow
+            continue
+        }
 
-        Write-Step "Upload jar: $($svc.Name) -> $($svc.DeployHost):$($svc.JarTargetDir)"
-        Upload-File -PscpPath $PscpPath -LocalPath $jarPath -RemoteHost $svc.DeployHost -User $svc.DeployUser -Password $svc.DeployPassword -RemoteDir $svc.JarTargetDir
+        foreach ($target in $targets) {
+            Write-Step "Upload jar: $($svc.Name)@$($target.Name) -> $($target.Host):$($target.JarTargetDir)"
+            Upload-File -PscpPath $PscpPath -LocalPath $jarPath -RemoteHost $target.Host -User $target.User -Password $target.Password -RemoteDir $target.JarTargetDir
 
-        Write-Step "Restart docker compose: $($svc.Name)"
-        Restart-RemoteCompose -PlinkPath $PlinkPath -RemoteHost $svc.DeployHost -User $svc.DeployUser -Password $svc.DeployPassword -ComposeRoot $svc.ComposeRoot
+            Write-Step "Restart docker compose: $($svc.Name)@$($target.Name)"
+            Restart-RemoteCompose -PlinkPath $PlinkPath -RemoteHost $target.Host -User $target.User -Password $target.Password -ComposeRoot $target.ComposeRoot
+            $deployedTargetCount++
+        }
+    }
+
+    if ($deployedTargetCount -eq 0) {
+        throw "No backend deploy target matched the selected apps and backend host selectors."
     }
 }
 
@@ -422,6 +528,7 @@ try {
     if ($selectedBackendNames.Count -eq 0) {
         $selectedBackendNames = @("api", "client", "admin")
     }
+    $selectedBackendHostSelectors = @(Normalize-NameList -Values $BackendHosts)
 
     $selectedFrontendNames = @(Normalize-NameList -Values $FrontendApps)
     if ($selectedFrontendNames.Count -eq 0) {
@@ -429,6 +536,7 @@ try {
     }
 
     $selectedBackendServices = Select-ConfiguredItems -Items $BackendServices -Names $selectedBackendNames -ItemType "backend app"
+    Validate-BackendHostSelectors -SelectedSelectors $selectedBackendHostSelectors -Services $BackendServices
     $selectedFrontendApps = Select-ConfiguredItems -Items $FrontendAppConfigs -Names $selectedFrontendNames -ItemType "frontend app"
 
     $runBackend = ($Scope -eq "all" -or $Scope -eq "backend") -and $selectedBackendServices.Count -gt 0
@@ -443,6 +551,12 @@ try {
 
     if ($runBackend) {
         Write-Host ("Selected backend apps : " + (($selectedBackendServices | ForEach-Object { $_.Name }) -join ", "))
+        if ($selectedBackendHostSelectors.Count -gt 0) {
+            Write-Host ("Selected backend hosts: " + ($selectedBackendHostSelectors -join ", "))
+        }
+        else {
+            Write-Host "Selected backend hosts: all configured nodes"
+        }
     }
     if ($runFrontend) {
         Write-Host ("Selected frontend apps: " + (($selectedFrontendApps | ForEach-Object { $_.Name }) -join ", "))
@@ -477,7 +591,7 @@ try {
     }
 
     if ($runBackend) {
-        Run-BackendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath -Services $selectedBackendServices
+        Run-BackendPipeline -PlinkPath $plinkPath -PscpPath $pscpPath -Services $selectedBackendServices -BackendHostSelectors $selectedBackendHostSelectors
     }
 
     if ($runFrontend) {

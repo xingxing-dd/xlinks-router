@@ -42,7 +42,7 @@ public abstract class AbstractSseHttpAdapter {
     protected OkHttpClient createScopedClient(ProviderInvokeContext context, boolean stream) {
         OkHttpClient.Builder builder = httpClient.newBuilder();
         if (stream) {
-            long readTimeoutMs = normalizeTimeout(streamTimeoutMs(context), 20_000L);
+            long readTimeoutMs = normalizeTimeout(streamFirstResponseTimeoutMs(context), 20_000L);
             builder.callTimeout(0, TimeUnit.MILLISECONDS)
                     .readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS);
             return builder.build();
@@ -56,7 +56,8 @@ public abstract class AbstractSseHttpAdapter {
     }
 
     protected StreamReadResult readSseFrames(ResponseBody body,
-                                             Consumer<StreamEvent> onEvent) throws IOException {
+                                             Consumer<StreamEvent> onEvent,
+                                             ProviderInvokeContext context) throws IOException {
         if (body == null) {
             return new StreamReadResult(false, "");
         }
@@ -64,6 +65,7 @@ public abstract class AbstractSseHttpAdapter {
         List<String> frameLines = new ArrayList<>();
         StringBuilder rawPayloadPreview = new StringBuilder();
         boolean emittedAnyEvent = false;
+        boolean idleTimeoutApplied = false;
         while (!source.exhausted()) {
             String line;
             try {
@@ -86,6 +88,10 @@ public abstract class AbstractSseHttpAdapter {
                     onEvent.accept(event);
                     emittedAnyEvent = true;
                     rawPayloadPreview.setLength(0);
+                    if (!idleTimeoutApplied) {
+                        applyReadTimeout(source, idleStreamTimeoutMs(context));
+                        idleTimeoutApplied = true;
+                    }
                 }
                 if (event != null && event.isDoneSignal()) {
                     break;
@@ -102,9 +108,19 @@ public abstract class AbstractSseHttpAdapter {
                 onEvent.accept(event);
                 emittedAnyEvent = true;
                 rawPayloadPreview.setLength(0);
+                if (!idleTimeoutApplied) {
+                    applyReadTimeout(source, idleStreamTimeoutMs(context));
+                }
             }
         }
         return new StreamReadResult(emittedAnyEvent, emittedAnyEvent ? "" : rawPayloadPreview.toString().trim());
+    }
+
+    private void applyReadTimeout(BufferedSource source, long timeoutMs) {
+        if (source == null) {
+            return;
+        }
+        source.timeout().timeout(normalizeTimeout(timeoutMs, 20_000L), TimeUnit.MILLISECONDS);
     }
 
     private void appendRawPreview(StringBuilder rawPayloadPreview, String line) {
@@ -294,7 +310,13 @@ public abstract class AbstractSseHttpAdapter {
         return context == null || context.getRequestTimeoutMs() == null ? 20_000L : context.getRequestTimeoutMs();
     }
 
-    private long streamTimeoutMs(ProviderInvokeContext context) {
+    private long streamFirstResponseTimeoutMs(ProviderInvokeContext context) {
+        return context == null || context.getStreamFirstResponseTimeoutMs() == null
+                ? 20_000L
+                : context.getStreamFirstResponseTimeoutMs();
+    }
+
+    private long idleStreamTimeoutMs(ProviderInvokeContext context) {
         return context == null || context.getStreamIdleTimeoutMs() == null ? 20_000L : context.getStreamIdleTimeoutMs();
     }
 

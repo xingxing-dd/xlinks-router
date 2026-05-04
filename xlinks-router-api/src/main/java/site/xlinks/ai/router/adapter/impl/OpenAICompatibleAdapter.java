@@ -92,7 +92,7 @@ public class OpenAICompatibleAdapter extends AbstractSseHttpAdapter implements P
                 }
 
                 String contentType = response.header("Content-Type", "");
-                StreamReadResult readResult = readSseFrames(body, onEvent);
+                StreamReadResult readResult = readSseFrames(body, onEvent, context);
                 if (readResult.emittedAnyEvent()) {
                     return;
                 }

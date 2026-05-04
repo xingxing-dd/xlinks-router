@@ -274,17 +274,14 @@ public class ProtocolProxyService {
                 ProxyRequestTrace.addTimelineEvent("并发许可", "已启动自动续租");
                 ProxyRequestTrace.addTimelineEvent("上游请求", buildUpstreamRequestDetail(context, request, false));
                 JsonNode response = adapter.forwardDirect(request, context);
-                clearSelectedRouteFailure(context);
                 if (attempt > 1) {
                     ProxyRequestTrace.addRouteEvent("重试成功，结束重试链路("
                             + buildRetryRouteDetail(attempt, context) + ")");
                 }
                 return new DirectInvokeResult(context, response);
             } catch (UpstreamTimeoutException ex) {
-                recordSelectedRouteFailure(context);
                 throw ex;
             } catch (UpstreamProviderException ex) {
-                recordSelectedRouteFailure(context);
                 ProxyRequestTrace.addRouteEvent("上游失败("
                         + buildRetryFailureDetail(attempt, context, ex) + ")");
                 if (!shouldRetryProviderFailure(ex, attempt)) {
@@ -297,7 +294,6 @@ public class ProtocolProxyService {
                 ProxyRequestTrace.addRouteEvent("准备重试下一个 provider/token("
                         + buildRetryPlanDetail(attempt, context, ex, exclusions) + ")");
             } catch (Exception ex) {
-                recordSelectedRouteFailure(context);
                 throw ex;
             } finally {
                 providerConcurrencyGuard.cancelAutoRenew(renewFuture);
@@ -359,7 +355,6 @@ public class ProtocolProxyService {
                 if (writerFailure != null) {
                     throw writerFailure;
                 }
-                clearSelectedRouteFailure(context);
                 if (attempt > 1) {
                     ProxyRequestTrace.addRouteEvent("重试成功，结束重试链路("
                             + buildRetryRouteDetail(attempt, context) + ")");
@@ -372,12 +367,10 @@ public class ProtocolProxyService {
             } catch (StreamFirstResponseTimeoutException | StreamIdleTimeoutException | UpstreamTimeoutException ex) {
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
-                recordSelectedRouteFailure(context);
                 throw ex;
             } catch (UpstreamProviderException ex) {
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
-                recordSelectedRouteFailure(context);
                 ProxyRequestTrace.addRouteEvent("流式上游失败("
                         + buildRetryFailureDetail(attempt, context, ex) + ")");
                 if (!shouldRetryProviderFailure(ex, attempt) || responseMsRef.get() != null) {
@@ -393,7 +386,6 @@ public class ProtocolProxyService {
             } catch (Exception ex) {
                 enqueueStreamDispatchEnd(streamDispatchQueue, writerFailureRef);
                 waitStreamWriterDone(writerDone, writerFailureRef);
-                recordSelectedRouteFailure(context);
                 throw ex;
             } finally {
                 providerConcurrencyGuard.cancelAutoRenew(renewFuture);
@@ -463,27 +455,6 @@ public class ProtocolProxyService {
         }
         ProxyRequestTrace.markFailure(context, finishReason, errorCode, errorMessage);
         ProxyRequestTrace.addRouteEvent("请求结束，结果=" + finishReason + "，错误码=" + errorCode);
-    }
-
-    private void recordSelectedRouteFailure(ProviderInvokeContext context) {
-        if (context == null) {
-            return;
-        }
-        if (context.getProviderTokenId() != null) {
-            routeCacheService.recordProviderTokenFailure(context.getProviderTokenId());
-            return;
-        }
-        routeCacheService.recordProviderFailure(context.getProviderId());
-    }
-
-    private void clearSelectedRouteFailure(ProviderInvokeContext context) {
-        if (context == null) {
-            return;
-        }
-        if (context.getProviderTokenId() != null) {
-            routeCacheService.clearProviderTokenFailure(context.getProviderTokenId());
-        }
-        routeCacheService.clearProviderFailure(context.getProviderId());
     }
 
     private boolean shouldRetryProviderFailure(UpstreamProviderException exception, int attempt) {
@@ -570,12 +541,20 @@ public class ProtocolProxyService {
         Integer requestTimeoutMs = context == null ? null : context.getRequestTimeoutMs();
         Integer firstTimeoutMs = context == null ? null : context.getStreamFirstResponseTimeoutMs();
         Integer idleTimeoutMs = context == null ? null : context.getStreamIdleTimeoutMs();
-        return "url=" + nullSafe(url)
-                + ", stream=" + stream
-                + ", providerToken=" + tokenForLog
-                + ", requestTimeoutMs=" + nullSafe(requestTimeoutMs)
-                + ", streamFirstResponseTimeoutMs=" + nullSafe(firstTimeoutMs)
-                + ", streamIdleTimeoutMs=" + nullSafe(idleTimeoutMs);
+        StringBuilder detail = new StringBuilder()
+                .append("url=").append(nullSafe(url))
+                .append(", stream=").append(stream)
+                .append(", providerToken=").append(tokenForLog);
+        if (stream) {
+            detail.append(", effectiveFirstResponseTimeoutMs=").append(nullSafe(firstTimeoutMs))
+                    .append(", effectiveIdleTimeoutMs=").append(nullSafe(idleTimeoutMs))
+                    .append(", requestTimeoutMs(configOnlyForNonStream)=").append(nullSafe(requestTimeoutMs));
+        } else {
+            detail.append(", effectiveRequestTimeoutMs=").append(nullSafe(requestTimeoutMs))
+                    .append(", streamFirstResponseTimeoutMs(configOnlyForStream)=").append(nullSafe(firstTimeoutMs))
+                    .append(", streamIdleTimeoutMs(configOnlyForStream)=").append(nullSafe(idleTimeoutMs));
+        }
+        return detail.toString();
     }
 
     private String buildUpstreamUrl(ProviderInvokeContext context, ProxyRequest request) {
@@ -727,9 +706,15 @@ public class ProtocolProxyService {
         while (true) {
             RuntimeException writerFailure = writerFailureRef.get();
             if (writerFailure != null) {
-                log.warn("Stream writer failed before enqueue, itemType={}, error={}",
-                        item.endSignal() ? "end" : "event",
-                        writerFailure.getMessage());
+                if (isClientAbortException(writerFailure)) {
+                    log.info("Stream writer stopped because downstream client disconnected, itemType={}, error={}",
+                            item.endSignal() ? "end" : "event",
+                            writerFailure.getMessage());
+                } else {
+                    log.warn("Stream writer failed before enqueue, itemType={}, error={}",
+                            item.endSignal() ? "end" : "event",
+                            writerFailure.getMessage());
+                }
                 throw writerFailure;
             }
             try {
@@ -770,6 +755,37 @@ public class ProtocolProxyService {
             writerFailureRef.compareAndSet(null, interruptedError);
             throw interruptedError;
         }
+    }
+
+    private boolean isClientAbortException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof ClientAbortException) {
+                return true;
+            }
+            String className = current.getClass().getName();
+            if (className != null) {
+                String lowerClassName = className.toLowerCase();
+                if (lowerClassName.contains("clientabortexception")
+                        || lowerClassName.contains("asyncrequestnotusableexception")) {
+                    return true;
+                }
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lowerMessage = message.toLowerCase();
+                if (lowerMessage.contains("broken pipe")
+                        || lowerMessage.contains("connection reset")
+                        || lowerMessage.contains("connection aborted")
+                        || lowerMessage.contains("connection closed")
+                        || lowerMessage.contains("forcibly closed")
+                        || lowerMessage.contains("stream closed")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private void emitTraceSummary(Throwable unexpectedError) {

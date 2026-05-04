@@ -138,7 +138,7 @@
     exchangeRate: '兑换比例',
     payAmount: '支付金额',
     paymentMethod: '支付方式',
-    rechargeRateHint: '输入美元余额金额，实际支付人民币按 1 : 0.2 计算',
+    rechargeRateHint: '输入美元余额金额，实际支付人民币按 1 : 0.4 计算',
     inputAmountPlaceholder: '请输入美元充值金额',
     minAmount: '最小金额',
     maxAmount: '最大金额',
@@ -343,6 +343,8 @@
     activationCodeFormatErrorDetail: '激活码至少需要 8 位字符',
     loadFailed: '加载套餐列表失败',
     orderFailed: '创建订单失败',
+    noPlansTitle: '暂未上架套餐订阅',
+    noPlansDesc: '请前往充值使用',
     features: {
       defaultModel: 'Codex',
       allowedModels: '仅可用 {models}',

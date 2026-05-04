@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 class ProviderRouteResolverTest {
 
     @Test
-    void shouldSkipTemporarilyUnavailableProviderAndUseNextCandidate() {
+    void shouldSkipExcludedProviderAndUseNextCandidate() {
         RouteCacheService routeCacheService = mock(RouteCacheService.class);
         ProviderTokenSelectService providerTokenSelectService = mock(ProviderTokenSelectService.class);
         ProviderRouteResolver resolver = new ProviderRouteResolver(routeCacheService, providerTokenSelectService);
@@ -48,8 +48,6 @@ class ProviderRouteResolverTest {
 
         when(routeCacheService.listProviderModelsByPriority(10L, ProxyProtocol.CHAT_COMPLETIONS))
                 .thenReturn(List.of(first, second));
-        when(routeCacheService.isProviderTemporarilyUnavailable(100L)).thenReturn(true);
-        when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(secondProvider);
         when(providerTokenSelectService.selectTokenLeaseOrNull(secondProvider, "req-1", Set.of()))
                 .thenReturn(new ProviderTokenSelectService.SelectionResult(secondToken, null, false));
@@ -59,7 +57,9 @@ class ProviderRouteResolverTest {
                 10L,
                 "gpt-4o",
                 ProxyProtocol.CHAT_COMPLETIONS,
-                "req-1"
+                "req-1",
+                Set.of(100L),
+                Set.of()
         );
 
         assertNotNull(route);
@@ -99,7 +99,6 @@ class ProviderRouteResolverTest {
         when(routeCacheService.listProviderModelsByPriority(10L, ProxyProtocol.CHAT_COMPLETIONS))
                 .thenReturn(List.of(highPriority, preferred));
         when(routeCacheService.getMerchantPreferredProviderId(500L, 10L)).thenReturn(200L);
-        when(routeCacheService.isProviderTemporarilyUnavailable(200L)).thenReturn(false);
         when(routeCacheService.getProvider(200L)).thenReturn(preferredProvider);
         when(providerTokenSelectService.selectTokenLeaseOrNull(preferredProvider, "req-2", Set.of()))
                 .thenReturn(new ProviderTokenSelectService.SelectionResult(preferredToken, null, false));

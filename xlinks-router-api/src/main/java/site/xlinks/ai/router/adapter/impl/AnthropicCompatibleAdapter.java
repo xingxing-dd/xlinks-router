@@ -91,7 +91,7 @@ public class AnthropicCompatibleAdapter extends AbstractSseHttpAdapter implement
 
                 String contentType = response.header("Content-Type", "");
                 if (isEventStream(contentType)) {
-                    StreamReadResult readResult = readSseFrames(body, onEvent);
+                    StreamReadResult readResult = readSseFrames(body, onEvent, context);
                     if (readResult.emittedAnyEvent()) {
                         return;
                     }

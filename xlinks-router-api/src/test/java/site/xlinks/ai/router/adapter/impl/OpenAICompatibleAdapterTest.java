@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,6 +63,27 @@ class OpenAICompatibleAdapterTest {
 
         assertEquals("text/event-stream", streamingRequest.header("Accept"));
         assertEquals("application/json", nonStreamingRequest.header("Accept"));
+    }
+
+    @Test
+    void shouldUseDifferentTimeoutsForStreamAndNonStreamClients() {
+        ProviderInvokeContext context = ProviderInvokeContext.builder()
+                .requestTimeoutMs(20_000)
+                .streamFirstResponseTimeoutMs(40_000)
+                .streamIdleTimeoutMs(55_000)
+                .build();
+
+        OkHttpClient directClient = ReflectionTestUtils.invokeMethod(adapter, "createScopedClient", context, false);
+        OkHttpClient streamClient = ReflectionTestUtils.invokeMethod(adapter, "createScopedClient", context, true);
+
+        assertNotNull(directClient);
+        assertNotNull(streamClient);
+        assertEquals(20_000, directClient.callTimeoutMillis());
+        assertEquals(20_000, directClient.readTimeoutMillis());
+        assertEquals(20_000, directClient.writeTimeoutMillis());
+        assertEquals(0, streamClient.callTimeoutMillis());
+        assertEquals(40_000, streamClient.readTimeoutMillis());
+        assertEquals(10_000, streamClient.writeTimeoutMillis());
     }
 
 
@@ -214,4 +236,3 @@ class OpenAICompatibleAdapterTest {
                 .build();
     }
 }
-

@@ -1,0 +1,82 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: xlinks-router-api-distributed
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://rm-uf635ebs664h84te8no.mysql.rds.aliyuncs.com:3306/xlinks_router?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: "132311aA!"
+    hikari:
+      idleTimeout: 300000
+  data:
+    redis:
+      host: 123.60.29.123
+      port: 6379
+      password: 132311aA.
+      database: 0
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: site.xlinks.ai.router.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+logging:
+  level:
+    site.xlinks.ai.router: DEBUG
+    org.springframework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+
+xlinks:
+  id:
+    machine-id: ${XLS_API_DISTRIBUTED_MACHINE_ID:1}
+  router:
+    sse:
+      timeout-ms: 900000
+    cache:
+      refresh-interval-ms: 300000
+    quota-reset:
+      cron: "0 0 0 * * ?"
+      zone: "Asia/Shanghai"
+    internal:
+      auth-token: ${XLS_API_DISTRIBUTED_INTERNAL_AUTH_TOKEN:change-me}
+    auth:
+      token-cache-ttl-seconds: 15
+    debug:
+      log-upstream-responses-stream-payload: false
+      trace-timeline-enabled: true
+      trace-stream-event-preview-limit: 120
+      trace-log-provider-token-plain: false
+    async:
+      usage:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 1000
+      sse:
+        core-size: 8
+        max-size: 64
+        queue-capacity: 2000
+      permit-renew:
+        pool-size: 4
+    limits:
+      default-max-concurrent-per-token: 0
+      default-acquire-timeout-ms: 0
+      default-request-timeout-ms: 20000
+      default-stream-first-response-timeout-ms: 20000
+      default-stream-idle-timeout-ms: 20000
+      default-session-lease-ms: 30000
+      default-session-renew-interval-ms: 10000
+    http:
+      connect-timeout-ms: 10000
+      read-timeout-ms: 120000
+      write-timeout-ms: 120000
+    routing:
+      cache-refresh-interval-ms: 300000

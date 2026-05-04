@@ -1,33 +1,42 @@
 ---
 name: xlinks-router-deploy
-description: Deploy xlinks-router by using the repository release scripts in `scripts/`. Use when the user wants to publish the whole xlinks-router system, deploy one backend app (`api`,`client`,`admin`), deploy one frontend app (`client`,`admin`), run a dry run, or build without deploy. Before executing, resolve ambiguous publish intent with the user when names like `client`, `admin`, `web`, `backend`, `frontend`, or `module` do not uniquely map to a script target.
+description: Deploy xlinks-router by using the repository release scripts in `scripts/`. Use when the user wants to publish the whole xlinks-router system, deploy one backend app (`api`,`client`,`admin`), deploy one frontend app (`client`,`admin`), target one backend node or all configured backend nodes, run a dry run, or build without deploy. Before executing, resolve ambiguous publish intent with the user when names like `client`, `admin`, `web`, `backend`, `frontend`, or `module` do not uniquely map to a script target.
 ---
 
 # Xlinks Router Deploy
 
 ## Overview
 
-Use the repo deployment entrypoint `scripts/deploy-all.ps1` from the repository root. Do not invent alternate release commands when the existing script already supports the requested target.
+Use the repo deployment entrypoint from the repository root:
+- Windows: `scripts/deploy-all.ps1`
+- macOS/Linux: `scripts/deploy-all.sh`
+
+Do not invent alternate release commands when the existing script already supports the requested target.
 
 Read [references/deploy-matrix.md](references/deploy-matrix.md) before composing the final command if the request involves target selection, skip flags, or confirmation rules.
 
 ## Workflow
 
-1. Read `scripts/DEPLOY.md` and `scripts/deploy-all.ps1` if the repo may have changed since the skill was written.
+1. Read `scripts/DEPLOY.md` and the platform-appropriate deploy script if the repo may have changed since the skill was written.
 2. Map the user request to script parameters:
    - Full publish: `-Scope all`
    - Backend only: `-Scope backend`
    - Frontend only: `-Scope frontend`
    - Specific backend apps: `-BackendApps api|client|admin`
+   - Specific backend nodes: `-BackendHosts <ip-or-alias>`; when omitted, backend apps deploy to all configured nodes
    - Specific frontend apps: `-FrontendApps client|admin`
    - Preview only: `-DryRun`
    - Build only: combine scope with `-SkipBackendDeploy` and/or `-SkipFrontendDeploy`
 3. Pause for human confirmation when the request is ambiguous or materially risky.
 4. Echo the resolved scope in plain language before execution.
-5. Run the PowerShell entrypoint from repo root:
+5. Run the native entrypoint from repo root:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 ...
+```
+
+```bash
+./scripts/deploy-all.sh ...
 ```
 
 6. Report which backend apps and frontend apps were selected, and summarize success or failure.
@@ -55,6 +64,7 @@ Use short, concrete confirmation prompts. Good examples:
 - `xlinks-router-admin` -> backend `admin`
 - `xlinks-router-web/xlinks-router-client` -> frontend `client`
 - `xlinks-router-web/xlinks-router-admin` -> frontend `admin`
+- Backend node selectors can be host IPs or configured aliases such as `api-prod-1` and `api-prod-2`
 
 Treat these words as ambiguous until clarified:
 
@@ -66,7 +76,7 @@ Treat these words as ambiguous until clarified:
 ## Execution Guidance
 
 - Prefer the PowerShell script over the `.bat` wrapper because the script exposes the full option surface clearly.
-- Run from repository root `D:\project\xlinks-router`.
+- On macOS/Linux prefer `scripts/deploy-all.sh`; on Windows prefer `scripts/deploy-all.ps1`.
 - Do not hardcode hostnames or passwords in the response unless the user explicitly asks; rely on the script.
 - If the user only wants a plan or command preview, stop after composing the exact command.
 - If the script fails in preflight, surface the failing prerequisite directly.
@@ -83,6 +93,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Dr
 # Backend api only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api
 
+# Backend api one node only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Scope backend -BackendApps api -BackendHosts 47.101.46.196
+
 # Frontend client only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Scope frontend -FrontendApps client
 
@@ -91,4 +104,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Sc
 
 # Build frontend only without deploy
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-all.ps1 -Scope frontend -SkipFrontendDeploy
+
+# Backend api all configured nodes on macOS/Linux
+./scripts/deploy-all.sh --scope backend --backend-apps api
+
+# Backend api one node only on macOS/Linux
+./scripts/deploy-all.sh --scope backend --backend-apps api --backend-hosts api-prod-2
 ```

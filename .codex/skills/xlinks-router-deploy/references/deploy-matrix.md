@@ -11,6 +11,7 @@ Always prefer those files if current repo behavior and this reference diverge.
 
 - `-Scope all|backend|frontend`
 - `-BackendApps <name[,name...]>`
+- `-BackendHosts <host-or-alias[,host-or-alias...]>`
 - `-FrontendApps <name[,name...]>`
 - `-DryRun`
 - `-SkipBackendBuild`
@@ -24,6 +25,13 @@ Always prefer those files if current repo behavior and this reference diverge.
 - `api` -> module `xlinks-router-api`
 - `client` -> module `xlinks-router-client`
 - `admin` -> module `xlinks-router-admin`
+
+## Backend Host Mapping
+
+- `api` 默认发布到全部已配置生产节点
+- `api-prod-1` -> `101.35.218.196`
+- `api-prod-2` -> `47.101.46.196`
+- 也可以直接传 IP，例如 `-BackendHosts 47.101.46.196`
 
 ## Frontend App Mapping
 
@@ -56,6 +64,11 @@ Always prefer those files if current repo behavior and this reference diverge.
 - `publish api`
   - Clear backend target.
   - Command: `-Scope backend -BackendApps api`
+  - No host specified means deploy to all configured api nodes.
+
+- `publish api to 47.101.46.196`
+  - Clear backend target with node filter.
+  - Command: `-Scope backend -BackendApps api -BackendHosts 47.101.46.196`
 
 - `publish client`
   - Ambiguous: backend `client` vs frontend `client`

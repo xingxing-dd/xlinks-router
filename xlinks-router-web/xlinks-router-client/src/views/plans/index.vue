@@ -372,6 +372,13 @@ onMounted(loadPlans)
     <div v-if="loading" class="rounded-2xl border border-slate-200 bg-white py-12 text-center text-slate-500">
       {{ t('common.loading') }}
     </div>
+    <div v-else-if="codexPlans.length === 0" class="rounded-3xl border-2 border-slate-200 bg-white p-8 text-center shadow-sm">
+      <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <CreditCard class="h-6 w-6" />
+      </div>
+      <h3 class="mb-2 text-lg font-semibold text-slate-900">{{ t('plans.noPlansTitle') }}</h3>
+      <p class="text-sm text-slate-600">{{ t('plans.noPlansDesc') }}</p>
+    </div>
     <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-0">
       <div
         v-for="(plan, index) in codexPlans"

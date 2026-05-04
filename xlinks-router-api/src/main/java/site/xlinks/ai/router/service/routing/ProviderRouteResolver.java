@@ -62,11 +62,6 @@ public class ProviderRouteResolver {
                         + candidate.getProviderId() + ")");
                 continue;
             }
-            if (routeCacheService.isProviderTemporarilyUnavailable(candidate.getProviderId())) {
-                ProxyRequestTrace.addRouteEvent("触发降级，跳过临时不可用 provider(providerId="
-                        + candidate.getProviderId() + ")");
-                continue;
-            }
             Provider candidateProvider = routeCacheService.getProvider(candidate.getProviderId());
             if (candidateProvider == null || candidateProvider.getStatus() == null || candidateProvider.getStatus() != 1) {
                 ProxyRequestTrace.addRouteEvent("跳过不可用 provider(providerId=" + candidate.getProviderId()

@@ -3,42 +3,6 @@ import { useI18n } from 'vue-i18n'
 import { getApi, postApi } from '@/utils/request'
 import { toast } from '@/utils/toast'
 
-const DEFAULT_PLANS = [
-  {
-    id: 'small',
-    name: 'Codex小包套餐',
-    price: 45,
-    dailyLimit: 30,
-    monthlyQuota: 900,
-    durationDays: 30,
-    allowedModels: ['Codex'],
-    carryOverDailyQuota: true,
-    stackQuotaOnly: true,
-  },
-  {
-    id: 'medium',
-    name: 'Codex中包套餐',
-    price: 60,
-    dailyLimit: 60,
-    monthlyQuota: 1800,
-    durationDays: 30,
-    allowedModels: ['Codex'],
-    carryOverDailyQuota: true,
-    stackQuotaOnly: true,
-  },
-  {
-    id: 'large',
-    name: 'Codex大包套餐',
-    price: 75,
-    dailyLimit: 90,
-    monthlyQuota: 2700,
-    durationDays: 30,
-    allowedModels: ['Codex'],
-    carryOverDailyQuota: true,
-    stackQuotaOnly: true,
-  },
-]
-
 export function usePlans() {
   const { t } = useI18n()
 
@@ -98,7 +62,7 @@ export function usePlans() {
     }
   }
 
-  const codexPlans = ref(DEFAULT_PLANS.map(enrichPlan))
+  const codexPlans = ref([])
 
   const activeSubscriptions = ref([])
 
