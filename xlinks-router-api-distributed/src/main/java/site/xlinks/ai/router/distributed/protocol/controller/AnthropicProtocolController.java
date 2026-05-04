@@ -30,6 +30,6 @@ public class AnthropicProtocolController {
         ForwardRequest forwardRequest = protocolRequestParser.parseAnthropic(requestBody, request, token);
         log.debug("Accepted anthropic messages request, model={}, stream={}, tokenSource={}",
                 forwardRequest.getModel(), forwardRequest.isStream(), token.source());
-        return forwardingApplicationService.prepareOrThrow(forwardRequest);
+        return forwardingApplicationService.forward(forwardRequest);
     }
 }

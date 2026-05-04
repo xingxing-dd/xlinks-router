@@ -221,9 +221,18 @@
 
 10. 当前 routing 已落地能力  
     当前 forwarding 主链已完成：`协议请求解析 -> customer token -> customerAccount -> customerPlan -> model -> allowedModels 校验 -> merchant preferred provider -> provider/providerToken 选择`。  
-    当前阶段尚未接入真实上游 HTTP 转发，路由完成后仍以占位异常方式结束，下一阶段由 `infrastructure/http` 接入真实网络转发。
+    当前阶段已经接入 `infrastructure/http` 的最小可用 forwarding 骨架：路由完成后会进入统一 HTTP 执行器，由协议适配器完成真实上游调用。  
+    当前实现仍以“原始字符串请求体透传 + 必要字段改写 + 原始响应/原始 SSE 转发”为主，后续再逐步细化协议适配与异常映射。
 
 11. provider 故障态过滤原则  
     provider 与 providerToken 的运行态故障信息继续放在 Redis 中。  
     routing 在 provider 维度先过滤临时失败节点，providerToken 选择阶段再过滤 token 维度的失败状态与配额耗尽状态。  
     这样可以保证“路由决策”和“运行态稳定性状态”解耦，但仍保持单次决策链路清晰。
+
+12. 第四阶段当前落地边界  
+    `app/forwarding` 只负责准备上下文并调用 `ProviderHttpForwardingExecutor`。  
+    `infrastructure/http` 负责：
+    `ProviderHttpForwardingExecutor` 统一选择协议适配器；  
+    `OpenAiProviderHttpAdapter` 与 `AnthropicProviderHttpAdapter` 负责构建上游请求；  
+    `AbstractOkHttpProviderHttpAdapter` 负责公共 OkHttp 执行、超时控制、请求体最小改写、同步响应透传、SSE 字节流透传。  
+    当前版本优先保证 forwarding 闭环跑通，不在这一阶段过早引入复杂响应重写逻辑。

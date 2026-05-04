@@ -57,6 +57,6 @@ public class OpenAiProtocolController {
         ForwardRequest forwardRequest = protocolRequestParser.parseOpenAi(protocol, requestBody, token);
         log.debug("Accepted {} request, model={}, stream={}, tokenSource={}",
                 protocol.getCode(), forwardRequest.getModel(), forwardRequest.isStream(), token.source());
-        return forwardingApplicationService.prepareOrThrow(forwardRequest);
+        return forwardingApplicationService.forward(forwardRequest);
     }
 }

@@ -3,12 +3,11 @@ package site.xlinks.ai.router.distributed.app.forwarding;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.distributed.domain.routing.RoutingDomainService;
 import site.xlinks.ai.router.distributed.domain.routing.model.RoutingContext;
 import site.xlinks.ai.router.distributed.domain.routing.model.RoutingDecision;
+import site.xlinks.ai.router.distributed.infrastructure.http.ProviderHttpForwardingExecutor;
 import site.xlinks.ai.router.distributed.app.forwarding.model.ForwardingPreparation;
-import site.xlinks.ai.router.distributed.protocol.model.DistributedErrorCode;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
 import site.xlinks.ai.router.entity.CustomerAccount;
 import site.xlinks.ai.router.entity.CustomerPlan;
@@ -22,6 +21,7 @@ public class ForwardingApplicationService {
 
     private final ForwardingReadModelLoader forwardingReadModelLoader;
     private final RoutingDomainService routingDomainService;
+    private final ProviderHttpForwardingExecutor providerHttpForwardingExecutor;
 
     public ForwardingPreparation prepare(ForwardRequest request) {
         CustomerToken customerToken = forwardingReadModelLoader.loadCustomerToken(request.getCustomerToken());
@@ -47,7 +47,7 @@ public class ForwardingApplicationService {
                 .build();
     }
 
-    public Object prepareOrThrow(ForwardRequest request) {
+    public Object forward(ForwardRequest request) {
         ForwardingPreparation preparation = prepare(request);
         RoutingDecision routingDecision = routingDomainService.route(
                 RoutingContext.builder()
@@ -61,15 +61,6 @@ public class ForwardingApplicationService {
         preparation.setRoutingDecision(routingDecision);
         preparation.setStage("ROUTED");
         preparation.setNextAction("HTTP_FORWARDING");
-
-        throw new BusinessException(
-                DistributedErrorCode.PROTOCOL_DEFINITION_ONLY.getCode(),
-                "Forwarding preparation and routing completed, but http forwarding is not connected yet: protocol="
-                        + preparation.getRequest().getProtocol().getCode()
-                        + ", accountId=" + preparation.getCustomerAccount().getId()
-                        + ", modelId=" + preparation.getModel().getId()
-                        + ", providerId=" + routingDecision.getProvider().getId()
-                        + ", providerTokenId=" + routingDecision.getProviderToken().getId()
-        );
+        return providerHttpForwardingExecutor.forward(preparation);
     }
 }
