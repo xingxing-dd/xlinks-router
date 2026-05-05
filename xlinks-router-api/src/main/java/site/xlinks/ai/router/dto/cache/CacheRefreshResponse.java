@@ -2,13 +2,11 @@ package site.xlinks.ai.router.dto.cache;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 /**
- * Internal cache refresh response.
+ * 内部缓存刷新响应。
  */
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
 public class CacheRefreshResponse {
 
@@ -22,5 +20,5 @@ public class CacheRefreshResponse {
 
     private String message;
 
-    private String refreshedAt;
+    private String timestamp;
 }

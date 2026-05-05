@@ -1,18 +1,17 @@
 package site.xlinks.ai.router.dto.cache;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * Internal cache refresh request.
+ * 内部缓存刷新请求。
  */
 @Data
 public class CacheRefreshRequest {
 
-    @NotBlank(message = "type cannot be blank")
+    private String source;
+
     private String type;
 
-    @NotBlank(message = "action cannot be blank")
     private String action;
 
     private Long id;
@@ -24,8 +23,6 @@ public class CacheRefreshRequest {
     private Long modelId;
 
     private Long planId;
-
-    private String source;
 
     private String remark;
 }

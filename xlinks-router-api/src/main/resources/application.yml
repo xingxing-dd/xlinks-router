@@ -23,35 +23,21 @@ mybatis-plus:
   type-aliases-package: site.xlinks.ai.router.entity
   configuration:
     map-underscore-to-camel-case: true
-    # Disable MyBatis SQL stdout logging.
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       id-type: auto
-
-app:
-  security:
-    token-encrypt-key: ${TOKEN_ENCRYPT_KEY:}
-  api:
-    timeout: 30000
-    retry-count: 3
-
-springdoc:
-  api-docs:
-    enabled: false
-    path: /v3/api-docs
-  swagger-ui:
-    enabled: false
-    path: /swagger-ui.html
 
 logging:
   level:
     site.xlinks.ai.router: DEBUG
     org.springframework: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
 
 xlinks:
+  id:
+    machine-id: ${XLS_API_DISTRIBUTED_MACHINE_ID:1}
   router:
     sse:
       timeout-ms: 900000
@@ -60,11 +46,10 @@ xlinks:
     quota-reset:
       cron: "0 0 0 * * ?"
       zone: "Asia/Shanghai"
+    internal:
+      auth-token: ${XLS_API_DISTRIBUTED_INTERNAL_AUTH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}
     auth:
       token-cache-ttl-seconds: 15
-      internal-cache-refresh-token: ${INTERNAL_CACHE_REFRESH_TOKEN:6f5df376e71a4801bb7b7006e0988c7e}
-    forward:
-      user-agent: "codex-tui/0.125.0 (Mac OS 26.3.1; arm64) zed/0.231.2_stable.221.cc335b70f85a17974a4c61f852dbebff8c4b1db8 (codex-tui; 0.125.0)"
     debug:
       log-upstream-responses-stream-payload: false
       trace-timeline-enabled: true
@@ -89,11 +74,9 @@ xlinks:
       default-stream-idle-timeout-ms: 20000
       default-session-lease-ms: 30000
       default-session-renew-interval-ms: 10000
-    okhttp:
-      connect-timeout-seconds: 10
-      read-timeout-seconds: 120
-      write-timeout-seconds: 120
-      max-idle-connections: 64
-      keep-alive-minutes: 5
-      max-requests: 512
-      max-requests-per-host: 128
+    http:
+      connect-timeout-ms: 10000
+      read-timeout-ms: 120000
+      write-timeout-ms: 120000
+    routing:
+      cache-refresh-interval-ms: 300000
