@@ -67,7 +67,7 @@ class ForwardingUsageRecordServiceTest {
         when(walletService.debitBasicAllowOverdraftToZero(anyLong(), any(), anyString(), anyString(), anyString()))
                 .thenReturn(new WalletService.BasicWalletDebitResult(null, BigDecimal.ZERO, new BigDecimal("0.002000")));
 
-        forwardingUsageRecordService.record(context, usageMetrics, 100L, null, null, "success");
+        forwardingUsageRecordService.record(context, usageMetrics, 100L, 100L, null, null, "success");
 
         verify(walletService).debitBasicAllowOverdraftToZero(eq(101L), eq(new BigDecimal("0.002000")), anyString(), eq("req-1"), anyString());
         verify(routingSnapshotCacheService).refreshWalletByAccountId(101L);

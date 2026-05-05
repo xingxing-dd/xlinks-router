@@ -7,7 +7,6 @@
 - `xlinks-router-common`：公共实体、DTO、工具类与基础能力
 - `xlinks-router-admin`：管理后台后端
 - `xlinks-router-api`：对外模型中转 API 与路由逻辑
-- `xlinks-router-api-distributed`：面向分布式部署的 API 重构模块，用于承接 `xlinks-router-api` 的分布式化演进
 - `xlinks-router-client`：用户侧后端服务
 - `xlinks-router-web/xlinks-router-admin`：管理端前端，基于 Vue 3 + Vite
 - `xlinks-router-web/xlinks-router-client`：客户端前端，基于 Vue 3 + Vite
@@ -24,7 +23,7 @@ Java 源码位于 `src/main/java`，测试代码位于 `src/test/java`，数据�
 - `cd xlinks-router-web/xlinks-router-admin && npm run dev`：启动管理端前端
 - `cd xlinks-router-web/xlinks-router-client && npm run build`：构建客户端前端
 
-完整初始化流程请参考根目录 `README.md`，其中包含 MySQL、Redis 和启动说明。若涉及 API 分布式改造，请优先检查 `xlinks-router-api-distributed` 是否已纳入当前构建与启动链路。
+完整初始化流程请参考根目录 `README.md`，其中包含 MySQL、Redis 和启动说明。
 
 ## 代码风格与命名规范
 

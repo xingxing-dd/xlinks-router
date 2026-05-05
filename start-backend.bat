@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "ROOT=%~dp0"
-set "BACKENDS=xlinks-router-admin xlinks-router-api xlinks-router-api-distributed xlinks-router-client"
+set "BACKENDS=xlinks-router-admin xlinks-router-api xlinks-router-client"
 set "FORCE_COMMON_INSTALL=0"
 set "TARGET="
 
@@ -32,8 +32,7 @@ echo.
 echo ===== Backend Modules =====
 echo 1. admin  ^(xlinks-router-admin^)
 echo 2. api    ^(xlinks-router-api^)
-echo 3. distributed ^(xlinks-router-api-distributed^)
-echo 4. client ^(xlinks-router-client^)
+echo 3. client ^(xlinks-router-client^)
 echo A. Run all ^(new windows^)
 echo.
 set /p "choice=Input index / short name / full name / A: "
@@ -41,8 +40,7 @@ set /p "choice=Input index / short name / full name / A: "
 if /I "%choice%"=="A" goto RUN_ALL
 if "%choice%"=="1" set "choice=admin"
 if "%choice%"=="2" set "choice=api"
-if "%choice%"=="3" set "choice=distributed"
-if "%choice%"=="4" set "choice=client"
+if "%choice%"=="3" set "choice=client"
 
 if not defined choice (
   echo [INFO] Empty input. Exit.
@@ -57,7 +55,7 @@ set "module=%~1"
 call :RESOLVE_BACKEND "%module%"
 if not exist "%ROOT%%module%\pom.xml" (
   echo [ERROR] Backend module not found: %module%
-  echo Available short names: admin api distributed client
+  echo Available short names: admin api client
   echo Available full names : %BACKENDS%
   goto :eof
 )
@@ -74,8 +72,6 @@ goto :eof
 set "input=%~1"
 if /I "%input%"=="admin" set "module=xlinks-router-admin"
 if /I "%input%"=="api" set "module=xlinks-router-api"
-if /I "%input%"=="distributed" set "module=xlinks-router-api-distributed"
-if /I "%input%"=="api-distributed" set "module=xlinks-router-api-distributed"
 if /I "%input%"=="client" set "module=xlinks-router-client"
 goto :eof
 

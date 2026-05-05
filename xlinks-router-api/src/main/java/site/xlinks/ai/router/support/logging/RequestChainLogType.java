@@ -8,6 +8,7 @@ public enum RequestChainLogType {
 
     REQUEST_RECEIVED("请求进入", "开始接收客户端请求"),
     DECISION_START("路由决策", "开始执行路由决策"),
+    PROTOCOL_CONTROLLER_ENTERED("接收协议请求", "协议=%s，请求已进入协议控制器"),
     PROTOCOL_REQUEST_RECEIVED("接收协议请求", "协议=%s，模型=%s，stream=%s，tokenSource=%s"),
     MODELS_REQUEST_RECEIVED("接收协议请求", "已接收 models 请求"),
     CUSTOMER_TOKEN_RESOLVED("解析客户令牌", "协议=%s，来源=%s"),

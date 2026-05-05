@@ -2,7 +2,7 @@
 set -eo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKENDS=("xlinks-router-admin" "xlinks-router-api" "xlinks-router-api-distributed" "xlinks-router-client")
+BACKENDS=("xlinks-router-admin" "xlinks-router-api" "xlinks-router-client")
 FORCE_COMMON_INSTALL=0
 TARGET=""
 
@@ -21,7 +21,6 @@ resolve_backend() {
   case "$(lower "$1")" in
     admin|xlinks-router-admin) printf '%s\n' "xlinks-router-admin" ;;
     api|xlinks-router-api) printf '%s\n' "xlinks-router-api" ;;
-    distributed|api-distributed|xlinks-router-api-distributed) printf '%s\n' "xlinks-router-api-distributed" ;;
     client|xlinks-router-client) printf '%s\n' "xlinks-router-client" ;;
     *) printf '%s\n' "$1" ;;
   esac
@@ -50,7 +49,7 @@ run_one() {
 
   if [[ ! -f "$ROOT/$module/pom.xml" ]]; then
     echo "[ERROR] Backend module not found: $module" >&2
-    echo "Available short names: admin api distributed client" >&2
+    echo "Available short names: admin api client" >&2
     echo "Available full names : ${BACKENDS[*]}" >&2
     return 1
   fi
@@ -129,8 +128,7 @@ echo
 echo "===== Backend Modules ====="
 echo "1. admin  (xlinks-router-admin)"
 echo "2. api    (xlinks-router-api)"
-echo "3. distributed (xlinks-router-api-distributed)"
-echo "4. client      (xlinks-router-client)"
+echo "3. client      (xlinks-router-client)"
 echo "A. Run all (parallel)"
 echo
 read -r -p "Input index / short name / full name / A: " choice
@@ -139,8 +137,7 @@ case "$(lower "${choice:-}")" in
   a) run_all ;;
   1) run_one "admin" ;;
   2) run_one "api" ;;
-  3) run_one "distributed" ;;
-  4) run_one "client" ;;
+  3) run_one "client" ;;
   "")
     echo "[INFO] Empty input. Exit."
     ;;

@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.app.forwarding.ForwardingApplicationService;
@@ -28,9 +27,12 @@ public class AnthropicProtocolController {
 
     @PostMapping("/messages")
     public void messages(HttpServletRequest request,
-                         HttpServletResponse response,
-                         @RequestBody String requestBody) throws IOException {
-        ForwardRequest forwardRequest = protocolRequestParser.parse(ForwardProtocol.ANTHROPIC_MESSAGES, requestBody, request);
+                         HttpServletResponse response) throws IOException {
+        RequestChainLogCollector.record(
+                RequestChainLogType.PROTOCOL_CONTROLLER_ENTERED,
+                ForwardProtocol.ANTHROPIC_MESSAGES.getCode()
+        );
+        ForwardRequest forwardRequest = protocolRequestParser.parse(ForwardProtocol.ANTHROPIC_MESSAGES, request);
         RequestChainLogCollector.bindForwardRequest(forwardRequest);
         RequestChainLogCollector.record(
                 RequestChainLogType.PROTOCOL_REQUEST_RECEIVED,

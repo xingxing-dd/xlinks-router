@@ -15,6 +15,7 @@ const Docs = () => import('../views/docs/index.vue')
 const Landing = () => import('../views/landing/index.vue')
 const PaymentSuccess = () => import('../views/payment/success.vue')
 const PaymentError = () => import('../views/payment/error.vue')
+const CustomerTokenUsage = () => import('../views/customer-token-usage/index.vue')
 const DefaultLayout = () => import('../layouts/DefaultLayout.vue')
 
 const routes = [
@@ -51,6 +52,11 @@ const routes = [
     path: '/payment/error',
     name: 'PaymentError',
     component: PaymentError
+  },
+  {
+    path: '/usages',
+    name: 'Usages',
+    component: CustomerTokenUsage
   },
   {
     path: '/',
@@ -106,7 +112,7 @@ router.beforeEach((to) => {
 
   const authStore = useAuthStore()
   // Allow marketing, support, and auth pages to be visited without login.
-  const publicPaths = ['/landing', '/login', '/register', '/forgot-password', '/promotion', '/contact', '/payment/success', '/payment/error']
+  const publicPaths = ['/landing', '/login', '/register', '/forgot-password', '/promotion', '/contact', '/payment/success', '/payment/error', '/usages']
 
   if (!publicPaths.includes(to.path) && !authStore.isAuthenticated) {
     return {
@@ -117,7 +123,7 @@ router.beforeEach((to) => {
     }
   }
 
-  if (publicPaths.includes(to.path) && authStore.isAuthenticated && !['/promotion', '/contact', '/payment/success', '/payment/error'].includes(to.path)) {
+  if (publicPaths.includes(to.path) && authStore.isAuthenticated && !['/promotion', '/contact', '/payment/success', '/payment/error', '/usages'].includes(to.path)) {
     return '/tokens'
   }
 

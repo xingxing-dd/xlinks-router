@@ -11,6 +11,6 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class UsageTrendItemResponse {
     private String date;
-    private Integer tokens;
+    private Long tokens;
     private BigDecimal cost;
 }

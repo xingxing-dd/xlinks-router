@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.app.forwarding.ForwardingApplicationService;
@@ -31,23 +30,20 @@ public class OpenAiProtocolController {
 
     @PostMapping("/completions")
     public void completions(HttpServletRequest request,
-                            HttpServletResponse response,
-                            @RequestBody String requestBody) throws IOException {
-        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.COMPLETIONS);
+                            HttpServletResponse response) throws IOException {
+        acceptOpenAiRequest(request, response, ForwardProtocol.COMPLETIONS);
     }
 
     @PostMapping("/chat/completions")
     public void chatCompletions(HttpServletRequest request,
-                                HttpServletResponse response,
-                                @RequestBody String requestBody) throws IOException {
-        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.CHAT_COMPLETIONS);
+                                HttpServletResponse response) throws IOException {
+        acceptOpenAiRequest(request, response, ForwardProtocol.CHAT_COMPLETIONS);
     }
 
     @PostMapping("/responses")
     public void responses(HttpServletRequest request,
-                          HttpServletResponse response,
-                          @RequestBody String requestBody) throws IOException {
-        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.RESPONSES);
+                          HttpServletResponse response) throws IOException {
+        acceptOpenAiRequest(request, response, ForwardProtocol.RESPONSES);
     }
 
     @GetMapping("/models")
@@ -58,9 +54,9 @@ public class OpenAiProtocolController {
 
     private void acceptOpenAiRequest(HttpServletRequest request,
                                      HttpServletResponse response,
-                                     String requestBody,
                                      ForwardProtocol protocol) throws IOException {
-        ForwardRequest forwardRequest = protocolRequestParser.parse(protocol, requestBody, request);
+        RequestChainLogCollector.record(RequestChainLogType.PROTOCOL_CONTROLLER_ENTERED, protocol.getCode());
+        ForwardRequest forwardRequest = protocolRequestParser.parse(protocol, request);
         RequestChainLogCollector.bindForwardRequest(forwardRequest);
         RequestChainLogCollector.record(
                 RequestChainLogType.PROTOCOL_REQUEST_RECEIVED,

@@ -1,22 +1,26 @@
 package site.xlinks.ai.router.client.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import site.xlinks.ai.router.client.context.CustomerAccountContext;
 import site.xlinks.ai.router.client.dto.dashboard.DashboardStatsResponse;
 import site.xlinks.ai.router.client.dto.dashboard.ModelUsageItemResponse;
 import site.xlinks.ai.router.client.dto.dashboard.RecentActivityResponse;
 import site.xlinks.ai.router.client.dto.dashboard.UsageTrendItemResponse;
+import site.xlinks.ai.router.common.enums.ErrorCode;
+import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.common.result.PageResult;
 import site.xlinks.ai.router.common.result.Result;
+import site.xlinks.ai.router.entity.CustomerToken;
 import site.xlinks.ai.router.entity.UsageRecord;
+import site.xlinks.ai.router.mapper.CustomerTokenMapper;
 import site.xlinks.ai.router.mapper.UsageRecordMapper;
-import site.xlinks.ai.router.service.WalletService;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -28,27 +32,16 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/dashboard")
+@RequestMapping("/api/v1/usages")
 @RequiredArgsConstructor
-public class DashboardController {
+public class CustomerTokenUsageController {
 
     private final UsageRecordMapper usageRecordMapper;
-    private final WalletService walletService;
+    private final CustomerTokenMapper customerTokenMapper;
 
     @GetMapping("/stats")
-    public Result<DashboardStatsResponse> getStats() {
-        DashboardStatsResponse response = new DashboardStatsResponse();
-        Long accountId = CustomerAccountContext.getAccountId();
-        if (accountId == null) {
-            response.setTodayRequests(0L);
-            response.setTodayRequestsChange(0D);
-            response.setTodayTokens(0L);
-            response.setTodayTokensChange(0D);
-            response.setTodayCost(BigDecimal.ZERO);
-            response.setTodayCostChange(0D);
-            response.setBalance(BigDecimal.ZERO);
-            return Result.success(response);
-        }
+    public Result<DashboardStatsResponse> getStats(@RequestParam String customerToken) {
+        CustomerToken token = resolveCustomerToken(customerToken);
 
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
@@ -56,32 +49,36 @@ public class DashboardController {
         LocalDateTime yesterdayStart = today.minusDays(1).atStartOfDay();
         LocalDateTime yesterdayEnd = today.minusDays(1).atTime(LocalTime.MAX);
 
-        StatsSummary todaySummary = querySummary(accountId, todayStart, todayEnd);
-        StatsSummary yesterdaySummary = querySummary(accountId, yesterdayStart, yesterdayEnd);
+        StatsSummary todaySummary = querySummary(token.getAccountId(), token.getTokenValue(), todayStart, todayEnd);
+        StatsSummary yesterdaySummary = querySummary(token.getAccountId(), token.getTokenValue(), yesterdayStart, yesterdayEnd);
 
+        DashboardStatsResponse response = new DashboardStatsResponse();
         response.setTodayRequests(todaySummary.requests);
         response.setTodayRequestsChange(calcChangePercent(todaySummary.requests, yesterdaySummary.requests));
         response.setTodayTokens(todaySummary.tokens);
         response.setTodayTokensChange(calcChangePercent(todaySummary.tokens, yesterdaySummary.tokens));
         response.setTodayCost(todaySummary.cost);
         response.setTodayCostChange(calcChangePercent(todaySummary.cost, yesterdaySummary.cost));
-        response.setBalance(walletService.ensureWallet(accountId).getMainWallet().getAvailableBalance());
+        response.setBalance(BigDecimal.ZERO);
         return Result.success(response);
     }
 
     @GetMapping("/usage-trend")
-    public Result<List<UsageTrendItemResponse>> getUsageTrend(@RequestParam(defaultValue = "7") Integer days) {
-        Long accountId = CustomerAccountContext.getAccountId();
-        if (accountId == null || days == null || days <= 0) {
+    public Result<List<UsageTrendItemResponse>> getUsageTrend(@RequestParam String customerToken,
+                                                              @RequestParam(defaultValue = "7") Integer days) {
+        CustomerToken token = resolveCustomerToken(customerToken);
+        if (days == null || days <= 0) {
             return Result.success(List.of());
         }
+
         int hours = days * 24;
         LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
         LocalDateTime startTime = endTime.minusHours(hours - 1L);
 
         List<UsageRecord> records = usageRecordMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, token.getAccountId())
+                        .eq(UsageRecord::getCustomerToken, token.getTokenValue())
                         .between(UsageRecord::getCreatedAt, startTime, endTime.plusHours(1))
         );
 
@@ -92,7 +89,7 @@ public class DashboardController {
                 continue;
             }
             LocalDateTime bucket = createdAt.truncatedTo(ChronoUnit.HOURS);
-            StatsSummary summary = bucketMap.computeIfAbsent(bucket, k -> new StatsSummary(0L, 0L, BigDecimal.ZERO));
+            StatsSummary summary = bucketMap.computeIfAbsent(bucket, key -> new StatsSummary(0L, 0L, BigDecimal.ZERO));
             long tokenCount = record.getTotalTokens() == null ? 0L : record.getTotalTokens().longValue();
             BigDecimal cost = record.getTotalCost() == null ? BigDecimal.ZERO : record.getTotalCost();
             bucketMap.put(bucket, new StatsSummary(summary.requests + 1, summary.tokens + tokenCount, summary.cost.add(cost)));
@@ -109,46 +106,47 @@ public class DashboardController {
     }
 
     @GetMapping("/model-usage")
-    public Result<List<ModelUsageItemResponse>> getModelUsage() {
-        Long accountId = CustomerAccountContext.getAccountId();
-        if (accountId == null) {
-            return Result.success(List.of());
-        }
+    public Result<List<ModelUsageItemResponse>> getModelUsage(@RequestParam String customerToken) {
+        CustomerToken token = resolveCustomerToken(customerToken);
+
         List<UsageRecord> records = usageRecordMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, token.getAccountId())
+                        .eq(UsageRecord::getCustomerToken, token.getTokenValue())
         );
+
         Map<String, StatsSummary> modelSummary = new HashMap<>();
         for (UsageRecord record : records) {
             String modelName = record.getModelName();
             if (modelName == null || modelName.isBlank()) {
-                modelName = record.getModelCode() == null ? "未知模型" : record.getModelCode();
+                modelName = record.getModelCode() == null ? "Unknown Model" : record.getModelCode();
             }
-            StatsSummary summary = modelSummary.getOrDefault(modelName, new StatsSummary(0L, 0L, BigDecimal.ZERO));
+
             long tokenCount = record.getTotalTokens() == null ? 0L : record.getTotalTokens().longValue();
             if (tokenCount <= 0) {
                 continue;
             }
+
+            StatsSummary summary = modelSummary.getOrDefault(modelName, new StatsSummary(0L, 0L, BigDecimal.ZERO));
             BigDecimal cost = record.getTotalCost() == null ? BigDecimal.ZERO : record.getTotalCost();
             modelSummary.put(modelName, new StatsSummary(summary.requests + 1, summary.tokens + tokenCount, summary.cost.add(cost)));
         }
+
         List<ModelUsageItemResponse> responses = new ArrayList<>();
         for (Map.Entry<String, StatsSummary> entry : modelSummary.entrySet()) {
             StatsSummary summary = entry.getValue();
             responses.add(new ModelUsageItemResponse(entry.getKey(), summary.requests, summary.tokens, summary.cost));
         }
-        responses.sort((a, b) -> Long.compare(b.getTokens(), a.getTokens()));
+        responses.sort((left, right) -> Long.compare(right.getTokens(), left.getTokens()));
         return Result.success(responses);
     }
 
     @GetMapping("/recent-activities")
-    public Result<PageResult<RecentActivityResponse>> getRecentActivities(@RequestParam(defaultValue = "1") Integer page,
+    public Result<PageResult<RecentActivityResponse>> getRecentActivities(@RequestParam String customerToken,
+                                                                          @RequestParam(defaultValue = "1") Integer page,
                                                                           @RequestParam(defaultValue = "20") Integer pageSize,
                                                                           @RequestParam(required = false) Integer limit) {
-        Long accountId = CustomerAccountContext.getAccountId();
-        if (accountId == null) {
-            return Result.success(PageResult.of(List.of(), 0, 1, 20));
-        }
+        CustomerToken token = resolveCustomerToken(customerToken);
 
         if (limit != null && limit > 0) {
             page = 1;
@@ -166,73 +164,78 @@ public class DashboardController {
         }
 
         Long totalCount = usageRecordMapper.selectCount(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, token.getAccountId())
+                        .eq(UsageRecord::getCustomerToken, token.getTokenValue())
         );
         long total = totalCount == null ? 0L : totalCount;
-
         long offset = (long) (page - 1) * pageSize;
         if (offset >= total) {
             return Result.success(PageResult.of(List.of(), total, page, pageSize));
         }
 
         List<UsageRecord> records = usageRecordMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
+                new LambdaQueryWrapper<UsageRecord>()
+                        .eq(UsageRecord::getAccountId, token.getAccountId())
+                        .eq(UsageRecord::getCustomerToken, token.getTokenValue())
                         .orderByDesc(UsageRecord::getCreatedAt)
                         .last("limit " + offset + "," + pageSize)
         );
-        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         List<RecentActivityResponse> responses = new ArrayList<>();
+        String maskedToken = maskToken(token.getTokenValue());
         for (UsageRecord record : records) {
             String time = record.getCreatedAt() == null ? "" : record.getCreatedAt().format(formatter);
-            String tokenValue = record.getCustomerToken();
-            String token = "";
-            if (tokenValue != null && !tokenValue.isBlank()) {
-                if (tokenValue.length() <= 8) {
-                    token = tokenValue.charAt(0) + "****" + tokenValue.charAt(tokenValue.length() - 1);
-                } else {
-                    token = tokenValue.substring(0, 3) + "****" + tokenValue.substring(tokenValue.length() - 4);
-                }
-            }
             String channel = record.getEndpointCode() == null ? "" : record.getEndpointCode();
             String model = record.getModelName() == null || record.getModelName().isBlank()
                     ? (record.getModelCode() == null ? "" : record.getModelCode())
                     : record.getModelName();
-            Integer inputTokens = record.getPromptTokens();
-            Integer cacheHitTokens = record.getCacheHitTokens();
-            Integer outputTokens = record.getCompletionTokens();
-            Integer totalTokens = record.getTotalTokens();
-            Integer responseMs = record.getResponseMs();
-            String usageType = record.getUsageType();
-            java.math.BigDecimal cost = record.getTotalCost();
             responses.add(new RecentActivityResponse(
                     time,
-                    token,
+                    maskedToken,
                     channel,
                     model,
-                    inputTokens,
-                    cacheHitTokens,
-                    outputTokens,
-                    totalTokens,
-                    responseMs,
-                    usageType,
-                    cost
+                    record.getPromptTokens(),
+                    record.getCacheHitTokens(),
+                    record.getCompletionTokens(),
+                    record.getTotalTokens(),
+                    record.getResponseMs(),
+                    record.getUsageType(),
+                    record.getTotalCost()
             ));
         }
         return Result.success(PageResult.of(responses, total, page, pageSize));
     }
 
-    private StatsSummary querySummary(Long accountId, LocalDateTime start, LocalDateTime end) {
+    private CustomerToken resolveCustomerToken(String customerToken) {
+        String normalized = customerToken == null ? "" : customerToken.trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "customerToken不能为空");
+        }
+
+        CustomerToken token = customerTokenMapper.selectOne(
+                new LambdaQueryWrapper<CustomerToken>()
+                        .eq(CustomerToken::getTokenValue, normalized)
+                        .last("limit 1")
+        );
+        if (token == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "customerToken不存在");
+        }
+        return token;
+    }
+
+    private StatsSummary querySummary(Long accountId, String customerToken, LocalDateTime start, LocalDateTime end) {
         List<UsageRecord> records = usageRecordMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
+                new LambdaQueryWrapper<UsageRecord>()
                         .eq(UsageRecord::getAccountId, accountId)
+                        .eq(UsageRecord::getCustomerToken, customerToken)
                         .between(UsageRecord::getCreatedAt, start, end)
         );
         long requests = records.size();
-        long tokens = records.stream().mapToLong(r -> r.getTotalTokens() == null ? 0L : r.getTotalTokens().longValue()).sum();
+        long tokens = records.stream().mapToLong(record -> record.getTotalTokens() == null ? 0L : record.getTotalTokens().longValue()).sum();
         BigDecimal cost = records.stream()
-                .map(r -> r.getTotalCost() == null ? BigDecimal.ZERO : r.getTotalCost())
+                .map(record -> record.getTotalCost() == null ? BigDecimal.ZERO : record.getTotalCost())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new StatsSummary(requests, tokens, cost);
     }
@@ -253,8 +256,18 @@ public class DashboardController {
         }
         return today.subtract(yesterday)
                 .multiply(BigDecimal.valueOf(100))
-                .divide(yesterday, 2, java.math.RoundingMode.HALF_UP)
+                .divide(yesterday, 2, RoundingMode.HALF_UP)
                 .doubleValue();
+    }
+
+    private String maskToken(String token) {
+        if (token == null || token.isBlank()) {
+            return "";
+        }
+        if (token.length() <= 8) {
+            return token.charAt(0) + "****" + token.charAt(token.length() - 1);
+        }
+        return token.substring(0, 3) + "****" + token.substring(token.length() - 4);
     }
 
     private static class StatsSummary {

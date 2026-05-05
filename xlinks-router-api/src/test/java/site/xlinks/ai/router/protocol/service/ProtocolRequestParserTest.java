@@ -35,9 +35,9 @@ class ProtocolRequestParserTest {
         String rawBody = """
                 {"model":"gpt-4o-mini","stream":true,"messages":[]}
                 """;
+        servletRequest.setContent(rawBody.getBytes());
         ForwardRequest request = parser.parse(
                 ForwardProtocol.CHAT_COMPLETIONS,
-                rawBody,
                 servletRequest
         );
 
@@ -57,10 +57,10 @@ class ProtocolRequestParserTest {
         String rawBody = """
                 {"model":"gpt-5.4","stream":false,"input":"hello"}
                 """;
+        servletRequest.setContent(rawBody.getBytes());
 
         ForwardRequest request = parser.parse(
                 ForwardProtocol.RESPONSES,
-                rawBody,
                 servletRequest
         );
 
@@ -82,10 +82,10 @@ class ProtocolRequestParserTest {
         String rawBody = """
                 {"model":"claude-sonnet-4-20250514","messages":[]}
                 """;
+        servletRequest.setContent(rawBody.getBytes());
 
         ForwardRequest request = parser.parse(
                 ForwardProtocol.ANTHROPIC_MESSAGES,
-                rawBody,
                 servletRequest
         );
 
@@ -103,23 +103,25 @@ class ProtocolRequestParserTest {
                 "token-3",
                 CustomerTokenSource.AUTHORIZATION_BEARER
         );
+        servletRequest.setContent("""
+                {"stream":false,"prompt":"hello"}
+                """.getBytes());
         assertThrows(BusinessException.class, () -> parser.parse(
                 ForwardProtocol.COMPLETIONS,
-                """
-                {"stream":false,"prompt":"hello"}
-                """,
                 servletRequest
         ));
     }
 
     @Test
     void shouldRejectRequestWithoutResolvedCustomerToken() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setCharacterEncoding("UTF-8");
+        request.setContent("""
+                {"model":"gpt-4o-mini"}
+                """.getBytes());
         assertThrows(BusinessException.class, () -> parser.parse(
                 ForwardProtocol.CHAT_COMPLETIONS,
-                """
-                {"model":"gpt-4o-mini"}
-                """,
-                new MockHttpServletRequest()
+                request
         ));
     }
 
@@ -129,6 +131,7 @@ class ProtocolRequestParserTest {
                 ProtocolRequestContext.ATTR_RESOLVED_CUSTOMER_TOKEN,
                 new CustomerTokenResolver.ResolvedCustomerToken(token, source)
         );
+        request.setCharacterEncoding("UTF-8");
         return request;
     }
 }

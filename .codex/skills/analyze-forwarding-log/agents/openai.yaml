@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze Forwarding Log"
+  short_description: "Analyze forwarding logs for routing, retry, limit, hotspot, and latency"
+  default_prompt: "Use $analyze-forwarding-log to analyze the provided xlinks router forwarding log file path and judge whether routing, concurrency limiting, downgrade, retry, token hotspot, exceptions, and latency behave as expected."

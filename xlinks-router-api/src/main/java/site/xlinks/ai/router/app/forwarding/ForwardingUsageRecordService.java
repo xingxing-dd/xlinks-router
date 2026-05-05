@@ -33,21 +33,24 @@ public class ForwardingUsageRecordService {
     @Async("usageTaskExecutor")
     public void recordSuccessAsync(ForwardingUsageContext context,
                                    UsageMetrics usageMetrics,
+                                   long responseMs,
                                    long sessionMs) {
-        record(context, usageMetrics, sessionMs, null, null, "success");
+        record(context, usageMetrics, responseMs, sessionMs, null, null, "success");
     }
 
     @Async("usageTaskExecutor")
     public void recordErrorAsync(ForwardingUsageContext context,
                                  String errorCode,
                                  String errorMessage,
+                                 long responseMs,
                                  long sessionMs,
                                  String finishReason) {
-        record(context, null, sessionMs, errorCode, errorMessage, finishReason);
+        record(context, null, responseMs, sessionMs, errorCode, errorMessage, finishReason);
     }
 
     public void record(ForwardingUsageContext context,
                        UsageMetrics usageMetrics,
+                       long responseMs,
                        long sessionMs,
                        String errorCode,
                        String errorMessage,
@@ -57,9 +60,10 @@ public class ForwardingUsageRecordService {
         }
         UsageRecord record = buildRecord(context, usageMetrics);
         record.setResponseStatus(errorCode == null ? 200 : 500);
+        int normalizedResponseMs = normalizeDurationMs(responseMs);
         int normalizedSessionMs = normalizeDurationMs(sessionMs);
+        record.setResponseMs(Math.min(normalizedResponseMs, normalizedSessionMs));
         record.setSessionMs(normalizedSessionMs);
-        record.setResponseMs(normalizedSessionMs);
         record.setErrorCode(errorCode);
         record.setErrorMessage(errorMessage);
         record.setFinishReason(finishReason);

@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 
 @Data
 public class DashboardStatsResponse {
-    private Integer todayRequests;
+    private Long todayRequests;
     private Double todayRequestsChange;
-    private Integer todayTokens;
+    private Long todayTokens;
     private Double todayTokensChange;
     private BigDecimal todayCost;
     private Double todayCostChange;

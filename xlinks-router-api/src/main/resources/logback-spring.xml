@@ -3,7 +3,7 @@
 
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <property name="APP_NAME" value="${spring.application.name:-xlinks-router-api-distributed}"/>
+    <property name="APP_NAME" value="${spring.application.name:-xlinks-router-api}"/>
     <property name="LOG_HOME" value="${LOG_HOME:-logs}"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

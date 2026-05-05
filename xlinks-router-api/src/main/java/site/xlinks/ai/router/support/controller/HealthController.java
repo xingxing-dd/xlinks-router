@@ -14,7 +14,7 @@ import java.util.Map;
 @RequestMapping("/internal")
 public class HealthController {
 
-    @Value("${spring.application.name:xlinks-router-api-distributed}")
+    @Value("${spring.application.name:xlinks-router-api}")
     private String applicationName;
 
     @GetMapping("/health")

@@ -199,9 +199,9 @@ public class ForwardingExecutionService {
                                                 ForwardAttemptContext attemptContext,
                                                 int attempt,
                                                 int maxAttempts) {
-        startForwardingSession(decision, attemptContext);
         boolean releaseInFinally = true;
         try {
+            startForwardingSession(decision, attemptContext);
             Object response = providerHttpForwardingExecutor.forward(decision);
             if (isStreamingResponse(response)) {
                 Object streamingResponse = wrapStreamingResponse(decision, response, attemptContext);
@@ -298,8 +298,18 @@ public class ForwardingExecutionService {
                         prefetchedChunk.bytes(),
                         prefetchedChunk.length(),
                         STREAM_TAIL_CAPTURE_BYTES,
-                        payload -> recordStreamSuccess(decision, payload, elapsedSessionMs(decision)),
-                        errorMessage -> recordStreamError(decision, errorMessage, elapsedSessionMs(decision)),
+                        payload -> recordStreamSuccess(
+                                decision,
+                                payload,
+                                prefetchedChunk.firstResponseMs(),
+                                elapsedSessionMs(decision)
+                        ),
+                        errorMessage -> recordStreamError(
+                                decision,
+                                errorMessage,
+                                prefetchedChunk.firstResponseMs(),
+                                elapsedSessionMs(decision)
+                        ),
                         () -> releaseAttemptResources(decision, attemptContext)
                 ));
     }
@@ -328,7 +338,7 @@ public class ForwardingExecutionService {
                 }
                 byte[] chunk = new byte[read];
                 System.arraycopy(buffer, 0, chunk, 0, read);
-                return new PrefetchedStreamChunk(chunk, read);
+                return new PrefetchedStreamChunk(chunk, read, elapsedSessionMs(decision));
             }
         } catch (InterruptedIOException ex) {
             streamHandle.closeQuietly();
@@ -361,7 +371,7 @@ public class ForwardingExecutionService {
         RequestChainLogCollector.markResponseStatus(responseEntity.getStatusCode().value());
         if (responseEntity.getStatusCode().is2xxSuccessful()) {
             UsageMetrics usageMetrics = usageExtractor.extract(payload, decision.getUsageContext().getModelProvider());
-            forwardingUsageRecordService.recordSuccessAsync(decision.getUsageContext(), usageMetrics, sessionMs);
+            forwardingUsageRecordService.recordSuccessAsync(decision.getUsageContext(), usageMetrics, sessionMs, sessionMs);
             RequestChainLogCollector.record(RequestChainLogType.DIRECT_RESPONSE_SUCCESS, responseEntity.getStatusCode().value());
             RequestChainLogCollector.markSuccess("请求处理成功");
             return;
@@ -371,24 +381,32 @@ public class ForwardingExecutionService {
                 String.valueOf(responseEntity.getStatusCode().value()),
                 payload,
                 sessionMs,
+                sessionMs,
                 "error"
         );
         RequestChainLogCollector.record(RequestChainLogType.DIRECT_RESPONSE_ERROR, responseEntity.getStatusCode().value());
         RequestChainLogCollector.markBusinessFailure("请求处理失败");
     }
 
-    private void recordStreamSuccess(ForwardingDecision decision, String payload, long sessionMs) {
+    private void recordStreamSuccess(ForwardingDecision decision,
+                                     String payload,
+                                     long responseMs,
+                                     long sessionMs) {
         UsageMetrics usageMetrics = usageExtractor.extract(payload, decision.getUsageContext().getModelProvider());
-        forwardingUsageRecordService.recordSuccessAsync(decision.getUsageContext(), usageMetrics, sessionMs);
+        forwardingUsageRecordService.recordSuccessAsync(decision.getUsageContext(), usageMetrics, responseMs, sessionMs);
         RequestChainLogCollector.record(RequestChainLogType.STREAMING_RESPONSE_SUCCESS);
         RequestChainLogCollector.markSuccess("请求处理成功");
     }
 
-    private void recordStreamError(ForwardingDecision decision, String errorMessage, long sessionMs) {
+    private void recordStreamError(ForwardingDecision decision,
+                                   String errorMessage,
+                                   long responseMs,
+                                   long sessionMs) {
         forwardingUsageRecordService.recordErrorAsync(
                 decision.getUsageContext(),
                 "STREAM_WRITE_ERROR",
                 errorMessage,
+                responseMs,
                 sessionMs,
                 "error"
         );
@@ -555,6 +573,6 @@ public class ForwardingExecutionService {
         }
     }
 
-    private record PrefetchedStreamChunk(byte[] bytes, int length) {
+    private record PrefetchedStreamChunk(byte[] bytes, int length, long firstResponseMs) {
     }
 }

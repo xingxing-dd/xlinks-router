@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class ModelUsageItemResponse {
     private String model;
-    private Integer requests;
-    private Integer tokens;
+    private Long requests;
+    private Long tokens;
     private BigDecimal cost;
 }

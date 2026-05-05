@@ -7,6 +7,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.xlinks.ai.router.common.enums.ErrorCode;
@@ -48,6 +49,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -143,7 +145,7 @@ class ForwardingApplicationServiceTest {
                 route != null && route.getProvider() != null && route.getProvider().getId().equals(1001L)));
         verify(providerRuntimeStateService).clearFailure(argThat(route ->
                 route != null && route.getProvider() != null && route.getProvider().getId().equals(1002L)));
-        verify(forwardingUsageRecordService).recordSuccessAsync(any(ForwardingUsageContext.class), any(UsageMetrics.class), anyLong());
+        verify(forwardingUsageRecordService).recordSuccessAsync(any(ForwardingUsageContext.class), any(UsageMetrics.class), anyLong(), anyLong());
         verify(providerConcurrencyGuard, times(2)).releaseQuietly(any(), any(), any(), any());
     }
 
@@ -212,7 +214,29 @@ class ForwardingApplicationServiceTest {
 
         verify(providerConcurrencyGuard).cancelAutoRenew(renewFuture);
         verify(providerConcurrencyGuard).releaseQuietly(any(), eq(provider), eq(token), eq(lease));
-        verify(forwardingUsageRecordService).recordSuccessAsync(any(ForwardingUsageContext.class), any(UsageMetrics.class), anyLong());
+        verify(forwardingUsageRecordService).recordSuccessAsync(any(ForwardingUsageContext.class), any(UsageMetrics.class), anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldReleasePermitWhenAutoRenewSchedulingFails() {
+        ForwardRequest request = buildRequest(false);
+        Provider provider = provider(1001L);
+        ProviderToken token = providerToken(2001L, 1001L);
+        ProviderPermitLease lease = permitLease(1001L, 2001L, "permit-1");
+
+        when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L));
+        when(forwardingReadModelLoader.loadProvider(1001L)).thenReturn(provider);
+        when(forwardingReadModelLoader.loadProviderTokens(1001L)).thenReturn(List.of(token));
+        when(providerTokenSelectionService.select(eq(provider), anyList())).thenReturn(token);
+        when(providerConcurrencyGuard.tryAcquire(eq(provider), eq(token), any())).thenReturn(lease);
+        when(providerConcurrencyGuard.scheduleAutoRenew(any(), eq(provider), eq(token), eq(lease)))
+                .thenThrow(new TaskRejectedException("scheduler rejected"));
+
+        assertThrows(TaskRejectedException.class, () -> forwardingApplicationService.forward(request));
+
+        verify(providerConcurrencyGuard).releaseQuietly(any(), eq(provider), eq(token), eq(lease));
+        verify(providerConcurrencyGuard).cancelAutoRenew(any());
+        verifyNoInteractions(providerHttpForwardingExecutor);
     }
 
     @Test
@@ -263,6 +287,7 @@ class ForwardingApplicationServiceTest {
         Provider provider = provider(1001L);
         ProviderToken token = providerToken(2001L, 1001L);
         ProviderPermitLease lease = permitLease(1001L, 2001L, null);
+        AtomicLong recordedResponseMs = new AtomicLong(-1L);
         AtomicLong recordedSessionMs = new AtomicLong(-1L);
 
         when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L));
@@ -276,16 +301,18 @@ class ForwardingApplicationServiceTest {
                     return ResponseEntity.status(429).body("{\"error\":\"rate limit\"}");
                 });
         doAnswer(invocation -> {
-            recordedSessionMs.set(invocation.getArgument(3, Long.class));
+            recordedResponseMs.set(invocation.getArgument(3, Long.class));
+            recordedSessionMs.set(invocation.getArgument(4, Long.class));
             return null;
-        }).when(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("429"), any(), anyLong(), eq("error"));
+        }).when(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("429"), any(), anyLong(), anyLong(), eq("error"));
 
         Object result = forwardingApplicationService.forward(request);
 
         ResponseEntity<?> responseEntity = assertInstanceOf(ResponseEntity.class, result);
         assertEquals(429, responseEntity.getStatusCode().value());
-        verify(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("429"), eq("{\"error\":\"rate limit\"}"), anyLong(), eq("error"));
+        verify(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("429"), eq("{\"error\":\"rate limit\"}"), anyLong(), anyLong(), eq("error"));
         verifyNoInteractions(usageExtractor);
+        assertEquals(recordedResponseMs.get(), recordedSessionMs.get());
         assertTrue(recordedSessionMs.get() >= 0L);
     }
 
@@ -297,6 +324,7 @@ class ForwardingApplicationServiceTest {
         ProviderPermitLease lease = permitLease(1001L, 2001L, "permit-1");
         @SuppressWarnings("unchecked")
         ScheduledFuture<?> renewFuture = mock(ScheduledFuture.class);
+        AtomicLong recordedResponseMs = new AtomicLong(-1L);
         AtomicLong recordedSessionMs = new AtomicLong(-1L);
 
         when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L));
@@ -313,9 +341,10 @@ class ForwardingApplicationServiceTest {
                         "stream broken"
                 ))));
         doAnswer(invocation -> {
-            recordedSessionMs.set(invocation.getArgument(3, Long.class));
+            recordedResponseMs.set(invocation.getArgument(3, Long.class));
+            recordedSessionMs.set(invocation.getArgument(4, Long.class));
             return null;
-        }).when(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("STREAM_WRITE_ERROR"), eq("stream broken"), anyLong(), eq("error"));
+        }).when(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("STREAM_WRITE_ERROR"), eq("stream broken"), anyLong(), anyLong(), eq("error"));
 
         Object result = forwardingApplicationService.forward(request);
 
@@ -327,10 +356,60 @@ class ForwardingApplicationServiceTest {
         body.completeError(exception.getMessage());
 
         assertEquals("stream broken", exception.getMessage());
-        verify(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("STREAM_WRITE_ERROR"), eq("stream broken"), anyLong(), eq("error"));
+        verify(forwardingUsageRecordService).recordErrorAsync(any(ForwardingUsageContext.class), eq("STREAM_WRITE_ERROR"), eq("stream broken"), anyLong(), anyLong(), eq("error"));
         verify(providerConcurrencyGuard).cancelAutoRenew(renewFuture);
         verify(providerConcurrencyGuard).releaseQuietly(any(), eq(provider), eq(token), eq(lease));
+        assertTrue(recordedResponseMs.get() >= 0L);
+        assertTrue(recordedSessionMs.get() >= recordedResponseMs.get());
         assertTrue(recordedSessionMs.get() >= 0L);
+    }
+
+    @Test
+    void shouldRecordFirstResponseMsSeparatelyForStreamingSuccess() throws Exception {
+        ForwardRequest request = buildRequest(true);
+        Provider provider = provider(1001L);
+        ProviderToken token = providerToken(2001L, 1001L);
+        ProviderPermitLease lease = permitLease(1001L, 2001L, "permit-1");
+        @SuppressWarnings("unchecked")
+        ScheduledFuture<?> renewFuture = mock(ScheduledFuture.class);
+        AtomicLong recordedResponseMs = new AtomicLong(-1L);
+        AtomicLong recordedSessionMs = new AtomicLong(-1L);
+        AtomicReference<UsageMetrics> recordedUsageMetrics = new AtomicReference<>();
+
+        when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L));
+        when(forwardingReadModelLoader.loadProvider(1001L)).thenReturn(provider);
+        when(forwardingReadModelLoader.loadProviderTokens(1001L)).thenReturn(List.of(token));
+        when(providerTokenSelectionService.select(eq(provider), anyList())).thenReturn(token);
+        when(providerConcurrencyGuard.tryAcquire(eq(provider), eq(token), any())).thenReturn(lease);
+        doAnswer(invocation -> renewFuture)
+                .when(providerConcurrencyGuard)
+                .scheduleAutoRenew(any(), eq(provider), eq(token), eq(lease));
+        when(providerHttpForwardingExecutor.forward(any()))
+                .thenReturn(ResponseEntity.ok(providerStreamHandle(new DelayedChunkInputStream(
+                        "first".getBytes(StandardCharsets.UTF_8),
+                        " second".getBytes(StandardCharsets.UTF_8),
+                        20L
+                ))));
+        UsageMetrics usageMetrics = UsageMetrics.builder().inputTokens(2).outputTokens(1).totalTokens(3).build();
+        when(usageExtractor.extract(any(String.class), any())).thenReturn(usageMetrics);
+        doAnswer(invocation -> {
+            recordedUsageMetrics.set(invocation.getArgument(1, UsageMetrics.class));
+            recordedResponseMs.set(invocation.getArgument(2, Long.class));
+            recordedSessionMs.set(invocation.getArgument(3, Long.class));
+            return null;
+        }).when(forwardingUsageRecordService).recordSuccessAsync(any(ForwardingUsageContext.class), any(UsageMetrics.class), anyLong(), anyLong());
+
+        Object result = forwardingApplicationService.forward(request);
+
+        ResponseEntity<?> responseEntity = assertInstanceOf(ResponseEntity.class, result);
+        ForwardingAsyncStreamBody body = assertInstanceOf(ForwardingAsyncStreamBody.class, responseEntity.getBody());
+        assertEquals("first second", readAll(body));
+        Thread.sleep(30L);
+        body.completeSuccess();
+
+        assertEquals(usageMetrics, recordedUsageMetrics.get());
+        assertTrue(recordedResponseMs.get() >= 0L);
+        assertTrue(recordedSessionMs.get() > recordedResponseMs.get());
     }
 
     @Test
@@ -520,6 +599,46 @@ class ForwardingApplicationServiceTest {
                 throw new InterruptedIOException(errorMessage);
             }
             return -1;
+        }
+
+        @Override
+        public int read() throws IOException {
+            throw new IOException("not supported");
+        }
+    }
+
+    private static final class DelayedChunkInputStream extends InputStream {
+
+        private final byte[] firstChunk;
+        private final byte[] secondChunk;
+        private final long delayMs;
+        private int index;
+
+        private DelayedChunkInputStream(byte[] firstChunk, byte[] secondChunk, long delayMs) {
+            this.firstChunk = firstChunk;
+            this.secondChunk = secondChunk;
+            this.delayMs = delayMs;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            try {
+                if (index == 0) {
+                    index++;
+                    System.arraycopy(firstChunk, 0, b, off, firstChunk.length);
+                    return firstChunk.length;
+                }
+                if (index == 1) {
+                    Thread.sleep(delayMs);
+                    index++;
+                    System.arraycopy(secondChunk, 0, b, off, secondChunk.length);
+                    return secondChunk.length;
+                }
+                return -1;
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted", ex);
+            }
         }
 
         @Override
