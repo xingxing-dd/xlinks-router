@@ -5,8 +5,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.ProtocolRequestContext;
 import site.xlinks.ai.router.distributed.protocol.service.CustomerTokenResolver;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogCollector;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogType;
 
 @Component
 @RequiredArgsConstructor
@@ -17,20 +20,22 @@ public class ProtocolCustomerTokenInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String uri = request.getRequestURI();
-        if (uri == null || !uri.startsWith("/v1/")) {
+        if (uri == null) {
             return true;
         }
 
-        CustomerTokenResolver.ResolvedCustomerToken resolvedToken = isAnthropicRequest(uri)
-                ? customerTokenResolver.resolveAnthropicToken(request)
-                : customerTokenResolver.resolveOpenAiToken(request);
+        ForwardProtocol protocol = ForwardProtocol.fromRequestUri(uri).orElse(null);
+        if (protocol == null) {
+            return true;
+        }
 
+        CustomerTokenResolver.ResolvedCustomerToken resolvedToken = customerTokenResolver.resolve(request, protocol);
+        RequestChainLogCollector.bindProtocolContext(protocol.getCode(), resolvedToken.source().name(), null);
+        RequestChainLogCollector.record(RequestChainLogType.CUSTOMER_TOKEN_RESOLVED, protocol.getCode(), resolvedToken.source());
+
+        request.setAttribute(ProtocolRequestContext.ATTR_RESOLVED_CUSTOMER_TOKEN, resolvedToken);
         request.setAttribute(ProtocolRequestContext.ATTR_CUSTOMER_TOKEN, resolvedToken.value());
         request.setAttribute(ProtocolRequestContext.ATTR_CUSTOMER_TOKEN_SOURCE, resolvedToken.source());
         return true;
-    }
-
-    private boolean isAnthropicRequest(String uri) {
-        return "/v1/messages".equals(uri);
     }
 }

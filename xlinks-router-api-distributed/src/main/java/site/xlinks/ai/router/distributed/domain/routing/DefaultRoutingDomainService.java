@@ -4,127 +4,41 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.common.enums.ErrorCode;
 import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.distributed.app.forwarding.ForwardingReadModelLoader;
-import site.xlinks.ai.router.distributed.domain.provider.ProviderTokenSelectionService;
-import site.xlinks.ai.router.distributed.domain.routing.model.RoutingContext;
-import site.xlinks.ai.router.distributed.domain.routing.model.RoutingDecision;
-import site.xlinks.ai.router.distributed.infrastructure.cache.DistributedRouteCacheRepository;
-import site.xlinks.ai.router.distributed.infrastructure.cache.model.AllowedModelsRule;
-import site.xlinks.ai.router.distributed.infrastructure.cache.model.ProviderFailureState;
-import site.xlinks.ai.router.entity.Provider;
-import site.xlinks.ai.router.entity.ProviderModel;
-import site.xlinks.ai.router.entity.ProviderToken;
+import site.xlinks.ai.router.distributed.domain.routing.filter.RoutingFilter;
+import site.xlinks.ai.router.distributed.domain.routing.model.RoutingExclusions;
+import site.xlinks.ai.router.distributed.domain.routing.model.RoutingFilterContext;
+import site.xlinks.ai.router.distributed.domain.routing.model.RoutingPlan;
+import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogCollector;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogType;
 
-import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 默认路由领域服务。
+ * 负责按顺序执行过滤链，并汇总生成最终的路由计划。
+ */
 @Service
 @RequiredArgsConstructor
-public class DefaultRoutingDomainService implements RoutingDomainService {
+public class DefaultRoutingDomainService {
 
-    private final DistributedRouteCacheRepository distributedRouteCacheRepository;
-    private final ForwardingReadModelLoader forwardingReadModelLoader;
-    private final ProviderTokenSelectionService providerTokenSelectionService;
+    private final List<RoutingFilter> routingFilters;
 
-    @Override
-    public RoutingDecision route(RoutingContext context) {
-        Long accountId = context.getCustomerAccount() == null ? null : context.getCustomerAccount().getId();
-        Long modelId = context.getModel() == null ? null : context.getModel().getId();
-        if (accountId == null || modelId == null || context.getRequest() == null || context.getRequest().getProtocol() == null) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Routing context is incomplete");
-        }
-
-        validateAllowedModels(context);
-
-        List<ProviderModel> candidates = forwardingReadModelLoader.loadRoutingIndex(modelId, context.getRequest().getProtocol());
-        if (candidates.isEmpty()) {
-            throw new BusinessException(ErrorCode.PROVIDER_UNAVAILABLE, "No provider route available");
-        }
-
-        Long preferredProviderId = forwardingReadModelLoader.loadMerchantPreferredProvider(accountId, modelId);
-        List<ProviderModel> ordered = prioritizePreferredProvider(candidates, preferredProviderId);
-
-        for (ProviderModel providerModel : ordered) {
-            if (providerModel == null || providerModel.getProviderId() == null) {
-                continue;
-            }
-            if (isProviderTemporarilyUnavailable(providerModel.getProviderId())) {
-                continue;
-            }
-            Provider provider = forwardingReadModelLoader.loadProvider(providerModel.getProviderId());
-            if (provider == null || provider.getStatus() == null || provider.getStatus() != 1) {
-                continue;
-            }
-            List<ProviderToken> providerTokens = forwardingReadModelLoader.loadProviderTokens(provider.getId());
-            ProviderToken providerToken = providerTokenSelectionService.select(provider, providerTokens);
-            if (providerToken == null) {
-                continue;
-            }
-            return RoutingDecision.builder()
-                    .accountId(accountId)
-                    .modelId(modelId)
-                    .preferredProviderId(preferredProviderId)
-                    .provider(provider)
-                    .providerModel(providerModel)
-                    .providerToken(providerToken)
-                    .decisionStage("ROUTED")
-                    .build();
-        }
-
-        throw new BusinessException(ErrorCode.PROVIDER_TOKEN_UNAVAILABLE, "No provider token available");
+    public RoutingPlan route(ForwardRequest request) {
+        return route(request, RoutingExclusions.none());
     }
 
-    private List<ProviderModel> prioritizePreferredProvider(List<ProviderModel> candidates, Long preferredProviderId) {
-        if (preferredProviderId == null || candidates == null || candidates.isEmpty()) {
-            return candidates;
+    public RoutingPlan route(ForwardRequest request, RoutingExclusions exclusions) {
+        RoutingFilterContext filterContext = RoutingFilterContext.from(request, exclusions);
+        RequestChainLogCollector.record(RequestChainLogType.DECISION_START);
+        RequestChainLogCollector.record(RequestChainLogType.ROUTING_FILTER_CHAIN_START);
+        for (RoutingFilter routingFilter : routingFilters) {
+            routingFilter.filter(filterContext);
         }
-        List<ProviderModel> preferred = new ArrayList<>();
-        List<ProviderModel> others = new ArrayList<>();
-        for (ProviderModel candidate : candidates) {
-            if (candidate == null) {
-                continue;
-            }
-            if (preferredProviderId.equals(candidate.getProviderId())) {
-                preferred.add(candidate);
-            } else {
-                others.add(candidate);
-            }
+        if (filterContext.getOrderedProviderModels() == null || filterContext.getOrderedProviderModels().isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "路由计划不完整，未找到可执行的服务商候选");
         }
-        if (preferred.isEmpty()) {
-            return candidates;
-        }
-        List<ProviderModel> ordered = new ArrayList<>(candidates.size());
-        ordered.addAll(preferred);
-        ordered.addAll(others);
-        return ordered;
-    }
-
-    private void validateAllowedModels(RoutingContext context) {
-        String modelCode = context.getModel().getModelCode();
-        AllowedModelsRule customerRule = forwardingReadModelLoader.loadCustomerAllowedModelsRule(context.getCustomerToken());
-        if (!matches(customerRule, modelCode)) {
-            throw new BusinessException(ErrorCode.MODEL_NOT_IN_ALLOWED_LIST, "Customer token does not allow current model");
-        }
-        AllowedModelsRule planRule = forwardingReadModelLoader.loadPlanAllowedModelsRule(context.getCustomerPlan());
-        if (!matches(planRule, modelCode)) {
-            throw new BusinessException(ErrorCode.MODEL_NOT_IN_ALLOWED_LIST, "Customer plan does not allow current model");
-        }
-    }
-
-    private boolean matches(AllowedModelsRule rule, String modelCode) {
-        if (rule == null || rule.isAllowAll()) {
-            return true;
-        }
-        if (modelCode == null || modelCode.isBlank()) {
-            return false;
-        }
-        return rule.getAllowedModels() == null
-                || rule.getAllowedModels().isEmpty()
-                || rule.getAllowedModels().contains(modelCode.trim());
-    }
-
-    private boolean isProviderTemporarilyUnavailable(Long providerId) {
-        ProviderFailureState state = distributedRouteCacheRepository.getProviderFailureState(providerId);
-        return state != null && state.getFailureCount() > 0;
+        RequestChainLogCollector.record(RequestChainLogType.ROUTING_FILTER_CHAIN_COMPLETED);
+        return filterContext.toPlan();
     }
 }

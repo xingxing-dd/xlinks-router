@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.springframework.stereotype.Component;
-import site.xlinks.ai.router.distributed.app.forwarding.model.ForwardingPreparation;
+import site.xlinks.ai.router.distributed.app.forwarding.model.ForwardingDecision;
 import site.xlinks.ai.router.distributed.infrastructure.http.model.ProviderInvokeContext;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
@@ -20,13 +20,14 @@ public class OpenAiProviderHttpAdapter extends AbstractOkHttpProviderHttpAdapter
     public boolean supports(ForwardProtocol protocol) {
         return protocol == ForwardProtocol.COMPLETIONS
                 || protocol == ForwardProtocol.CHAT_COMPLETIONS
+                || protocol == ForwardProtocol.RESPONSES
                 || protocol == ForwardProtocol.MODELS;
     }
 
     @Override
-    protected Request buildRequest(ForwardingPreparation preparation, ProviderInvokeContext context) {
-        ForwardRequest request = preparation.getRequest();
-        String url = context.getBaseUrl() + request.getProtocol().getProviderPath();
+    protected Request buildRequest(ForwardingDecision decision, ProviderInvokeContext context) {
+        ForwardRequest request = decision.getRequest();
+        String url = buildRequestUrl(context.getBaseUrl(), request.getProtocol().getProviderPath());
         Request.Builder builder = new Request.Builder()
                 .url(url)
                 .addHeader("Authorization", "Bearer " + context.getProviderToken())
@@ -34,8 +35,7 @@ public class OpenAiProviderHttpAdapter extends AbstractOkHttpProviderHttpAdapter
         if (request.getProtocol() == ForwardProtocol.MODELS) {
             return builder.get().build();
         }
-        return builder
-                .addHeader("Content-Type", "application/json")
+        return builder.addHeader("Content-Type", "application/json")
                 .post(buildJsonRequestBody(request, context))
                 .build();
     }

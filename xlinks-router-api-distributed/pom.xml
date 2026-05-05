@@ -74,7 +74,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
                 <configuration>
-                    <mainClass>site.xlinks.ai.router.distributed.boot.DistributedApiApplication</mainClass>
+                    <mainClass>site.xlinks.ai.router.distributed.DistributedApiApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>

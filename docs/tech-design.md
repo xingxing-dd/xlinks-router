@@ -116,9 +116,12 @@ Gateway paths:
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `GET /v1/models`
+- `GET /user/balance`
 
 The endpoint is inferred from the request protocol and filtered by provider capability.
 The endpoint is inferred from the request protocol and filtered by provider capability.
+
+`GET /user/balance` is a direct query endpoint. It does not forward upstream requests. The returned `balance` is the sum of wallet available balance and currently usable remaining customer-plan quota, with `unit = USD`.
 
 ## 7. Document Index
 

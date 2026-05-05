@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.springframework.stereotype.Component;
-import site.xlinks.ai.router.distributed.app.forwarding.model.ForwardingPreparation;
+import site.xlinks.ai.router.distributed.app.forwarding.model.ForwardingDecision;
 import site.xlinks.ai.router.distributed.infrastructure.http.model.ProviderInvokeContext;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
@@ -24,9 +24,9 @@ public class AnthropicProviderHttpAdapter extends AbstractOkHttpProviderHttpAdap
     }
 
     @Override
-    protected Request buildRequest(ForwardingPreparation preparation, ProviderInvokeContext context) {
-        ForwardRequest request = preparation.getRequest();
-        String url = context.getBaseUrl() + request.getProtocol().getProviderPath();
+    protected Request buildRequest(ForwardingDecision decision, ProviderInvokeContext context) {
+        ForwardRequest request = decision.getRequest();
+        String url = buildRequestUrl(context.getBaseUrl(), request.getProtocol().getProviderPath());
         String anthropicVersion = request.getPassthroughHeaders() == null
                 ? null
                 : request.getPassthroughHeaders().get("anthropic-version");

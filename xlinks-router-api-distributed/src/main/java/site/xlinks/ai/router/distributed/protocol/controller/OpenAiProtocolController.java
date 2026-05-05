@@ -1,62 +1,74 @@
 package site.xlinks.ai.router.distributed.protocol.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import site.xlinks.ai.router.distributed.app.forwarding.ForwardingApplicationService;
+import site.xlinks.ai.router.distributed.protocol.controller.adapter.ProtocolControllerResponseWriter;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
-import site.xlinks.ai.router.distributed.protocol.service.CustomerTokenResolver;
-import site.xlinks.ai.router.distributed.protocol.service.ProtocolRequestContextResolver;
+import site.xlinks.ai.router.distributed.protocol.service.OpenAiModelsService;
 import site.xlinks.ai.router.distributed.protocol.service.ProtocolRequestParser;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogCollector;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogType;
 
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
 
-@Slf4j
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
 public class OpenAiProtocolController {
 
     private final ForwardingApplicationService forwardingApplicationService;
-    private final ProtocolRequestContextResolver protocolRequestContextResolver;
     private final ProtocolRequestParser protocolRequestParser;
+    private final ProtocolControllerResponseWriter protocolControllerResponseWriter;
+    private final OpenAiModelsService openAiModelsService;
 
     @PostMapping("/completions")
-    public Object completions(HttpServletRequest request,
-                              @RequestBody String requestBody) {
-        return acceptOpenAiRequest(request, requestBody, ForwardProtocol.COMPLETIONS);
+    public void completions(HttpServletRequest request,
+                            HttpServletResponse response,
+                            @RequestBody String requestBody) throws IOException {
+        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.COMPLETIONS);
     }
 
     @PostMapping("/chat/completions")
-    public Object chatCompletions(HttpServletRequest request,
-                                  @RequestBody String requestBody) {
-        return acceptOpenAiRequest(request, requestBody, ForwardProtocol.CHAT_COMPLETIONS);
+    public void chatCompletions(HttpServletRequest request,
+                                HttpServletResponse response,
+                                @RequestBody String requestBody) throws IOException {
+        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.CHAT_COMPLETIONS);
+    }
+
+    @PostMapping("/responses")
+    public void responses(HttpServletRequest request,
+                          HttpServletResponse response,
+                          @RequestBody String requestBody) throws IOException {
+        acceptOpenAiRequest(request, response, requestBody, ForwardProtocol.RESPONSES);
     }
 
     @GetMapping("/models")
     public Object models(HttpServletRequest request) {
-        CustomerTokenResolver.ResolvedCustomerToken token = protocolRequestContextResolver.resolveCustomerToken(request);
-        log.debug("Accepted models request, tokenSource={}", token.source());
-        return Map.of(
-                "object", "list",
-                "data", List.of()
-        );
+        RequestChainLogCollector.record(RequestChainLogType.MODELS_REQUEST_RECEIVED);
+        return openAiModelsService.listModels(request);
     }
 
-    private Object acceptOpenAiRequest(HttpServletRequest request,
-                                       String requestBody,
-                                       ForwardProtocol protocol) {
-        CustomerTokenResolver.ResolvedCustomerToken token = protocolRequestContextResolver.resolveCustomerToken(request);
-        ForwardRequest forwardRequest = protocolRequestParser.parseOpenAi(protocol, requestBody, token);
-        log.debug("Accepted {} request, model={}, stream={}, tokenSource={}",
-                protocol.getCode(), forwardRequest.getModel(), forwardRequest.isStream(), token.source());
-        return forwardingApplicationService.forward(forwardRequest);
+    private void acceptOpenAiRequest(HttpServletRequest request,
+                                     HttpServletResponse response,
+                                     String requestBody,
+                                     ForwardProtocol protocol) throws IOException {
+        ForwardRequest forwardRequest = protocolRequestParser.parse(protocol, requestBody, request);
+        RequestChainLogCollector.bindForwardRequest(forwardRequest);
+        RequestChainLogCollector.record(
+                RequestChainLogType.PROTOCOL_REQUEST_RECEIVED,
+                protocol.getCode(),
+                forwardRequest.getModel(),
+                forwardRequest.isStream(),
+                forwardRequest.getTokenSource()
+        );
+        protocolControllerResponseWriter.write(forwardingApplicationService.forward(forwardRequest), request, response);
     }
 }

@@ -7,11 +7,19 @@ import org.springframework.stereotype.Component;
 import site.xlinks.ai.router.common.exception.BusinessException;
 import site.xlinks.ai.router.distributed.protocol.model.CustomerTokenSource;
 import site.xlinks.ai.router.distributed.protocol.model.DistributedErrorCode;
+import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 
 @Component
 public class CustomerTokenResolver {
 
     private static final String HEADER_X_API_KEY = "x-api-key";
+
+    public ResolvedCustomerToken resolve(HttpServletRequest request, ForwardProtocol protocol) {
+        if (protocol == ForwardProtocol.ANTHROPIC_MESSAGES) {
+            return resolveAnthropicToken(request);
+        }
+        return resolveOpenAiToken(request);
+    }
 
     public ResolvedCustomerToken resolveOpenAiToken(HttpServletRequest request) {
         return resolveBearerToken(request);

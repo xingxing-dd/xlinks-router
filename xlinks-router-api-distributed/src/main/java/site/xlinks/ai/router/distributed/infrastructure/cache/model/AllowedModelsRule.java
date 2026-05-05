@@ -15,4 +15,8 @@ public class AllowedModelsRule {
     private boolean allowAll;
     private Set<String> allowedModels;
     private List<String> allowedModelList;
+
+    public static AllowedModelsRule allowAll() {
+        return new AllowedModelsRule(true, Set.of(), List.of());
+    }
 }

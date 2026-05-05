@@ -1,106 +1,54 @@
 package site.xlinks.ai.router.distributed.protocol.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
-import site.xlinks.ai.router.common.exception.BusinessException;
-import site.xlinks.ai.router.distributed.protocol.model.DistributedErrorCode;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.ForwardRequest;
 
-import java.util.LinkedHashMap;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class ProtocolRequestParser {
 
-    private static final String HEADER_ANTHROPIC_VERSION = "anthropic-version";
-    private static final String HEADER_ANTHROPIC_BETA = "anthropic-beta";
+    private final List<ProtocolRequestParsingStrategy> strategies;
+    private final ProtocolRequestContextResolver protocolRequestContextResolver;
+    private volatile Map<ForwardProtocol, ProtocolRequestParsingStrategy> strategyByProtocol;
 
-    private final ObjectMapper objectMapper;
-
-    public ForwardRequest parseOpenAi(ForwardProtocol protocol,
-                                      String requestBody,
-                                      CustomerTokenResolver.ResolvedCustomerToken token) {
-        String rawBody = StringUtils.defaultString(requestBody);
-        JsonNode payload = parseJson(requestBody);
-        String model = readRequiredText(payload, "model");
-        Boolean stream = readBoolean(payload, "stream");
-        return ForwardRequest.builder()
-                .protocol(protocol)
-                .model(model)
-                .stream(stream)
-                .customerToken(token.value())
-                .tokenSource(token.source())
-                .payload(payload)
-                .requestBody(rawBody)
-                .passthroughHeaders(Map.of())
-                .build();
-    }
-
-    public ForwardRequest parseAnthropic(String requestBody,
-                                         HttpServletRequest request,
-                                         CustomerTokenResolver.ResolvedCustomerToken token) {
-        String rawBody = StringUtils.defaultString(requestBody);
-        JsonNode payload = parseJson(requestBody);
-        String model = readRequiredText(payload, "model");
-        Boolean stream = readBoolean(payload, "stream");
-        Map<String, String> passthroughHeaders = new LinkedHashMap<>();
-        copyHeaderIfPresent(request, passthroughHeaders, HEADER_ANTHROPIC_VERSION);
-        copyHeaderIfPresent(request, passthroughHeaders, HEADER_ANTHROPIC_BETA);
-        return ForwardRequest.builder()
-                .protocol(ForwardProtocol.ANTHROPIC_MESSAGES)
-                .model(model)
-                .stream(stream)
-                .customerToken(token.value())
-                .tokenSource(token.source())
-                .payload(payload)
-                .requestBody(rawBody)
-                .passthroughHeaders(passthroughHeaders)
-                .build();
-    }
-
-    private JsonNode parseJson(String requestBody) {
-        try {
-            return objectMapper.readTree(StringUtils.defaultIfBlank(requestBody, "{}"));
-        } catch (Exception ex) {
-            throw new BusinessException(
-                    DistributedErrorCode.INVALID_JSON_REQUEST.getCode(),
-                    DistributedErrorCode.INVALID_JSON_REQUEST.getMessage()
-            );
+    // 协议解析入口只负责分发策略，不承载具体协议细节，方便横向扩展新协议。
+    public ForwardRequest parse(ForwardProtocol protocol,
+                                 String requestBody,
+                                 HttpServletRequest request) {
+        ProtocolRequestParsingStrategy strategy = getStrategyByProtocol().get(protocol);
+        if (strategy == null) {
+            throw new IllegalStateException("No protocol request parsing strategy registered for " + protocol);
         }
+        CustomerTokenResolver.ResolvedCustomerToken token = protocolRequestContextResolver.resolveCustomerToken(request);
+        return strategy.parse(protocol, requestBody, request, token);
     }
 
-    private String readRequiredText(JsonNode payload, String fieldName) {
-        JsonNode node = payload.path(fieldName);
-        String value = node.isMissingNode() || node.isNull() ? null : StringUtils.trimToNull(node.asText());
-        if (value == null) {
-            throw new BusinessException(
-                    DistributedErrorCode.MODEL_REQUIRED.getCode(),
-                    DistributedErrorCode.MODEL_REQUIRED.getMessage()
-            );
+    private Map<ForwardProtocol, ProtocolRequestParsingStrategy> buildStrategyMap(List<ProtocolRequestParsingStrategy> strategies) {
+        Map<ForwardProtocol, ProtocolRequestParsingStrategy> mappings = new EnumMap<>(ForwardProtocol.class);
+        for (ProtocolRequestParsingStrategy strategy : strategies) {
+            for (ForwardProtocol protocol : strategy.supportedProtocols()) {
+                ProtocolRequestParsingStrategy existing = mappings.putIfAbsent(protocol, strategy);
+                if (existing != null) {
+                    throw new IllegalStateException("Duplicate protocol request parsing strategy for " + protocol);
+                }
+            }
         }
-        return value;
+        return Map.copyOf(mappings);
     }
 
-    private Boolean readBoolean(JsonNode payload, String fieldName) {
-        JsonNode node = payload.get(fieldName);
-        if (node == null || node.isNull()) {
-            return null;
+    private Map<ForwardProtocol, ProtocolRequestParsingStrategy> getStrategyByProtocol() {
+        Map<ForwardProtocol, ProtocolRequestParsingStrategy> local = strategyByProtocol;
+        if (local == null) {
+            local = buildStrategyMap(strategies);
+            strategyByProtocol = local;
         }
-        return node.asBoolean();
-    }
-
-    private void copyHeaderIfPresent(HttpServletRequest request,
-                                     Map<String, String> headers,
-                                     String headerName) {
-        String value = StringUtils.trimToNull(request.getHeader(headerName));
-        if (value != null) {
-            headers.put(headerName, value);
-        }
+        return local;
     }
 }

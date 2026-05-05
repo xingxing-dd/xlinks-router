@@ -1,5 +1,8 @@
 package site.xlinks.ai.router.distributed.protocol.model;
 
+import lombok.Getter;
+
+@Getter
 public enum DistributedErrorCode {
 
     INVALID_JSON_REQUEST(4600, "Invalid JSON request body"),
@@ -14,13 +17,5 @@ public enum DistributedErrorCode {
     DistributedErrorCode(int code, String message) {
         this.code = code;
         this.message = message;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
     }
 }

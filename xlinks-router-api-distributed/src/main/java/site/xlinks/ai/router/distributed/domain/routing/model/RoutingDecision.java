@@ -6,6 +6,9 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 
+/**
+ * 单次执行尝试最终选中的上游路由结果。
+ */
 @Data
 @Builder
 public class RoutingDecision {
@@ -22,5 +25,5 @@ public class RoutingDecision {
 
     private ProviderToken providerToken;
 
-    private String decisionStage;
+    private RoutingDecisionStage decisionStage;
 }

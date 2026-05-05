@@ -9,6 +9,7 @@ The gateway exposes:
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `GET /v1/models`
+- `GET /user/balance`
 
 Authentication:
 
@@ -136,7 +137,28 @@ This separation is required for an aggregation router, because the platform-faci
 - no provider token available: route error
 - customer token invalid or expired: `401`
 
-## 9. Usage & Billing (Cache-hit Aware)
+## 9. Balance Query
+
+- `GET /user/balance`
+
+This endpoint is intended for external balance or usage checks.
+
+The returned `balance` is the total available USD amount:
+
+- wallet `available_balance`
+- plus all currently usable customer plan remaining quota
+
+Example:
+
+```json
+{
+  "is_active": true,
+  "balance": 57.34,
+  "unit": "USD"
+}
+```
+
+## 10. Usage & Billing (Cache-hit Aware)
 
 Provider-specific field:
 

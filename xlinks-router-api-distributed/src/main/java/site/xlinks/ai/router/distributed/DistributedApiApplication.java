@@ -1,4 +1,4 @@
-package site.xlinks.ai.router.distributed.boot;
+package site.xlinks.ai.router.distributed;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;

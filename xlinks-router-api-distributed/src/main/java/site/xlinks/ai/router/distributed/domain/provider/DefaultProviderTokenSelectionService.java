@@ -7,8 +7,9 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @lombok.RequiredArgsConstructor
@@ -22,15 +23,22 @@ public class DefaultProviderTokenSelectionService implements ProviderTokenSelect
             return null;
         }
         LocalDateTime now = LocalDateTime.now();
-        return candidates.stream()
-                .filter(token -> token != null)
+        List<ProviderToken> eligibleTokens = candidates.stream()
+                .filter(Objects::nonNull)
                 .filter(token -> !isTemporarilyUnavailable(token.getId()))
                 .filter(token -> token.getTokenStatus() != null && token.getTokenStatus() == 1)
                 .filter(token -> token.getExpireTime() == null || !now.isAfter(token.getExpireTime()))
-                .filter(token -> hasQuota(token))
-                .sorted(tokenComparator())
-                .findFirst()
-                .orElse(null);
+                .filter(this::hasQuota)
+                .sorted(this::compareStableOrder)
+                .toList();
+        if (eligibleTokens.isEmpty()) {
+            return null;
+        }
+        if (eligibleTokens.size() == 1 || provider.getId() == null) {
+            return eligibleTokens.get(0);
+        }
+        int startIndex = Math.floorMod(distributedCursor(provider), eligibleTokens.size());
+        return eligibleTokens.get(startIndex);
     }
 
     private boolean isTemporarilyUnavailable(Long providerTokenId) {
@@ -47,36 +55,21 @@ public class DefaultProviderTokenSelectionService implements ProviderTokenSelect
         return total == null || used == null || used < total;
     }
 
-    private Comparator<ProviderToken> tokenComparator() {
-        return Comparator
-                .comparingLong(this::remainingQuota)
-                .reversed()
-                .thenComparing(ProviderToken::getLastUsedAt, this::compareLastUsed)
-                .thenComparing(token -> token.getId() == null ? Long.MAX_VALUE : token.getId());
+    private int distributedCursor(Provider provider) {
+        long cursor = distributedRouteCacheRepository.nextProviderTokenCursor(provider.getId());
+        return cursor <= 0L ? 0 : (int) (cursor - 1L);
     }
 
-    private long remainingQuota(ProviderToken token) {
-        if (token == null) {
-            return Long.MIN_VALUE;
+    private int compareStableOrder(ProviderToken left, ProviderToken right) {
+        int byId = Long.compare(tokenId(left), tokenId(right));
+        if (byId != 0) {
+            return byId;
         }
-        Long total = token.getQuotaTotal();
-        if (total == null) {
-            return Long.MAX_VALUE;
-        }
-        long used = token.getQuotaUsed() == null ? 0L : token.getQuotaUsed();
-        return total - used;
+        return Objects.toString(left == null ? null : left.getTokenName(), "")
+                .compareTo(Objects.toString(right == null ? null : right.getTokenName(), ""));
     }
 
-    private int compareLastUsed(LocalDateTime left, LocalDateTime right) {
-        if (left == null && right == null) {
-            return 0;
-        }
-        if (left == null) {
-            return -1;
-        }
-        if (right == null) {
-            return 1;
-        }
-        return left.compareTo(right);
+    private long tokenId(ProviderToken token) {
+        return token == null || token.getId() == null ? Long.MAX_VALUE : token.getId();
     }
 }

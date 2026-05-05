@@ -175,6 +175,12 @@ Bucket4j 本身是成熟方案，适合做分布式令牌桶和速率限制。
 
 每个 `providerToken` 一个 semaphore key：
 
+项目内 Redis 缓存与并发控制 key 统一前缀：
+
+```text
+xlinks:router:
+```
+
 ```text
 xlinks:router:provider:{providerId}:token:{providerTokenId}:permits
 ```

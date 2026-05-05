@@ -4,7 +4,7 @@ import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 
 public final class RedisCacheKeys {
 
-    private static final String PREFIX = "api:cache:";
+    private static final String PREFIX = "xlinks:router:";
 
     private RedisCacheKeys() {
     }
@@ -67,6 +67,10 @@ public final class RedisCacheKeys {
 
     public static String providerTokenFailure(Long providerTokenId) {
         return PREFIX + "provider-token-failure:" + providerTokenId;
+    }
+
+    public static String providerTokenCursor(Long providerId) {
+        return PREFIX + "provider-token-cursor:" + providerId;
     }
 
     public static String cacheVersion(String scope) {

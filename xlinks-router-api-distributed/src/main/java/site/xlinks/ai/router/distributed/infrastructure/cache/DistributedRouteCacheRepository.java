@@ -77,4 +77,6 @@ public interface DistributedRouteCacheRepository {
     void putProviderTokenFailureState(Long providerTokenId, ProviderFailureState state);
 
     void deleteProviderTokenFailureState(Long providerTokenId);
+
+    long nextProviderTokenCursor(Long providerId);
 }

@@ -1,7 +1,6 @@
 package site.xlinks.ai.router.distributed.protocol.handler;
 
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -19,31 +18,33 @@ import site.xlinks.ai.router.distributed.protocol.controller.AnthropicProtocolCo
 import site.xlinks.ai.router.distributed.protocol.controller.OpenAiProtocolController;
 import site.xlinks.ai.router.distributed.protocol.model.AnthropicProtocolErrorResponse;
 import site.xlinks.ai.router.distributed.protocol.model.DistributedErrorCode;
+import site.xlinks.ai.router.distributed.protocol.model.ForwardProtocol;
 import site.xlinks.ai.router.distributed.protocol.model.OpenAiProtocolErrorResponse;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogCollector;
+import site.xlinks.ai.router.distributed.support.logging.RequestChainLogType;
 
-@Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {OpenAiProtocolController.class, AnthropicProtocolController.class})
 public class ProtocolExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<String> handleBusinessException(BusinessException ex, HttpServletRequest request) {
-        log.warn("Protocol business exception. uri={}, traceId={}, code={}, message={}",
-                request.getRequestURI(), request.getHeader("X-Trace-Id"), ex.getCode(), ex.getMessage());
+        RequestChainLogCollector.record(RequestChainLogType.PROTOCOL_BUSINESS_ERROR, ex.getCode(), ex.getMessage());
+        RequestChainLogCollector.markBusinessFailure(ex.getMessage());
         return buildProtocolErrorResponse(request, ex.getCode(), ex.getMessage());
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<String> handleBadRequest(Exception ex, HttpServletRequest request) {
-        log.warn("Protocol bad request. uri={}, traceId={}, message={}",
-                request.getRequestURI(), request.getHeader("X-Trace-Id"), ex.getMessage());
+        RequestChainLogCollector.record(RequestChainLogType.PROTOCOL_BAD_REQUEST, ex.getMessage());
+        RequestChainLogCollector.markBusinessFailure("请求参数错误");
         return buildProtocolErrorResponse(request, ErrorCode.PARAM_ERROR.getCode(), "Invalid request body");
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleUnexpectedException(Exception ex, HttpServletRequest request) {
-        log.error("Protocol unexpected exception. uri={}, traceId={}",
-                request.getRequestURI(), request.getHeader("X-Trace-Id"), ex);
+        RequestChainLogCollector.record(RequestChainLogType.PROTOCOL_UNEXPECTED_ERROR, ex.getMessage());
+        RequestChainLogCollector.markUnexpectedFailure("协议请求出现未预期异常", ex);
         return buildProtocolErrorResponse(request, ErrorCode.SYSTEM_ERROR.getCode(), "Internal server error");
     }
 
@@ -57,60 +58,71 @@ public class ProtocolExceptionHandler {
     }
 
     private boolean isAnthropicRequest(HttpServletRequest request) {
-        return request != null && "/v1/messages".equals(request.getRequestURI());
+        return request != null
+                && ForwardProtocol.fromRequestUri(request.getRequestURI())
+                .filter(protocol -> protocol == ForwardProtocol.ANTHROPIC_MESSAGES)
+                .isPresent();
     }
 
     private HttpStatus resolveHttpStatus(int code) {
-        if (code == ErrorCode.UNAUTHORIZED.getCode()
-                || code == DistributedErrorCode.MISSING_CUSTOMER_TOKEN.getCode()
-                || code == DistributedErrorCode.INVALID_AUTHORIZATION_HEADER.getCode()) {
+        if (isUnauthorizedCode(code)) {
             return HttpStatus.UNAUTHORIZED;
         }
         if (code == ErrorCode.RATE_LIMITED.getCode()) {
             return HttpStatus.TOO_MANY_REQUESTS;
         }
-        if (code == DistributedErrorCode.PROTOCOL_DEFINITION_ONLY.getCode()) {
+        if (isNotImplementedCode(code)) {
             return HttpStatus.NOT_IMPLEMENTED;
         }
-        if (code >= 5000) {
+        if (isServerErrorCode(code)) {
             return HttpStatus.INTERNAL_SERVER_ERROR;
         }
         return HttpStatus.BAD_REQUEST;
     }
 
     private String buildOpenAiBody(int code, String message) {
-        if (code == ErrorCode.UNAUTHORIZED.getCode()
-                || code == DistributedErrorCode.MISSING_CUSTOMER_TOKEN.getCode()
-                || code == DistributedErrorCode.INVALID_AUTHORIZATION_HEADER.getCode()) {
+        if (isUnauthorizedCode(code)) {
             return OpenAiProtocolErrorResponse.unauthorized(message).toJson();
         }
         if (code == ErrorCode.RATE_LIMITED.getCode()) {
             return OpenAiProtocolErrorResponse.rateLimited(message).toJson();
         }
-        if (code == DistributedErrorCode.PROTOCOL_DEFINITION_ONLY.getCode()) {
+        if (isNotImplementedCode(code)) {
             return OpenAiProtocolErrorResponse.notImplemented(message).toJson();
         }
-        if (code >= 5000) {
+        if (isServerErrorCode(code)) {
             return OpenAiProtocolErrorResponse.internalError(message).toJson();
         }
         return OpenAiProtocolErrorResponse.invalidRequest(message).toJson();
     }
 
     private String buildAnthropicBody(int code, String message) {
-        if (code == ErrorCode.UNAUTHORIZED.getCode()
-                || code == DistributedErrorCode.MISSING_CUSTOMER_TOKEN.getCode()
-                || code == DistributedErrorCode.INVALID_AUTHORIZATION_HEADER.getCode()) {
+        if (isUnauthorizedCode(code)) {
             return AnthropicProtocolErrorResponse.authenticationError(message).toJson();
         }
         if (code == ErrorCode.RATE_LIMITED.getCode()) {
             return AnthropicProtocolErrorResponse.rateLimitError(message).toJson();
         }
-        if (code == DistributedErrorCode.PROTOCOL_DEFINITION_ONLY.getCode()) {
+        if (isNotImplementedCode(code)) {
             return AnthropicProtocolErrorResponse.notImplemented(message).toJson();
         }
-        if (code >= 5000) {
+        if (isServerErrorCode(code)) {
             return AnthropicProtocolErrorResponse.apiError(message).toJson();
         }
         return AnthropicProtocolErrorResponse.invalidRequest(message).toJson();
+    }
+
+    private boolean isUnauthorizedCode(int code) {
+        return code == ErrorCode.UNAUTHORIZED.getCode()
+                || code == DistributedErrorCode.MISSING_CUSTOMER_TOKEN.getCode()
+                || code == DistributedErrorCode.INVALID_AUTHORIZATION_HEADER.getCode();
+    }
+
+    private boolean isNotImplementedCode(int code) {
+        return code == DistributedErrorCode.PROTOCOL_DEFINITION_ONLY.getCode();
+    }
+
+    private boolean isServerErrorCode(int code) {
+        return code >= 5000;
     }
 }

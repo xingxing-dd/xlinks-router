@@ -246,6 +246,25 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
         }
     }
 
+    @Override
+    public long nextProviderTokenCursor(Long providerId) {
+        if (providerId == null) {
+            return 0L;
+        }
+        String key = RedisCacheKeys.providerTokenCursor(providerId);
+        try {
+            Long value = stringRedisTemplate.opsForValue().increment(key);
+            if (value == null) {
+                return 0L;
+            }
+            stringRedisTemplate.expire(key, CacheTtlPolicy.PROVIDER_RUNTIME_STATE_TTL);
+            return value;
+        } catch (Exception ex) {
+            log.warn("递增 provider token 轮询游标失败。providerId={}", providerId, ex);
+            return 0L;
+        }
+    }
+
     private <T> T readObject(String key, Class<T> type) {
         if (key == null || type == null) {
             return null;
@@ -257,7 +276,7 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
         try {
             return objectMapper.readValue(raw, type);
         } catch (Exception ex) {
-            log.warn("Failed to deserialize redis cache object. key={}, type={}", key, type.getSimpleName(), ex);
+            log.warn("反序列化 Redis 缓存对象失败。key={}, type={}", key, type.getSimpleName(), ex);
             return null;
         }
     }
@@ -274,7 +293,7 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
             List<T> value = objectMapper.readValue(raw, typeReference);
             return value == null ? Collections.emptyList() : value;
         } catch (Exception ex) {
-            log.warn("Failed to deserialize redis cache list. key={}", key, ex);
+            log.warn("反序列化 Redis 缓存列表失败。key={}", key, ex);
             return Collections.emptyList();
         }
     }
@@ -286,7 +305,7 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
         try {
             stringRedisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(value), ttl);
         } catch (Exception ex) {
-            log.warn("Failed to write redis cache. key={}", key, ex);
+            log.warn("写入 Redis 缓存失败。key={}", key, ex);
         }
     }
 }
