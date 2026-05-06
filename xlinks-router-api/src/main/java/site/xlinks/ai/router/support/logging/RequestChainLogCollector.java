@@ -314,18 +314,26 @@ public final class RequestChainLogCollector {
             if (isBalanceQueryRequest()) {
                 return renderBalanceQueryLogSafe();
             }
+            if (isCompactRequest()) {
+                return renderCompactRequestLog();
+            }
             return renderForwardingLog();
+        }
+
+        private String renderCompactRequestLog() {
+            StringBuilder builder = new StringBuilder();
+            appendForwardingHeader(builder);
+            builder.append('\n');
+            builder.append("请求摘要")
+                    .append(" | method=").append(defaultValue(method))
+                    .append(" | uri=").append(defaultValue(uri));
+            return builder.toString();
         }
 
         private String renderForwardingLog() {
             StringBuilder builder = new StringBuilder();
-            builder.append("请求链路日志")
-                    .append(" | 结果=").append(resultMessage == null ? "请求处理完成" : resultMessage)
-                    .append(" | 总耗时=").append(elapsedMs()).append("ms")
-                    .append(" | HTTP状态=").append(responseStatus == null ? "-" : responseStatus)
-                    .append(" | traceId=").append(defaultValue(traceId))
-                    .append(" | requestId=").append(defaultValue(requestId))
-                    .append('\n');
+            appendForwardingHeader(builder);
+            builder.append('\n');
 
             builder.append("请求摘要")
                     .append(" | method=").append(defaultValue(method))
@@ -335,15 +343,17 @@ public final class RequestChainLogCollector {
                     .append(" | tokenSource=").append(defaultValue(tokenSource))
                     .append('\n');
 
-            builder.append("业务摘要")
-                    .append(" | 客户账号=").append(formatNameAndId(accountName, null, accountId))
-                    .append(" | 客户令牌=").append(formatNameAndId(joinNames(customerName, customerTokenName), null, customerTokenId))
-                    .append(" | 套餐=").append(formatNameAndId(planName, null, planId))
-                    .append(" | 模型=").append(formatNameAndId(modelName, modelCode, modelId))
-                    .append(" | 模型厂商=").append(defaultValue(modelProvider))
-                    .append(" | 服务商=").append(formatNameAndId(providerName, providerCode, providerId))
-                    .append(" | 服务商令牌=").append(formatNameAndId(providerTokenName, null, providerTokenId))
-                    .append('\n');
+            if (hasBusinessContext()) {
+                builder.append("业务摘要")
+                        .append(" | 客户账号=").append(formatNameAndId(accountName, null, accountId))
+                        .append(" | 客户令牌=").append(formatNameAndId(joinNames(customerName, customerTokenName), null, customerTokenId))
+                        .append(" | 套餐=").append(formatNameAndId(planName, null, planId))
+                        .append(" | 模型=").append(formatNameAndId(modelName, modelCode, modelId))
+                        .append(" | 模型厂商=").append(defaultValue(modelProvider))
+                        .append(" | 服务商=").append(formatNameAndId(providerName, providerCode, providerId))
+                        .append(" | 服务商令牌=").append(formatNameAndId(providerTokenName, null, providerTokenId))
+                        .append('\n');
+            }
 
             appendEvents(builder);
             return builder.toString();
@@ -430,6 +440,9 @@ public final class RequestChainLogCollector {
         }
 
         private void appendEvents(StringBuilder builder) {
+            if (events.isEmpty()) {
+                return;
+            }
             builder.append("关键节点:");
             int lastEventIndex = events.size() - 1;
             for (int index = 0; index < events.size(); index++) {
@@ -447,6 +460,45 @@ public final class RequestChainLogCollector {
 
         private boolean isBalanceQueryRequest() {
             return "balance".equals(protocol) || "/user/balance".equals(uri);
+        }
+
+        private boolean isCompactRequest() {
+            return !hasBusinessContext()
+                    && isBlank(protocol)
+                    && stream == null
+                    && isBlank(tokenSource)
+                    && isBlank(requestId)
+                    && level != LogLevel.ERROR;
+        }
+
+        private boolean hasBusinessContext() {
+            return accountId != null
+                    || customerTokenId != null
+                    || planId != null
+                    || modelId != null
+                    || providerId != null
+                    || providerTokenId != null
+                    || !isBlank(accountName)
+                    || !isBlank(customerName)
+                    || !isBlank(customerTokenName)
+                    || !isBlank(planName)
+                    || !isBlank(modelCode)
+                    || !isBlank(modelName)
+                    || !isBlank(modelProvider)
+                    || !isBlank(providerCode)
+                    || !isBlank(providerName)
+                    || !isBlank(providerTokenName);
+        }
+
+        private void appendForwardingHeader(StringBuilder builder) {
+            builder.append("请求链路日志")
+                    .append(" | 结果=").append(resultMessage == null ? "请求处理完成" : resultMessage)
+                    .append(" | 总耗时=").append(elapsedMs()).append("ms")
+                    .append(" | HTTP状态=").append(responseStatus == null ? "-" : responseStatus)
+                    .append(" | traceId=").append(defaultValue(traceId));
+            if (!isBlank(requestId)) {
+                builder.append(" | requestId=").append(requestId);
+            }
         }
 
         private String renderEventMessage(RequestChainLogEvent event, int index, int lastEventIndex) {

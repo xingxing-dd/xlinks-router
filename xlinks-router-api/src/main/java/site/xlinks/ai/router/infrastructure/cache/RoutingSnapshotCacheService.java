@@ -121,11 +121,11 @@ public class RoutingSnapshotCacheService {
 
             applySnapshot(buildSnapshot(models, providers, providerModels, providerTokens, customerTokens,
                     customerAccounts, customerPlans, wallets, plans, routes));
-            log.info("路由快照刷新完成。models={} providers={} providerModels={} providerTokens={} customerTokens={} customerPlans={} wallets={} routes={}",
+            log.info("路由快照刷新完成。elapsedMs={} models={} providers={} providerModels={} providerTokens={} customerTokens={} customerPlans={} wallets={} routes={}",
+                    Math.max(System.currentTimeMillis() - startedAt, 0L),
                     modelByCodeCache.size(), providerByIdCache.size(), providerModelByModelIdCache.size(),
                     providerTokenByIdCache.size(), customerTokenByValueCache.size(), customerPlanByAccountIdCache.size(),
                     customerMainWalletByAccountIdCache.size(), merchantPreferredProviderCache.size());
-            log.info("Routing snapshot refresh elapsedMs={}", Math.max(System.currentTimeMillis() - startedAt, 0L));
         });
     }
 

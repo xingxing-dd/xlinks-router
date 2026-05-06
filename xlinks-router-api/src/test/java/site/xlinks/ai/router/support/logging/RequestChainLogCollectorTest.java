@@ -90,6 +90,34 @@ class RequestChainLogCollectorTest {
         }
     }
 
+    @Test
+    void shouldRenderSimpleHttpRequestAsCompactLog() throws Exception {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getRequestURI()).thenReturn("/");
+
+        RequestChainLogCollector.RequestChainLogSession session = RequestChainLogCollector.start(request, "trace-3");
+        try {
+            RequestChainLogCollector.markResponseStatus(404);
+            RequestChainLogCollector.markBusinessFailure("request path not found");
+
+            String rendered = render(session);
+            assertTrue(rendered.contains("method=GET"));
+            assertTrue(rendered.contains("uri=/"));
+            assertTrue(rendered.contains("traceId=trace-3"));
+            assertFalse(rendered.contains("requestId="));
+            assertFalse(rendered.contains("protocol="));
+            assertFalse(rendered.contains("stream="));
+            assertFalse(rendered.contains("tokenSource="));
+            assertFalse(rendered.contains("customerAccount="));
+            assertFalse(rendered.contains("customerToken="));
+            assertFalse(rendered.contains("业务摘要"));
+            assertFalse(rendered.contains("关键节点"));
+        } finally {
+            RequestChainLogCollector.clear();
+        }
+    }
+
     private String render(RequestChainLogCollector.RequestChainLogSession session) throws Exception {
         Method renderMethod = session.getClass().getDeclaredMethod("render");
         renderMethod.setAccessible(true);

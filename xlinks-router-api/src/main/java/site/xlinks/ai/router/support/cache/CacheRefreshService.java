@@ -13,9 +13,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/**
- * 内部缓存刷新分发服务。
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,20 +24,14 @@ public class CacheRefreshService {
 
     public CacheRefreshResponse refresh(CacheRefreshRequest request) {
         if (request == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "刷新请求不能为空");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "\u5237\u65b0\u8bf7\u6c42\u4e0d\u80fd\u4e3a\u7a7a");
         }
         String type = normalize(request.getType());
         String action = normalize(request.getAction());
 
         switch (type) {
             case "", "all" -> routingSnapshotCacheService.refreshAll();
-            case "model" -> {
-                if (request.getModelId() == null && request.getId() == null) {
-                    routingSnapshotCacheService.refreshAll();
-                } else {
-                    routingSnapshotCacheService.refreshAll();
-                }
-            }
+            case "model" -> routingSnapshotCacheService.refreshAll();
             case "provider", "providermodel", "providertoken", "plan", "merchantroute" -> routingSnapshotCacheService.refreshAll();
             case "customertoken" -> {
                 if (request.getAccountId() != null) {
@@ -58,18 +49,18 @@ public class CacheRefreshService {
                     routingSnapshotCacheService.refreshAll();
                 }
             }
-            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的缓存刷新类型: " + request.getType());
+            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "\u4e0d\u652f\u6301\u7684\u7f13\u5b58\u5237\u65b0\u7c7b\u578b: " + request.getType());
         }
 
         String scope = buildScope(type, request);
-        log.info("已执行本地路由快照刷新。source={} type={} action={} scope={} remark={}",
+        log.debug("Local route snapshot refresh handled. source={} type={} action={} scope={} remark={}",
                 normalizeBlankToUnknown(request.getSource()), type, action, scope, normalizeBlankToUnknown(request.getRemark()));
         return new CacheRefreshResponse(
                 type,
                 action,
                 "local-snapshot",
                 scope,
-                "缓存刷新已受理",
+                "\u7f13\u5b58\u5237\u65b0\u5df2\u53d7\u7406",
                 LocalDateTime.now().format(DATE_TIME_FORMATTER)
         );
     }
