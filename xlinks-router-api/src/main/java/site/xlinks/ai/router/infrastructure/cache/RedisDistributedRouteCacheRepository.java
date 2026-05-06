@@ -212,11 +212,11 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
     }
 
     @Override
-    public void putProviderFailureState(Long providerId, ProviderFailureState state) {
-        if (providerId == null || state == null) {
+    public void putProviderFailureState(Long providerId, ProviderFailureState state, Duration ttl) {
+        if (providerId == null || state == null || ttl == null) {
             return;
         }
-        writeObject(RedisCacheKeys.providerFailure(providerId), state, CacheTtlPolicy.PROVIDER_RUNTIME_STATE_TTL);
+        writeObject(RedisCacheKeys.providerFailure(providerId), state, ttl);
     }
 
     @Override
@@ -232,11 +232,11 @@ public class RedisDistributedRouteCacheRepository implements DistributedRouteCac
     }
 
     @Override
-    public void putProviderTokenFailureState(Long providerTokenId, ProviderFailureState state) {
-        if (providerTokenId == null || state == null) {
+    public void putProviderTokenFailureState(Long providerTokenId, ProviderFailureState state, Duration ttl) {
+        if (providerTokenId == null || state == null || ttl == null) {
             return;
         }
-        writeObject(RedisCacheKeys.providerTokenFailure(providerTokenId), state, CacheTtlPolicy.PROVIDER_RUNTIME_STATE_TTL);
+        writeObject(RedisCacheKeys.providerTokenFailure(providerTokenId), state, ttl);
     }
 
     @Override

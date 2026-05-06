@@ -19,6 +19,7 @@ export function useCustomerTokenUsage() {
     todayTokens: 0,
     todayTokensChange: 0,
     todayCost: 0,
+    totalCost: 0,
     todayCostChange: 0,
     balance: 0,
   })
@@ -128,6 +129,7 @@ export function useCustomerTokenUsage() {
       todayTokens: 0,
       todayTokensChange: 0,
       todayCost: 0,
+      totalCost: 0,
       todayCostChange: 0,
       balance: 0,
     }

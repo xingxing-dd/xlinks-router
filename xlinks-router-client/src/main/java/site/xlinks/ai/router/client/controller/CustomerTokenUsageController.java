@@ -51,6 +51,7 @@ public class CustomerTokenUsageController {
 
         StatsSummary todaySummary = querySummary(token.getAccountId(), token.getTokenValue(), todayStart, todayEnd);
         StatsSummary yesterdaySummary = querySummary(token.getAccountId(), token.getTokenValue(), yesterdayStart, yesterdayEnd);
+        StatsSummary totalSummary = querySummary(token.getAccountId(), token.getTokenValue(), null, null);
 
         DashboardStatsResponse response = new DashboardStatsResponse();
         response.setTodayRequests(todaySummary.requests);
@@ -58,6 +59,7 @@ public class CustomerTokenUsageController {
         response.setTodayTokens(todaySummary.tokens);
         response.setTodayTokensChange(calcChangePercent(todaySummary.tokens, yesterdaySummary.tokens));
         response.setTodayCost(todaySummary.cost);
+        response.setTotalCost(totalSummary.cost);
         response.setTodayCostChange(calcChangePercent(todaySummary.cost, yesterdaySummary.cost));
         response.setBalance(BigDecimal.ZERO);
         return Result.success(response);
@@ -226,12 +228,13 @@ public class CustomerTokenUsageController {
     }
 
     private StatsSummary querySummary(Long accountId, String customerToken, LocalDateTime start, LocalDateTime end) {
-        List<UsageRecord> records = usageRecordMapper.selectList(
-                new LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
-                        .eq(UsageRecord::getCustomerToken, customerToken)
-                        .between(UsageRecord::getCreatedAt, start, end)
-        );
+        LambdaQueryWrapper<UsageRecord> wrapper = new LambdaQueryWrapper<UsageRecord>()
+                .eq(UsageRecord::getAccountId, accountId)
+                .eq(UsageRecord::getCustomerToken, customerToken);
+        if (start != null && end != null) {
+            wrapper.between(UsageRecord::getCreatedAt, start, end);
+        }
+        List<UsageRecord> records = usageRecordMapper.selectList(wrapper);
         long requests = records.size();
         long tokens = records.stream().mapToLong(record -> record.getTotalTokens() == null ? 0L : record.getTotalTokens().longValue()).sum();
         BigDecimal cost = records.stream()

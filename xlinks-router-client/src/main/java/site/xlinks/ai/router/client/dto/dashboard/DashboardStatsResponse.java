@@ -11,6 +11,7 @@ public class DashboardStatsResponse {
     private Long todayTokens;
     private Double todayTokensChange;
     private BigDecimal todayCost;
+    private BigDecimal totalCost;
     private Double todayCostChange;
     private BigDecimal balance;
 }

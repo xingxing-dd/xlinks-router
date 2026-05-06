@@ -10,6 +10,7 @@ import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
 
+import java.time.Duration;
 import java.util.List;
 
 public interface DistributedRouteCacheRepository {
@@ -68,13 +69,13 @@ public interface DistributedRouteCacheRepository {
 
     ProviderFailureState getProviderFailureState(Long providerId);
 
-    void putProviderFailureState(Long providerId, ProviderFailureState state);
+    void putProviderFailureState(Long providerId, ProviderFailureState state, Duration ttl);
 
     void deleteProviderFailureState(Long providerId);
 
     ProviderFailureState getProviderTokenFailureState(Long providerTokenId);
 
-    void putProviderTokenFailureState(Long providerTokenId, ProviderFailureState state);
+    void putProviderTokenFailureState(Long providerTokenId, ProviderFailureState state, Duration ttl);
 
     void deleteProviderTokenFailureState(Long providerTokenId);
 

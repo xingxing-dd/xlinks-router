@@ -45,6 +45,7 @@ public class DashboardController {
             response.setTodayTokens(0L);
             response.setTodayTokensChange(0D);
             response.setTodayCost(BigDecimal.ZERO);
+            response.setTotalCost(BigDecimal.ZERO);
             response.setTodayCostChange(0D);
             response.setBalance(BigDecimal.ZERO);
             return Result.success(response);
@@ -58,12 +59,14 @@ public class DashboardController {
 
         StatsSummary todaySummary = querySummary(accountId, todayStart, todayEnd);
         StatsSummary yesterdaySummary = querySummary(accountId, yesterdayStart, yesterdayEnd);
+        StatsSummary totalSummary = querySummary(accountId, null, null);
 
         response.setTodayRequests(todaySummary.requests);
         response.setTodayRequestsChange(calcChangePercent(todaySummary.requests, yesterdaySummary.requests));
         response.setTodayTokens(todaySummary.tokens);
         response.setTodayTokensChange(calcChangePercent(todaySummary.tokens, yesterdaySummary.tokens));
         response.setTodayCost(todaySummary.cost);
+        response.setTotalCost(totalSummary.cost);
         response.setTodayCostChange(calcChangePercent(todaySummary.cost, yesterdaySummary.cost));
         response.setBalance(walletService.ensureWallet(accountId).getMainWallet().getAvailableBalance());
         return Result.success(response);
@@ -224,11 +227,13 @@ public class DashboardController {
     }
 
     private StatsSummary querySummary(Long accountId, LocalDateTime start, LocalDateTime end) {
-        List<UsageRecord> records = usageRecordMapper.selectList(
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UsageRecord>()
-                        .eq(UsageRecord::getAccountId, accountId)
-                        .between(UsageRecord::getCreatedAt, start, end)
-        );
+                        .eq(UsageRecord::getAccountId, accountId);
+        if (start != null && end != null) {
+            wrapper.between(UsageRecord::getCreatedAt, start, end);
+        }
+        List<UsageRecord> records = usageRecordMapper.selectList(wrapper);
         long requests = records.size();
         long tokens = records.stream().mapToLong(r -> r.getTotalTokens() == null ? 0L : r.getTotalTokens().longValue()).sum();
         BigDecimal cost = records.stream()

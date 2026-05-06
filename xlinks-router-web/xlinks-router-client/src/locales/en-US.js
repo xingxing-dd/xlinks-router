@@ -102,6 +102,7 @@ export default {
     todayRequests: "Today's Requests",
     tokenUsage: "Today's Token Usage",
     todayCost: "Today's Cost",
+    totalCost: 'Total Cost',
     balance: 'Balance',
     usageTrend: 'Token Usage Trend',
     modelDistribution: 'Model Usage Distribution',

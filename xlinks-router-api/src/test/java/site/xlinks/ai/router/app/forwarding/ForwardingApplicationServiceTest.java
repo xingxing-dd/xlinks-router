@@ -23,7 +23,6 @@ import site.xlinks.ai.router.domain.provider.ProviderTokenSelectionService;
 import site.xlinks.ai.router.domain.routing.DefaultRoutingDomainService;
 import site.xlinks.ai.router.domain.routing.model.RoutingDecisionStage;
 import site.xlinks.ai.router.domain.routing.model.RoutingPlan;
-import site.xlinks.ai.router.infrastructure.cache.DistributedRouteCacheRepository;
 import site.xlinks.ai.router.infrastructure.http.ProviderHttpForwardingExecutor;
 import site.xlinks.ai.router.infrastructure.http.exception.UpstreamRetryableException;
 import site.xlinks.ai.router.infrastructure.http.model.ProviderStreamHandle;
@@ -77,7 +76,6 @@ class ForwardingApplicationServiceTest {
     private ForwardingUsageRecordService forwardingUsageRecordService;
     private UsageExtractor usageExtractor;
     private ProviderTokenSelectionService providerTokenSelectionService;
-    private DistributedRouteCacheRepository distributedRouteCacheRepository;
     private ForwardingApplicationService forwardingApplicationService;
 
     @BeforeEach
@@ -90,7 +88,6 @@ class ForwardingApplicationServiceTest {
         forwardingUsageRecordService = mock(ForwardingUsageRecordService.class);
         usageExtractor = mock(UsageExtractor.class);
         providerTokenSelectionService = mock(ProviderTokenSelectionService.class);
-        distributedRouteCacheRepository = mock(DistributedRouteCacheRepository.class);
 
         ForwardingDecisionService forwardingDecisionService = new ForwardingDecisionService(routingDomainService);
         ForwardingExecutionService forwardingExecutionService = new ForwardingExecutionService(
@@ -101,8 +98,7 @@ class ForwardingApplicationServiceTest {
                 providerRuntimeStateService,
                 forwardingUsageRecordService,
                 usageExtractor,
-                providerTokenSelectionService,
-                distributedRouteCacheRepository
+                providerTokenSelectionService
         );
         ReflectionTestUtils.setField(forwardingExecutionService, "maxRetryAttempts", 3);
         forwardingApplicationService = new ForwardingApplicationService(
@@ -442,6 +438,32 @@ class ForwardingApplicationServiceTest {
                 anyLong(),
                 eq("error")
         );
+    }
+
+    @Test
+    void shouldStillTryHighestPriorityProviderWhenProviderFailureStateExists() {
+        ForwardRequest request = buildRequest(false);
+        Provider provider = provider(1001L);
+        ProviderToken token = providerToken(2001L, 1001L);
+        ProviderPermitLease lease = permitLease(1001L, 2001L, null);
+
+        when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L, 1002L));
+        when(forwardingReadModelLoader.loadProvider(1001L)).thenReturn(provider);
+        when(forwardingReadModelLoader.loadProviderTokens(1001L)).thenReturn(List.of(token));
+        when(providerTokenSelectionService.select(eq(provider), anyList())).thenReturn(token);
+        when(providerConcurrencyGuard.tryAcquire(eq(provider), eq(token), any())).thenReturn(lease);
+        when(providerHttpForwardingExecutor.forward(any())).thenReturn(ResponseEntity.ok("success"));
+        when(usageExtractor.extract("success", "OPENAI"))
+                .thenReturn(UsageMetrics.builder().inputTokens(1).outputTokens(1).totalTokens(2).build());
+
+        Object result = forwardingApplicationService.forward(request);
+
+        ResponseEntity<?> responseEntity = assertInstanceOf(ResponseEntity.class, result);
+        assertEquals("success", responseEntity.getBody());
+        verify(forwardingReadModelLoader).loadProvider(1001L);
+        verify(providerHttpForwardingExecutor).forward(any());
+        verify(providerRuntimeStateService).clearFailure(argThat(route ->
+                route != null && route.getProvider() != null && route.getProvider().getId().equals(1001L)));
     }
 
     @Test

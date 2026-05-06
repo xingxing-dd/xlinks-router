@@ -19,8 +19,6 @@ import site.xlinks.ai.router.app.forwarding.retry.ForwardFailureRoutingStrategy;
 import site.xlinks.ai.router.domain.provider.ProviderTokenSelectionService;
 import site.xlinks.ai.router.domain.routing.model.RoutingDecision;
 import site.xlinks.ai.router.domain.routing.model.RoutingDecisionStage;
-import site.xlinks.ai.router.infrastructure.cache.DistributedRouteCacheRepository;
-import site.xlinks.ai.router.infrastructure.cache.model.ProviderFailureState;
 import site.xlinks.ai.router.infrastructure.http.ProviderHttpForwardingExecutor;
 import site.xlinks.ai.router.infrastructure.http.exception.UpstreamRetryableException;
 import site.xlinks.ai.router.infrastructure.http.exception.UpstreamTimeoutException;
@@ -57,7 +55,6 @@ public class ForwardingExecutionService {
     private final ForwardingUsageRecordService forwardingUsageRecordService;
     private final UsageExtractor usageExtractor;
     private final ProviderTokenSelectionService providerTokenSelectionService;
-    private final DistributedRouteCacheRepository distributedRouteCacheRepository;
 
     @Value("${xlinks.router.forward.max-retry-attempts:3}")
     private int maxRetryAttempts;
@@ -120,7 +117,7 @@ public class ForwardingExecutionService {
                 continue;
             }
             Long providerId = providerModel.getProviderId();
-            if (excludedProviderIds.contains(providerId) || isProviderTemporarilyUnavailable(providerId)) {
+            if (excludedProviderIds.contains(providerId)) {
                 continue;
             }
 
@@ -497,11 +494,6 @@ public class ForwardingExecutionService {
                 .outputPrice(decision.getModel() == null ? null : decision.getModel().getOutputPrice())
                 .multiplier(decision.getCustomerPlan() == null ? null : decision.getCustomerPlan().getMultiplier())
                 .build();
-    }
-
-    private boolean isProviderTemporarilyUnavailable(Long providerId) {
-        ProviderFailureState state = distributedRouteCacheRepository.getProviderFailureState(providerId);
-        return state != null && state.getFailureCount() > 0;
     }
 
     private void recordAttemptStarted(int attempt,

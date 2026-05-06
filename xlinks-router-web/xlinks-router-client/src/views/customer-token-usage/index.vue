@@ -328,7 +328,12 @@ const getInputTokenTagClass = (inputTokens) => {
               </span>
             </div>
             <h3 class="mb-1 text-sm text-slate-500">{{ t('dashboard.todayCost') }}</h3>
-            <p class="text-2xl font-bold text-slate-900">{{ formatCurrency(dashboardStats.todayCost) }}</p>
+            <p class="flex flex-wrap items-baseline gap-2 text-2xl font-bold text-slate-900">
+              <span>{{ formatCurrency(dashboardStats.todayCost) }}</span>
+              <span class="text-sm font-medium text-slate-500">
+                ({{ t('dashboard.totalCost') }}: {{ formatCurrency(dashboardStats.totalCost) }})
+              </span>
+            </p>
           </div>
         </div>
 

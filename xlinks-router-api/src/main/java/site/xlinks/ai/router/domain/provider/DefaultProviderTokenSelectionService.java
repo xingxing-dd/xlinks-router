@@ -3,6 +3,7 @@ package site.xlinks.ai.router.domain.provider;
 import org.springframework.stereotype.Service;
 import site.xlinks.ai.router.infrastructure.cache.DistributedRouteCacheRepository;
 import site.xlinks.ai.router.infrastructure.cache.model.ProviderFailureState;
+import site.xlinks.ai.router.infrastructure.runtime.ProviderFailurePolicy;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 
@@ -15,6 +16,7 @@ import java.util.Objects;
 public class DefaultProviderTokenSelectionService implements ProviderTokenSelectionService {
 
     private final DistributedRouteCacheRepository distributedRouteCacheRepository;
+    private final ProviderFailurePolicy providerFailurePolicy;
 
     @Override
     public ProviderToken select(Provider provider, List<ProviderToken> candidates) {
@@ -45,7 +47,7 @@ public class DefaultProviderTokenSelectionService implements ProviderTokenSelect
             return false;
         }
         ProviderFailureState state = distributedRouteCacheRepository.getProviderTokenFailureState(providerTokenId);
-        return state != null && state.getFailureCount() > 0;
+        return providerFailurePolicy.isTemporarilyUnavailable(state);
     }
 
     private boolean hasQuota(ProviderToken token) {

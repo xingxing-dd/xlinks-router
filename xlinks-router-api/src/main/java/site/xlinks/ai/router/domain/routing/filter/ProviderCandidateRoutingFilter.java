@@ -15,6 +15,7 @@ import site.xlinks.ai.router.entity.ProviderModel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 服务商候选过滤器。
@@ -51,8 +52,47 @@ public class ProviderCandidateRoutingFilter implements RoutingFilter {
         RequestChainLogCollector.record(
                 RequestChainLogType.PROVIDER_CANDIDATES_FILTERED,
                 filteredCandidates.size(),
-                preferredProviderId == null ? "-" : preferredProviderId
+                buildPreferredProviderLog(preferredProviderId, filteredCandidates)
         );
+    }
+
+    private String buildPreferredProviderLog(Long preferredProviderId, List<ProviderModel> candidates) {
+        return (preferredProviderId == null ? "-" : preferredProviderId)
+                + "，可用服务商="
+                + buildCandidateProviderNames(candidates);
+    }
+
+    private String buildCandidateProviderNames(List<ProviderModel> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return "-";
+        }
+        String providerNames = candidates.stream()
+                .map(this::resolveProviderName)
+                .filter(name -> name != null && !name.isBlank())
+                .collect(Collectors.joining(" > "));
+        return providerNames.isBlank() ? "-" : providerNames;
+    }
+
+    private String resolveProviderName(ProviderModel candidate) {
+        if (candidate == null || candidate.getProviderId() == null) {
+            return null;
+        }
+        var provider = forwardingReadModelLoader.loadProvider(candidate.getProviderId());
+        if (provider == null) {
+            return String.valueOf(candidate.getProviderId());
+        }
+        String providerName = provider.getProviderName();
+        String providerCode = provider.getProviderCode();
+        if (providerName != null && !providerName.isBlank() && providerCode != null && !providerCode.isBlank()) {
+            return providerName + "/" + providerCode;
+        }
+        if (providerName != null && !providerName.isBlank()) {
+            return providerName;
+        }
+        if (providerCode != null && !providerCode.isBlank()) {
+            return providerCode;
+        }
+        return String.valueOf(candidate.getProviderId());
     }
 
     private List<ProviderModel> filterExcludedProviders(List<ProviderModel> candidates, RoutingExclusions exclusions) {

@@ -102,6 +102,7 @@
     todayRequests: '今日请求数',
     tokenUsage: '今日Token 消耗',
     todayCost: '今日费用',
+    totalCost: '累计费用',
     balance: '账户余额',
     usageTrend: 'Token 使用趋势',
     modelDistribution: '模型使用分布',

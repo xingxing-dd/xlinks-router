@@ -5,6 +5,7 @@ import site.xlinks.ai.router.infrastructure.cache.DistributedRouteCacheRepositor
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderToken;
 import site.xlinks.ai.router.infrastructure.cache.model.ProviderFailureState;
+import site.xlinks.ai.router.infrastructure.runtime.ProviderFailurePolicy;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -18,12 +19,16 @@ import static org.mockito.Mockito.when;
 
 class DefaultProviderTokenSelectionServiceTest {
 
+    private static final ProviderFailurePolicy PROVIDER_FAILURE_POLICY =
+            new ProviderFailurePolicy(5, 300000L, 1800000L);
+
     @Test
     void shouldDistributeSelectionsAcrossProviderTokensInRoundRobinOrder() {
         DistributedRouteCacheRepository cacheRepository = mock(DistributedRouteCacheRepository.class);
         AtomicLong cursor = new AtomicLong(0L);
         when(cacheRepository.nextProviderTokenCursor(1001L)).thenAnswer(invocation -> cursor.incrementAndGet());
-        DefaultProviderTokenSelectionService selectionService = new DefaultProviderTokenSelectionService(cacheRepository);
+        DefaultProviderTokenSelectionService selectionService =
+                new DefaultProviderTokenSelectionService(cacheRepository, PROVIDER_FAILURE_POLICY);
 
         Provider provider = provider(1001L);
         ProviderToken token1 = token(2001L);
@@ -43,8 +48,13 @@ class DefaultProviderTokenSelectionServiceTest {
         DistributedRouteCacheRepository cacheRepository = mock(DistributedRouteCacheRepository.class);
         when(cacheRepository.nextProviderTokenCursor(1001L)).thenReturn(2L);
         when(cacheRepository.getProviderTokenFailureState(2002L))
-                .thenReturn(new ProviderFailureState(1, Instant.now()));
-        DefaultProviderTokenSelectionService selectionService = new DefaultProviderTokenSelectionService(cacheRepository);
+                .thenReturn(new ProviderFailureState(
+                        PROVIDER_FAILURE_POLICY.tokenConsecutiveFailureThreshold(),
+                        Instant.now(),
+                        Instant.now().plus(PROVIDER_FAILURE_POLICY.tokenBlockedDuration())
+                ));
+        DefaultProviderTokenSelectionService selectionService =
+                new DefaultProviderTokenSelectionService(cacheRepository, PROVIDER_FAILURE_POLICY);
 
         Provider provider = provider(1001L);
         ProviderToken token1 = token(2001L);
@@ -57,9 +67,50 @@ class DefaultProviderTokenSelectionServiceTest {
     }
 
     @Test
+    void shouldKeepTokenEligibleAfterSingleTransientFailure() {
+        DistributedRouteCacheRepository cacheRepository = mock(DistributedRouteCacheRepository.class);
+        when(cacheRepository.nextProviderTokenCursor(1001L)).thenReturn(1L);
+        when(cacheRepository.getProviderTokenFailureState(2001L))
+                .thenReturn(new ProviderFailureState(1, Instant.now(), null));
+        DefaultProviderTokenSelectionService selectionService =
+                new DefaultProviderTokenSelectionService(cacheRepository, PROVIDER_FAILURE_POLICY);
+
+        Provider provider = provider(1001L);
+        ProviderToken token1 = token(2001L);
+        ProviderToken token2 = token(2002L);
+
+        ProviderToken selected = selectionService.select(provider, List.of(token1, token2));
+
+        assertEquals(2001L, selected.getId());
+    }
+
+    @Test
+    void shouldKeepTokenEligibleAfterBlacklistExpires() {
+        DistributedRouteCacheRepository cacheRepository = mock(DistributedRouteCacheRepository.class);
+        when(cacheRepository.nextProviderTokenCursor(1001L)).thenReturn(1L);
+        when(cacheRepository.getProviderTokenFailureState(2001L))
+                .thenReturn(new ProviderFailureState(
+                        PROVIDER_FAILURE_POLICY.tokenConsecutiveFailureThreshold(),
+                        Instant.now().minusSeconds(600),
+                        Instant.now().minusSeconds(1)
+                ));
+        DefaultProviderTokenSelectionService selectionService =
+                new DefaultProviderTokenSelectionService(cacheRepository, PROVIDER_FAILURE_POLICY);
+
+        Provider provider = provider(1001L);
+        ProviderToken token1 = token(2001L);
+        ProviderToken token2 = token(2002L);
+
+        ProviderToken selected = selectionService.select(provider, List.of(token1, token2));
+
+        assertEquals(2001L, selected.getId());
+    }
+
+    @Test
     void shouldReturnNullWhenNoEligibleProviderTokenExists() {
         DistributedRouteCacheRepository cacheRepository = mock(DistributedRouteCacheRepository.class);
-        DefaultProviderTokenSelectionService selectionService = new DefaultProviderTokenSelectionService(cacheRepository);
+        DefaultProviderTokenSelectionService selectionService =
+                new DefaultProviderTokenSelectionService(cacheRepository, PROVIDER_FAILURE_POLICY);
 
         Provider provider = provider(1001L);
         ProviderToken disabled = token(2001L);

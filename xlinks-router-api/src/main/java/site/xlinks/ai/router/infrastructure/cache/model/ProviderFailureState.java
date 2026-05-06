@@ -13,4 +13,5 @@ public class ProviderFailureState {
 
     private int failureCount;
     private Instant firstFailureAt;
+    private Instant blockedUntil;
 }
