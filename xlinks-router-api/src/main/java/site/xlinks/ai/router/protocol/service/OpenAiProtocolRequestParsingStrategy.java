@@ -1,6 +1,5 @@
 package site.xlinks.ai.router.protocol.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -34,14 +33,14 @@ public class OpenAiProtocolRequestParsingStrategy extends AbstractProtocolReques
                                 jakarta.servlet.http.HttpServletRequest request,
                                 CustomerTokenResolver.ResolvedCustomerToken token) {
         String rawBody = StringUtils.defaultString(requestBody);
-        JsonNode payload = parseJson(requestBody);
+        ParsedRequestFields fields = parseRequestFields(requestBody);
         return ForwardRequest.builder()
                 .protocol(protocol)
-                .model(readRequiredText(payload, "model"))
-                .stream(readBoolean(payload, "stream"))
+                .model(readRequiredText(fields))
+                .stream(readBoolean(fields))
                 .customerToken(token.value())
                 .tokenSource(token.source())
-                .payload(payload)
+                .payload(null)
                 .requestBody(rawBody)
                 .passthroughHeaders(Map.of())
                 .build();

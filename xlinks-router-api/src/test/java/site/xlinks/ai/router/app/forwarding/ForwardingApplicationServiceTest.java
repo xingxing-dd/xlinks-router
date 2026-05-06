@@ -431,6 +431,48 @@ class ForwardingApplicationServiceTest {
 
         assertEquals(ErrorCode.EXTERNAL_SERVICE_ERROR.getCode(), exception.getCode());
         verify(providerRuntimeStateService, times(1)).recordFailure(any());
+        verify(forwardingUsageRecordService).recordErrorAsync(
+                argThat(context -> context != null
+                        && context.getAccountId().equals(201L)
+                        && context.getProviderId().equals(1001L)
+                        && context.getProviderTokenId().equals(2001L)),
+                eq(String.valueOf(ErrorCode.EXTERNAL_SERVICE_ERROR.getCode())),
+                eq("服务商转发失败"),
+                anyLong(),
+                anyLong(),
+                eq("error")
+        );
+    }
+
+    @Test
+    void shouldRecordFinalFailureWhenNoProviderTokenCanBeAcquired() {
+        ForwardRequest request = buildRequest(false);
+        Provider provider = provider(1001L);
+        ProviderToken token = providerToken(2001L, 1001L);
+
+        when(routingDomainService.route(any())).thenReturn(routingPlan(request, 1001L));
+        when(forwardingReadModelLoader.loadProvider(1001L)).thenReturn(provider);
+        when(forwardingReadModelLoader.loadProviderTokens(1001L)).thenReturn(List.of(token));
+        when(providerTokenSelectionService.select(eq(provider), anyList()))
+                .thenReturn(token)
+                .thenReturn(null);
+        when(providerConcurrencyGuard.tryAcquire(eq(provider), eq(token), any())).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> forwardingApplicationService.forward(request));
+
+        assertEquals(ErrorCode.PROVIDER_TOKEN_UNAVAILABLE.getCode(), exception.getCode());
+        verify(forwardingUsageRecordService).recordErrorAsync(
+                argThat(context -> context != null
+                        && context.getAccountId().equals(201L)
+                        && context.getProviderId() == null
+                        && context.getProviderTokenId() == null
+                        && "customer-token".equals(context.getCustomerTokenValue())),
+                eq(String.valueOf(ErrorCode.PROVIDER_TOKEN_UNAVAILABLE.getCode())),
+                eq("没有可用的服务商令牌"),
+                anyLong(),
+                anyLong(),
+                eq("error")
+        );
     }
 
     private ForwardRequest buildRequest(boolean stream) {

@@ -98,18 +98,52 @@ public class ProtocolControllerResponseWriter {
     private void writeAsyncStream(ForwardingAsyncStreamBody asyncStreamBody,
                                   HttpServletRequest request,
                                   HttpServletResponse response) throws IOException {
-        AsyncContext asyncContext = request.startAsync();
-        asyncContext.setTimeout(asyncTimeoutMs);
-        AsyncStreamBridge bridge = new AsyncStreamBridge(
-                asyncContext,
-                response.getOutputStream(),
-                asyncStreamBody,
-                RequestChainLogCollector.captureCurrent(),
-                Math.max(queueCapacity, 8),
-                Math.max(chunkSize, 1024),
-                Math.max(queueOfferTimeoutMs, 100L)
-        );
-        bridge.start(forwardingStreamTaskExecutor);
+        AsyncContext asyncContext = null;
+        try {
+            asyncContext = request.startAsync();
+            asyncContext.setTimeout(asyncTimeoutMs);
+            AsyncStreamBridge bridge = new AsyncStreamBridge(
+                    asyncContext,
+                    response.getOutputStream(),
+                    asyncStreamBody,
+                    RequestChainLogCollector.captureCurrent(),
+                    Math.max(queueCapacity, 8),
+                    Math.max(chunkSize, 1024),
+                    Math.max(queueOfferTimeoutMs, 100L)
+            );
+            bridge.start(forwardingStreamTaskExecutor);
+        } catch (Exception ex) {
+            abortAsyncStream(asyncStreamBody, ex);
+            completeAsyncQuietly(asyncContext);
+            if (ex instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (ex instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IOException("Failed to start async stream bridge", ex);
+        }
+    }
+
+    private void abortAsyncStream(ForwardingAsyncStreamBody asyncStreamBody, Exception ex) {
+        if (asyncStreamBody == null) {
+            return;
+        }
+        String message = ex == null || ex.getMessage() == null || ex.getMessage().isBlank()
+                ? "流式响应启动失败"
+                : ex.getMessage();
+        asyncStreamBody.abort(message);
+    }
+
+    private void completeAsyncQuietly(AsyncContext asyncContext) {
+        if (asyncContext == null) {
+            return;
+        }
+        try {
+            asyncContext.complete();
+        } catch (IllegalStateException ignore) {
+            // Ignore repeated completion during startup failure cleanup.
+        }
     }
 
     private static final class AsyncStreamBridge implements WriteListener, AsyncListener {

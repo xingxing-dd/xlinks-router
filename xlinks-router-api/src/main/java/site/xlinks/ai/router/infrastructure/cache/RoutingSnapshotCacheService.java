@@ -99,6 +99,7 @@ public class RoutingSnapshotCacheService {
 
     public void refreshAll() {
         withRefreshLock(() -> {
+            long startedAt = System.currentTimeMillis();
             List<Model> models = modelMapper.selectList(new LambdaQueryWrapper<Model>().eq(Model::getStatus, 1));
             List<Provider> providers = providerMapper.selectList(new LambdaQueryWrapper<Provider>().eq(Provider::getStatus, 1));
             List<ProviderModel> providerModels = providerModelMapper.selectList(
@@ -124,6 +125,7 @@ public class RoutingSnapshotCacheService {
                     modelByCodeCache.size(), providerByIdCache.size(), providerModelByModelIdCache.size(),
                     providerTokenByIdCache.size(), customerTokenByValueCache.size(), customerPlanByAccountIdCache.size(),
                     customerMainWalletByAccountIdCache.size(), merchantPreferredProviderCache.size());
+            log.info("Routing snapshot refresh elapsedMs={}", Math.max(System.currentTimeMillis() - startedAt, 0L));
         });
     }
 

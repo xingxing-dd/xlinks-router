@@ -33,7 +33,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class WalletOrderService {
 
     private static final int DEFAULT_EXPIRE_MINUTES = 30;
-    private static final BigDecimal RECHARGE_PAYMENT_RATE = new BigDecimal("0.4");
+    private static final BigDecimal RECHARGE_PAYMENT_RATE = new BigDecimal("0.3");
     private static final DateTimeFormatter ORDER_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final DateTimeFormatter DISPLAY_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

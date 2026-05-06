@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -97,6 +98,24 @@ class ProviderConcurrencyGuardTest {
                 providerConcurrencyGuard.scheduleAutoRenew("req-1", provider, token, lease));
 
         assertNull(future);
+    }
+
+    @Test
+    void shouldBypassPermitWhenConcurrencyConfigNotSet() {
+        Provider provider = new Provider();
+        provider.setId(1001L);
+        provider.setProviderCode("provider-1001");
+        provider.setProviderName("provider-1001");
+        ProviderToken token = token();
+
+        ProviderPermitLease lease = providerConcurrencyGuard.tryAcquire(provider, token, "req-1");
+
+        assertNotNull(lease);
+        assertNull(lease.permitId());
+        assertNotNull(lease.runtimePolicy());
+        assertFalse(lease.runtimePolicy().concurrencyLimitEnabled());
+        verify(redissonClient, never()).getLock(any(String.class));
+        verify(redissonClient, never()).getPermitExpirableSemaphore(any(String.class));
     }
 
     private Provider provider() {

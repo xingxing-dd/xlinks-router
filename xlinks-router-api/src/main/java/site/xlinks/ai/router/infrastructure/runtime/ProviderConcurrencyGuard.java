@@ -1,11 +1,11 @@
 package site.xlinks.ai.router.infrastructure.runtime;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RPermitExpirableSemaphore;
 import org.redisson.api.RedissonClient;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskRejectedException;
@@ -25,13 +25,18 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class ProviderConcurrencyGuard {
 
     private final RedissonClient redissonClient;
 
     @Qualifier("providerPermitRenewScheduler")
     private final ThreadPoolTaskScheduler renewScheduler;
+
+    public ProviderConcurrencyGuard(@Lazy RedissonClient redissonClient,
+                                    @Qualifier("providerPermitRenewScheduler") ThreadPoolTaskScheduler renewScheduler) {
+        this.redissonClient = redissonClient;
+        this.renewScheduler = renewScheduler;
+    }
 
     @Value("${xlinks.router.limits.default-max-concurrent-per-token:0}")
     private int defaultMaxConcurrentPerToken;

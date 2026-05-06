@@ -13,6 +13,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ProtocolRequestParserTest {
@@ -46,6 +47,7 @@ class ProtocolRequestParserTest {
         assertEquals(ForwardProtocol.CHAT_COMPLETIONS, request.getProtocol());
         assertEquals(rawBody, request.getRequestBody());
         assertEquals("token-1", request.getCustomerToken());
+        assertNull(request.getPayload());
     }
 
     @Test
@@ -69,6 +71,7 @@ class ProtocolRequestParserTest {
         assertFalse(request.isStream());
         assertEquals(rawBody, request.getRequestBody());
         assertEquals("token-resp", request.getCustomerToken());
+        assertNull(request.getPayload());
     }
 
     @Test
@@ -95,6 +98,7 @@ class ProtocolRequestParserTest {
         assertEquals("tools-2024-04-04", request.getPassthroughHeaders().get("anthropic-beta"));
         assertEquals(rawBody, request.getRequestBody());
         assertEquals(CustomerTokenSource.X_API_KEY, request.getTokenSource());
+        assertNull(request.getPayload());
     }
 
     @Test
@@ -123,6 +127,25 @@ class ProtocolRequestParserTest {
                 ForwardProtocol.CHAT_COMPLETIONS,
                 request
         ));
+    }
+
+    @Test
+    void shouldReturnEarlyAfterModelAndStreamAreFound() {
+        MockHttpServletRequest servletRequest = requestWithResolvedToken(
+                "token-4",
+                CustomerTokenSource.AUTHORIZATION_BEARER
+        );
+        servletRequest.setContent("""
+                {"model":"gpt-5.5","stream":true,"messages":[
+                """.getBytes());
+
+        ForwardRequest request = parser.parse(
+                ForwardProtocol.RESPONSES,
+                servletRequest
+        );
+
+        assertEquals("gpt-5.5", request.getModel());
+        assertEquals(true, request.isStream());
     }
 
     private MockHttpServletRequest requestWithResolvedToken(String token, CustomerTokenSource source) {

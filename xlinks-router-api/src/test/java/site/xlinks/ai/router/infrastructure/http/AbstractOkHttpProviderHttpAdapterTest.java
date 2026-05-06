@@ -11,6 +11,7 @@ import site.xlinks.ai.router.app.forwarding.model.ProviderRuntimePolicy;
 import site.xlinks.ai.router.domain.routing.model.RoutingDecision;
 import site.xlinks.ai.router.infrastructure.http.model.ProviderInvokeContext;
 import site.xlinks.ai.router.protocol.model.ForwardProtocol;
+import site.xlinks.ai.router.protocol.model.ForwardRequest;
 import site.xlinks.ai.router.entity.Provider;
 import site.xlinks.ai.router.entity.ProviderModel;
 import site.xlinks.ai.router.entity.ProviderToken;
@@ -78,6 +79,22 @@ class AbstractOkHttpProviderHttpAdapterTest {
         assertEquals(3300, context.getStreamIdleTimeoutMs());
     }
 
+    @Test
+    void shouldRewriteRequestBodyFromRawWhenPayloadMissing() {
+        ForwardRequest request = ForwardRequest.builder()
+                .protocol(ForwardProtocol.RESPONSES)
+                .model("gpt-5.5")
+                .requestBody("{\"model\":\"gpt-5.5\",\"stream\":true,\"input\":\"hello\"}")
+                .build();
+        ProviderInvokeContext context = ProviderInvokeContext.builder()
+                .providerModelCode("upstream-model")
+                .build();
+
+        String rewritten = adapter.rewrite(request, context);
+
+        assertEquals("{\"model\":\"upstream-model\",\"stream\":true,\"input\":\"hello\"}", rewritten);
+    }
+
     private static final class TestAdapter extends AbstractOkHttpProviderHttpAdapter {
 
         private TestAdapter() {
@@ -92,6 +109,10 @@ class AbstractOkHttpProviderHttpAdapterTest {
         @Override
         public boolean supports(ForwardProtocol protocol) {
             return false;
+        }
+
+        private String rewrite(ForwardRequest request, ProviderInvokeContext context) {
+            return rewriteRequestBody(request, context);
         }
     }
 

@@ -63,33 +63,48 @@ public class ForwardingExecutionService {
     private int maxRetryAttempts;
 
     public Object execute(ForwardingDecision decision) {
+        ensureUsageContext(decision);
         int normalizedMaxAttempts = Math.max(maxRetryAttempts, 1);
         Set<Long> excludedProviderIds = new HashSet<>();
         UpstreamRetryableException lastRetryableException = null;
 
-        for (int attempt = 1; attempt <= normalizedMaxAttempts; attempt++) {
-            ForwardAttemptContext attemptContext = selectAttemptTarget(decision, excludedProviderIds, attempt);
-            if (attemptContext == null) {
-                break;
-            }
-            ForwardAttemptResult result = executeAttempt(decision, attemptContext, attempt, normalizedMaxAttempts);
-            if (result.retryableFailure() != null) {
-                lastRetryableException = result.retryableFailure();
-                if (result.switchProvider()) {
-                    excludedProviderIds.add(result.providerId());
-                    continue;
+        try {
+            for (int attempt = 1; attempt <= normalizedMaxAttempts; attempt++) {
+                ForwardAttemptContext attemptContext = selectAttemptTarget(decision, excludedProviderIds, attempt);
+                if (attemptContext == null) {
+                    break;
                 }
-                return translateFinalRetryableFailure(result.retryableFailure());
+                ForwardAttemptResult result = executeAttempt(decision, attemptContext, attempt, normalizedMaxAttempts);
+                if (result.retryableFailure() != null) {
+                    lastRetryableException = result.retryableFailure();
+                    if (result.switchProvider()) {
+                        excludedProviderIds.add(result.providerId());
+                        continue;
+                    }
+                    return translateFinalRetryableFailure(decision, result.retryableFailure());
+                }
+                if (result.response() != null) {
+                    return result.response();
+                }
             }
-            if (result.response() != null) {
-                return result.response();
-            }
-        }
 
-        if (lastRetryableException != null) {
-            return translateFinalRetryableFailure(lastRetryableException);
+            if (lastRetryableException != null) {
+                return translateFinalRetryableFailure(decision, lastRetryableException);
+            }
+            throw recordAndReturn(
+                    decision,
+                    new BusinessException(ErrorCode.PROVIDER_TOKEN_UNAVAILABLE, "没有可用的服务商令牌")
+            );
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            recordFinalFailure(
+                    decision,
+                    String.valueOf(ErrorCode.SYSTEM_ERROR.getCode()),
+                    valueOrDash(ex.getMessage())
+            );
+            throw ex;
         }
-        throw new BusinessException(ErrorCode.PROVIDER_TOKEN_UNAVAILABLE, "没有可用的服务商令牌");
     }
 
     private ForwardAttemptContext selectAttemptTarget(ForwardingDecision decision,
@@ -275,14 +290,47 @@ public class ForwardingExecutionService {
         );
     }
 
-    private Object translateFinalRetryableFailure(UpstreamRetryableException exception) {
+    private Object translateFinalRetryableFailure(ForwardingDecision decision,
+                                                 UpstreamRetryableException exception) {
         if (exception instanceof UpstreamTimeoutException) {
-            throw new BusinessException(ErrorCode.UPSTREAM_TIMEOUT, "上游请求超时");
+            throw recordAndReturn(decision, new BusinessException(ErrorCode.UPSTREAM_TIMEOUT, "上游请求超时"));
         }
         if (exception.getResponseEntity() != null) {
-            return exception.getResponseEntity();
+            ResponseEntity<String> responseEntity = exception.getResponseEntity();
+            recordFinalFailure(
+                    decision,
+                    String.valueOf(responseEntity.getStatusCode().value()),
+                    responseEntity.getBody()
+            );
+            return responseEntity;
         }
-        throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR, "服务商转发失败");
+        throw recordAndReturn(decision, new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR, "服务商转发失败"));
+    }
+
+    private BusinessException recordAndReturn(ForwardingDecision decision, BusinessException exception) {
+        recordFinalFailure(decision, String.valueOf(exception.getCode()), exception.getMessage());
+        return exception;
+    }
+
+    private void recordFinalFailure(ForwardingDecision decision,
+                                    String errorCode,
+                                    String errorMessage) {
+        ensureUsageContext(decision);
+        forwardingUsageRecordService.recordErrorAsync(
+                decision == null ? null : decision.getUsageContext(),
+                errorCode,
+                errorMessage,
+                elapsedSessionMs(decision),
+                elapsedSessionMs(decision),
+                "error"
+        );
+    }
+
+    private void ensureUsageContext(ForwardingDecision decision) {
+        if (decision == null || decision.getUsageContext() != null) {
+            return;
+        }
+        decision.setUsageContext(buildUsageContext(decision, decision.getSelectedRoute()));
     }
 
     private Object wrapStreamingResponse(ForwardingDecision decision,
@@ -423,18 +471,20 @@ public class ForwardingExecutionService {
     }
 
     private ForwardingUsageContext buildUsageContext(ForwardingDecision decision, RoutingDecision selectedRoute) {
+        Provider provider = selectedRoute == null ? null : selectedRoute.getProvider();
+        ProviderToken providerToken = selectedRoute == null ? null : selectedRoute.getProviderToken();
         return ForwardingUsageContext.builder()
                 .requestId(decision.getRequestId())
                 .accountId(decision.getCustomerAccount() == null ? null : decision.getCustomerAccount().getId())
                 .customerTokenId(decision.getCustomerToken() == null ? null : decision.getCustomerToken().getId())
                 .customerTokenValue(decision.getRequest() == null ? null : decision.getRequest().getCustomerToken())
                 .planId(decision.getCustomerPlan() == null ? null : decision.getCustomerPlan().getId())
-                .providerId(selectedRoute.getProvider() == null ? null : selectedRoute.getProvider().getId())
-                .providerCode(selectedRoute.getProvider() == null ? null : selectedRoute.getProvider().getProviderCode())
-                .providerName(selectedRoute.getProvider() == null ? null : selectedRoute.getProvider().getProviderName())
-                .providerTokenId(selectedRoute.getProviderToken() == null ? null : selectedRoute.getProviderToken().getId())
-                .providerTokenName(selectedRoute.getProviderToken() == null ? null : selectedRoute.getProviderToken().getTokenName())
-                .providerTokenValue(selectedRoute.getProviderToken() == null ? null : selectedRoute.getProviderToken().getTokenValue())
+                .providerId(provider == null ? null : provider.getId())
+                .providerCode(provider == null ? null : provider.getProviderCode())
+                .providerName(provider == null ? null : provider.getProviderName())
+                .providerTokenId(providerToken == null ? null : providerToken.getId())
+                .providerTokenName(providerToken == null ? null : providerToken.getTokenName())
+                .providerTokenValue(providerToken == null ? null : providerToken.getTokenValue())
                 .endpointCode(decision.getRequest() == null || decision.getRequest().getProtocol() == null
                         ? null
                         : decision.getRequest().getProtocol().getCode())
