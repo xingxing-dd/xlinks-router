@@ -1,7 +1,8 @@
-import { getLocale } from '@/locales'
+﻿import { getLocale } from '@/locales'
 
 const API_PREFIX = '/api'
 const AUTH_PREFIX = '/api/v1/auth'
+const ACCESS_TOKEN_KEY = 'xlinks-access-token-v2'
 
 function defaultMessage(zh, en) {
   return getLocale().startsWith('zh') ? zh : en
@@ -17,8 +18,8 @@ function redirectToLogin() {
     ? '/login'
     : `/login?redirect=${encodeURIComponent(currentPath)}`
 
-  localStorage.removeItem('xlinks-access-token')
-  sessionStorage.removeItem('xlinks-access-token')
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY)
   window.location.href = loginUrl
 }
 
@@ -35,7 +36,7 @@ function buildUrl(path) {
 }
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem('xlinks-access-token') || sessionStorage.getItem('xlinks-access-token')
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY)
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),

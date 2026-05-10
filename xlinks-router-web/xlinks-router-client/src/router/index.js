@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+﻿import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { finishRouteLoading, startRouteLoading } from '@/composables/useRouteLoading'
 
@@ -139,3 +139,6 @@ router.onError(() => {
 })
 
 export default router
+
+
+

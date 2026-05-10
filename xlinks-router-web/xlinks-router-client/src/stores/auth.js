@@ -1,7 +1,7 @@
-import { computed, ref } from 'vue'
+﻿import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-const ACCESS_TOKEN_KEY = 'xlinks-access-token'
+const ACCESS_TOKEN_KEY = 'xlinks-access-token-v2'
 
 function readToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY) || ''
